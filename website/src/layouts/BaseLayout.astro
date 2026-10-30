@@ -1,0 +1,70 @@
+---
+import '../styles/tokens.css';
+import '../styles/base.css';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import { SITE_NAME } from '../site';
+import { url } from '../lib/url';
+
+interface Props {
+  title: string;
+  description: string;
+}
+
+const { title, description } = Astro.props;
+
+// Canonical / og:url only exist when src/site.ts provides a real origin.
+const canonical = Astro.site ? new URL(Astro.url.pathname, Astro.site).href : undefined;
+
+// Production-only CSP. It makes "no external requests" enforceable by the
+// browser: nothing but same-origin images and inline styles may load, and no
+// script, font, frame or form post is allowed at all. connect-src is limited
+// to the site's own origin (the page itself makes no requests, but audit tools
+// such as Lighthouse fetch /robots.txt through the page and report a failure if
+// even that is blocked). Skipped in dev, where Vite needs a websocket for hot reload.
+const csp = [
+  "default-src 'none'",
+  "img-src 'self'",
+  "connect-src 'self'",
+  "style-src 'unsafe-inline'",
+  "base-uri 'none'",
+  "form-action 'none'",
+].join('; ');
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {import.meta.env.PROD && <meta http-equiv="Content-Security-Policy" content={csp} />}
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#fbfbfe" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0a0b17" media="(prefers-color-scheme: dark)" />
+    <meta name="referrer" content="no-referrer" />
+
+    <link rel="icon" href={url('/favicon.svg')} type="image/svg+xml" />
+    <link rel="apple-touch-icon" href={url('/apple-touch-icon.png')} />
+    {canonical && <link rel="canonical" href={canonical} />}
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={SITE_NAME} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:locale" content="en_US" />
+    {canonical && <meta property="og:url" content={canonical} />}
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to main content</a>
+    <Header />
+    <main id="main" tabindex="-1">
+      <slot />
+    </main>
+    <Footer />
+  </body>
+</html>

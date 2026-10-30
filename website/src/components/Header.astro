@@ -1,0 +1,103 @@
+---
+import { url } from '../lib/url';
+
+const home = url('/');
+const path = Astro.url.pathname;
+
+const links = [
+  { href: `${home}#how`, label: 'How it works', current: false },
+  { href: `${home}#features`, label: 'Features', current: false },
+  { href: url('/privacy/'), label: 'Privacy', current: path.includes('/privacy') },
+  { href: `${home}#download`, label: 'Download', current: false },
+];
+---
+
+<header class="site-header">
+  <div class="container bar">
+    <a class="brand" href={home} aria-label="Krova home">
+      <img src={url('/favicon.svg')} width="32" height="32" alt="" />
+      <span>Krova</span>
+    </a>
+    <nav aria-label="Primary">
+      <ul>
+        {
+          links.map((l) => (
+            <li>
+              <a href={l.href} aria-current={l.current ? 'page' : undefined}>
+                {l.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<style>
+  .site-header {
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-bg);
+  }
+
+  .bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    column-gap: var(--space-m);
+    row-gap: var(--space-3xs);
+    padding-block: var(--space-2xs);
+  }
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    min-height: 2.75rem;
+    color: var(--color-text);
+    font-size: var(--text-md);
+    font-weight: 750;
+    letter-spacing: var(--tracking-tight);
+    text-decoration: none;
+  }
+
+  nav ul {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: var(--space-xs);
+  }
+
+  nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+    padding-inline: var(--space-2xs);
+    border-radius: var(--radius-s);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  nav a:hover,
+  nav a[aria-current='page'] {
+    color: var(--color-text);
+  }
+
+  nav a[aria-current='page'] {
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.35em;
+  }
+
+  @media (max-width: 40rem) {
+    .bar {
+      justify-content: center;
+    }
+    nav ul {
+      justify-content: center;
+      column-gap: 0;
+    }
+  }
+</style>

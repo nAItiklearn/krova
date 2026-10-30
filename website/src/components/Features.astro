@@ -1,0 +1,115 @@
+---
+import Icon from './Icon.astro';
+import type { IconName } from './Icon.astro';
+
+interface Feature {
+  icon: IconName;
+  title: string;
+  text: string;
+}
+
+const features: Feature[] = [
+  {
+    icon: 'zones',
+    title: 'Zones you draw',
+    text: 'Split a monitor with a full-screen overlay editor, drag the dividers, or start from a template. Zones are stored as proportions of the screen, so they survive resolution and scaling changes.',
+  },
+  {
+    icon: 'monitors',
+    title: 'A layout per monitor',
+    text: 'Every monitor keeps its own layouts. Unplug one and plug it back in, and its layout comes back, matched by the monitor’s hardware identity.',
+  },
+  {
+    icon: 'key',
+    title: 'Only when you ask',
+    text: 'Zones appear only while you hold your activation key: Shift by default, or Ctrl, Alt or Cmd. Windows’ own Snap Assist is left alone.',
+  },
+  {
+    icon: 'edge',
+    title: 'Optional edge snapping',
+    text: 'Drag to a screen edge or corner to fill a half or a quarter. It never fires on the border between two monitors.',
+  },
+  {
+    icon: 'motion',
+    title: 'Animated or instant',
+    text: 'Windows glide into place with a short ease-out, about 120 ms, or jump there instantly. One setting.',
+  },
+  {
+    icon: 'shield',
+    title: 'Careful with windows',
+    text: 'Respects each window’s minimum and maximum size, handles mixed-DPI monitors, stays clear of the taskbar, menu bar and dock, and only touches windows on your current desktop or Space.',
+  },
+  {
+    icon: 'tray',
+    title: 'Quiet in the tray',
+    text: 'Lives in the system tray or menu bar with no taskbar window. Enable or disable, edit layouts, open settings, launch at login, quit.',
+  },
+  {
+    icon: 'theme',
+    title: 'Dark and light',
+    text: 'Follows your operating system’s appearance, with a setting to force light or dark.',
+  },
+  {
+    icon: 'code',
+    title: 'Free and open source',
+    text: 'MIT licensed: use it, read the code, modify it, share it. No account needed.',
+  },
+];
+---
+
+<section id="features" class="section section--alt" aria-labelledby="features-title">
+  <div class="container">
+    <header class="section-head">
+      <p class="eyebrow">Features</p>
+      <h2 id="features-title">Everything a zone manager needs, nothing it doesn’t</h2>
+      <p class="lead">A focused tool for placing windows. It does that well and leaves the rest of your desktop alone.</p>
+    </header>
+
+    <ul class="grid">
+      {
+        features.map((f) => (
+          <li class="card feature">
+            <span class="icon-wrap">
+              <Icon name={f.icon} />
+            </span>
+            <h3>{f.title}</h3>
+            <p>{f.text}</p>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</section>
+
+<style>
+  .grid {
+    display: grid;
+    gap: var(--space-m);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  }
+
+  .feature {
+    box-shadow: none;
+  }
+
+  .icon-wrap {
+    display: inline-grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    margin-bottom: var(--space-s);
+    border-radius: var(--radius-s);
+    background: var(--accent-tint);
+    color: var(--color-link);
+  }
+
+  h3 {
+    font-size: var(--text-md);
+    margin-bottom: var(--space-2xs);
+  }
+
+  p {
+    color: var(--color-text-muted);
+    font-size: var(--text-base);
+  }
+</style>

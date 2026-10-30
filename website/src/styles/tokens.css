@@ -1,0 +1,146 @@
+/*
+  Design tokens. Every colour, size and space used by the site comes from here.
+
+  Palette is derived from the Krova icon gradient (#4f46e5 indigo -> #0ea5e9 sky).
+  Contrast notes (WCAG 2.x, computed from the hex values):
+    light  text #12122a on #fbfbfe ........ ~17:1
+    light  muted #4b4d66 on #fbfbfe ....... ~8:1
+    light  link #4338ca on #ffffff ........ ~8:1
+    dark   text #eceefb on #0a0b17 ........ ~17:1
+    dark   muted #a9adc9 on #12142a ....... ~8:1
+    dark   link #a5b4fc on #0a0b17 ........ ~9.7:1
+    button white on #4f46e5 / #4338ca ..... 6.3:1 / 7.9:1
+  White text is never placed on the sky end of the gradient (2.8:1).
+*/
+
+:root {
+  color-scheme: light dark;
+
+  /* ---- Typefaces: system stacks only, nothing is downloaded ---- */
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+
+  /* ---- Type scale: fluid, roughly a 1.25 ratio ---- */
+  --text-xs: clamp(0.78rem, 0.76rem + 0.1vw, 0.84rem);
+  --text-sm: clamp(0.875rem, 0.85rem + 0.12vw, 0.95rem);
+  --text-base: clamp(1rem, 0.96rem + 0.2vw, 1.125rem);
+  --text-md: clamp(1.125rem, 1.05rem + 0.4vw, 1.3rem);
+  --text-lg: clamp(1.3rem, 1.15rem + 0.7vw, 1.6rem);
+  --text-xl: clamp(1.6rem, 1.3rem + 1.5vw, 2.25rem);
+  --text-2xl: clamp(2rem, 1.5rem + 2.5vw, 3.1rem);
+  --text-3xl: clamp(2.35rem, 1.5rem + 4.2vw, 4.25rem);
+
+  --leading-tight: 1.1;
+  --leading-snug: 1.3;
+  --leading-body: 1.6;
+  --tracking-tight: -0.02em;
+  --tracking-wide: 0.08em;
+
+  /* ---- Spacing scale ---- */
+  --space-3xs: 0.25rem;
+  --space-2xs: 0.5rem;
+  --space-xs: 0.75rem;
+  --space-s: 1rem;
+  --space-m: 1.5rem;
+  --space-l: 2rem;
+  --space-xl: 3rem;
+  --space-2xl: 4.5rem;
+  --space-3xl: 7rem;
+
+  --gutter: clamp(1rem, 0.5rem + 2.5vw, 2rem);
+  --section-y: clamp(3.5rem, 2rem + 6vw, 6.5rem);
+  --container: 72rem;
+  --container-narrow: 46rem;
+  --measure: 62ch;
+
+  /* ---- Shape ---- */
+  --radius-s: 8px;
+  --radius-m: 14px;
+  --radius-l: 22px;
+  --radius-pill: 999px;
+
+  /* ---- Motion ---- */
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur-fast: 150ms;
+  --dur: 220ms;
+
+  /* ---- Palette (light) ---- */
+  --color-bg: #fbfbfe;
+  --color-surface: #ffffff;
+  --color-surface-2: #f1f2fa;
+  --color-border: #d9dcee;
+  --color-border-strong: #7c809c;
+  --color-text: #12122a;
+  --color-text-muted: #4b4d66;
+
+  --color-accent: #4f46e5;
+  --color-accent-hover: #4338ca;
+  --color-on-accent: #ffffff;
+  --color-link: #4338ca;
+  --color-accent-2: #0369a1;
+  --color-focus: #4338ca;
+
+  --accent-tint: rgba(79, 70, 229, 0.1);
+  --grad-brand: linear-gradient(135deg, #4f46e5, #0ea5e9);
+  --grad-text: linear-gradient(100deg, #4f46e5 0%, #0369a1 100%);
+  --glow-1: rgba(79, 70, 229, 0.14);
+  --glow-2: rgba(14, 165, 233, 0.13);
+
+  --shadow-1: 0 1px 2px rgba(18, 18, 42, 0.06), 0 6px 20px rgba(18, 18, 42, 0.06);
+  --shadow-2: 0 2px 4px rgba(18, 18, 42, 0.06), 0 18px 48px rgba(40, 40, 120, 0.14);
+
+  /* ---- Zone mockup colours ---- */
+  --mon-bezel: #232542;
+  --mon-screen: #eef0fb;
+  --mon-stand: #c9cde6;
+  --zone-fill: rgba(79, 70, 229, 0.07);
+  --zone-stroke: rgba(79, 70, 229, 0.5);
+  --zone-hi-fill: rgba(79, 70, 229, 0.26);
+  --zone-hi-stroke: #4f46e5;
+  --win-bg: #ffffff;
+  --win-bar: #e3e6f7;
+  --win-line: #c9cde6;
+  --win-block: #dfe3f6;
+  --win-stroke: #8b90b3;
+  --cursor-fill: #12122a;
+  --cursor-stroke: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #0a0b17;
+    --color-surface: #12142a;
+    --color-surface-2: #0e1024;
+    --color-border: #262a4a;
+    --color-border-strong: #6b7094;
+    --color-text: #eceefb;
+    --color-text-muted: #a9adc9;
+
+    --color-link: #a5b4fc;
+    --color-accent-2: #38bdf8;
+    --color-focus: #7dd3fc;
+
+    --accent-tint: rgba(129, 140, 248, 0.16);
+    --grad-text: linear-gradient(100deg, #a5b4fc 0%, #38bdf8 100%);
+    --glow-1: rgba(99, 102, 241, 0.26);
+    --glow-2: rgba(14, 165, 233, 0.16);
+
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 20px rgba(0, 0, 0, 0.3);
+    --shadow-2: 0 2px 4px rgba(0, 0, 0, 0.4), 0 18px 48px rgba(0, 0, 0, 0.5);
+
+    --mon-bezel: #2b2e55;
+    --mon-screen: #0d0f21;
+    --mon-stand: #23264a;
+    --zone-fill: rgba(129, 140, 248, 0.09);
+    --zone-stroke: rgba(165, 180, 252, 0.5);
+    --zone-hi-fill: rgba(99, 102, 241, 0.42);
+    --zone-hi-stroke: #a5b4fc;
+    --win-bg: #1b1e3d;
+    --win-bar: #272b52;
+    --win-line: #3a3f73;
+    --win-block: #23274b;
+    --win-stroke: #5b6197;
+    --cursor-fill: #ffffff;
+    --cursor-stroke: #0a0b17;
+  }
+}

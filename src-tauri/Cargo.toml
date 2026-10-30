@@ -1,0 +1,36 @@
+[package]
+name = "krova-app"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+rust-version = "1.77"
+description = "Krova - free, offline window zone manager"
+
+# Desktop only: the default rlib is all `main.rs` needs. Tauri's mobile template also
+# lists "staticlib" and "cdylib", but on Windows-GNU the cdylib is a DLL that fails to
+# link with "export ordinal too large" (a DLL cannot export more than 65535 symbols).
+[lib]
+name = "krova_app_lib"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+krova-core = { path = "../crates/krova-core" }
+krova-platform = { path = "../crates/krova-platform" }
+
+[dev-dependencies]
+tempfile = "3"
+
+# src-tauri is its own workspace (the root workspace excludes it) so that the
+# core crates build and test on machines without a webview toolchain.
+[workspace]
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

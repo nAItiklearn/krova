@@ -1,0 +1,122 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { ISSUES_URL, REPO_CONFIGURED, REPO_URL } from '../site';
+import { url } from '../lib/url';
+
+const title = 'Privacy: Krova';
+const description =
+  'Krova makes no network calls, has no accounts or telemetry, and never logs window titles. Here is exactly what it stores on your computer, and where.';
+---
+
+<BaseLayout title={title} description={description}>
+  <div class="container container--narrow">
+    <header class="page-head">
+      <p class="eyebrow">Privacy</p>
+      <h1>Privacy, in plain language</h1>
+      <p class="lead">
+        Krova is an offline app. It does not send anything anywhere, so there is no data of yours for us to hold,
+        sell or lose.
+      </p>
+    </header>
+
+    <article class="prose" aria-label="Privacy details">
+      <h2>The short version</h2>
+      <ul>
+        <li>Krova makes <strong>no network calls</strong>.</li>
+        <li>There are <strong>no accounts</strong> and <strong>no telemetry</strong>.</li>
+        <li><strong>Window titles are never logged or stored.</strong></li>
+        <li>Your settings and layouts stay in <strong>one local JSON file</strong> that you can read, copy or delete.</li>
+      </ul>
+
+      <h2>What Krova does on the network</h2>
+      <p>
+        Nothing. The app makes no network calls at all: no sign-in, no usage statistics, no crash reports, no update
+        pings. Because it never connects out, there is no server on the other side that could receive your data.
+      </p>
+      <p>
+        You do not have to take our word for it. The source code is open under the MIT License, and you can watch
+        Krova with your operating system’s network monitor or block it in your firewall. It should behave exactly the
+        same.
+      </p>
+
+      <h2>What is stored on your computer</h2>
+      <p>
+        Krova keeps one file, <code>config.json</code>, in your user account’s application-data folder (typically under
+        <code>%APPDATA%</code> on Windows and <code>~/Library/Application Support</code> on macOS). It contains:
+      </p>
+      <ul>
+        <li>
+          <strong>Settings:</strong> the activation key, highlight color and opacity, animated or instant moves, edge
+          snapping on or off and its size, launch at login, enabled or disabled, and theme.
+        </li>
+        <li>
+          <strong>Per-monitor data:</strong> for each monitor, an identifier, a label, its layouts (zones saved as
+          proportions of the screen) and which layout is active.
+        </li>
+      </ul>
+      <p>
+        To recognise a monitor when you plug it back in, Krova stores what the operating system reports about it: the
+        manufacturer and product codes (and the serial number, where the system provides one), the device path, and the
+        monitor’s last size and position. These are what let Krova bring a layout back for the same monitor. They stay
+        in this file on your machine. If you ever share your <code>config.json</code>, for example in a bug report,
+        remove those identifiers first if you would rather not share them.
+      </p>
+      <p>
+        The file is written safely (to a temporary file, then renamed). If it ever turns out to be unreadable, Krova
+        renames it to <code>config.json.bak</code> and starts again with defaults instead of discarding it.
+      </p>
+
+      <h2>What Krova does not record</h2>
+      <p>
+        To move a window, Krova has to look at the window you are dragging, its position and size, and at where your
+        cursor is. That happens in memory, in the moment. <strong>Window titles are never logged or stored</strong>,
+        and nothing about the windows you move is written to <code>config.json</code>.
+      </p>
+
+      <h2>Permissions</h2>
+      <p>
+        On macOS, Krova asks for <strong>Accessibility</strong> permission (System Settings, Privacy &amp; Security,
+        Accessibility). macOS requires it before any app can move and resize other apps’ windows. On Windows no special
+        permission is requested; windows of apps running as administrator are skipped.
+      </p>
+
+      <h2>Removing your data</h2>
+      <p>
+        Delete <code>config.json</code> (and <code>config.json.bak</code>, if present) to erase the settings and
+        layouts Krova has stored. Krova keeps no copy anywhere else, because it never sends anything anywhere.
+      </p>
+
+      <h2>This website</h2>
+      <p>
+        This site is a set of static pages. It sets no cookies, runs no analytics, has no forms and loads no scripts,
+        fonts, images or embeds from other servers. Like any web server, whatever hosts these pages may keep ordinary
+        access logs; the site itself does nothing to add to that.
+      </p>
+      <p>
+        Downloading an installer necessarily contacts the server that hosts it (for example GitHub, if you get it from
+        the releases page). That request is handled under that service’s own privacy policy, not by Krova.
+      </p>
+
+      <h2>Questions</h2>
+      <p>
+        {
+          REPO_CONFIGURED ? (
+            <Fragment>
+              If something here is unclear or looks wrong, please <a href={ISSUES_URL}>open an issue</a> in the{' '}
+              <a href={REPO_URL}>project repository</a>.
+            </Fragment>
+          ) : (
+            <Fragment>If something here is unclear or looks wrong, please open an issue in the project repository.</Fragment>
+          )
+        }
+      </p>
+      <p class="muted">Last updated: 30 October 2026. See also the <a href={url('/license/')}>license</a>.</p>
+    </article>
+  </div>
+</BaseLayout>
+
+<style>
+  article {
+    padding-bottom: var(--section-y);
+  }
+</style>

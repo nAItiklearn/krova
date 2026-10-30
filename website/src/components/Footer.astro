@@ -1,0 +1,91 @@
+---
+import { url } from '../lib/url';
+import { COPYRIGHT_HOLDER, REPO_CONFIGURED, REPO_URL, RELEASES_URL, VERSION_LABEL } from '../site';
+
+const home = url('/');
+---
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="top">
+      <a class="brand" href={home} aria-label="Krova home">
+        <img src={url('/favicon.svg')} width="28" height="28" alt="" />
+        <span>Krova</span>
+      </a>
+      <nav aria-label="Footer">
+        <ul>
+          <li><a href={`${home}#faq`}>FAQ</a></li>
+          <li><a href={url('/privacy/')}>Privacy</a></li>
+          <li><a href={url('/license/')}>License</a></li>
+          {REPO_CONFIGURED && <li><a href={RELEASES_URL}>Releases</a></li>}
+          {REPO_CONFIGURED && <li><a href={REPO_URL}>Source code</a></li>}
+        </ul>
+      </nav>
+    </div>
+    <p class="small">
+      &copy; 2026 {COPYRIGHT_HOLDER}. Free and open source under the MIT License. Early software ({VERSION_LABEL}).
+    </p>
+    <p class="small">
+      Krova is an independent project. Windows is a trademark of the Microsoft group of companies and macOS is a
+      trademark of Apple Inc.; Krova is not affiliated with or endorsed by either.
+    </p>
+    <p class="small">This site sets no cookies, runs no analytics and loads nothing from other servers.</p>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    margin-top: auto;
+    padding-block: var(--space-xl) var(--space-l);
+    border-top: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+  }
+
+  .top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-s) var(--space-l);
+    margin-bottom: var(--space-m);
+  }
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    min-height: 2.75rem;
+    color: var(--color-text);
+    font-weight: 750;
+    text-decoration: none;
+  }
+
+  ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3xs) var(--space-s);
+  }
+
+  nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+
+  nav a:hover {
+    color: var(--color-text);
+  }
+
+  .small {
+    max-width: 60rem;
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+
+  .small + .small {
+    margin-top: var(--space-2xs);
+  }
+</style>

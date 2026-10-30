@@ -1,0 +1,92 @@
+---
+import ZoneDiagram from './ZoneDiagram.astro';
+---
+
+<section id="how" class="section" aria-labelledby="how-title">
+  <div class="container">
+    <header class="section-head section-head--center">
+      <p class="eyebrow">How it works</p>
+      <h2 id="how-title">Three steps, then it stays out of the way</h2>
+      <p class="lead">Set up your zones once. After that, snapping is a drag and a key you already know.</p>
+    </header>
+
+    <ol class="steps">
+      <li class="card step">
+        <ZoneDiagram variant="editor" />
+        <div class="body">
+          <p class="num" aria-hidden="true">1</p>
+          <h3>Define your zones</h3>
+          <p>
+            Open the layout editor on any monitor. Split zones, drag the dividers, or start from a template: halves,
+            thirds, a 2&times;2 grid, columns or a priority grid.
+          </p>
+        </div>
+      </li>
+      <li class="card step">
+        <ZoneDiagram variant="drag" />
+        <div class="body">
+          <p class="num" aria-hidden="true">2</p>
+          <h3>Hold Shift and drag</h3>
+          <p>
+            Start dragging a window and hold <kbd>Shift</kbd> (or the key you choose). The zones of the monitor under
+            your cursor appear, and the one you are over lights up.
+          </p>
+        </div>
+      </li>
+      <li class="card step">
+        <ZoneDiagram variant="snap" />
+        <div class="body">
+          <p class="num" aria-hidden="true">3</p>
+          <h3>Release to snap</h3>
+          <p>
+            Let go of the mouse and the window moves to fit that zone. Changed your mind? Release
+            <kbd>Shift</kbd> before the mouse button and nothing moves.
+          </p>
+        </div>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<style>
+  .steps {
+    display: grid;
+    gap: var(--space-m);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  }
+
+  .step {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-m);
+    padding: var(--space-m);
+  }
+
+  .body {
+    position: relative;
+    padding-top: var(--space-2xs);
+  }
+
+  .num {
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    margin-bottom: var(--space-xs);
+    border-radius: 50%;
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+    font-size: var(--text-sm);
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  h3 {
+    font-size: var(--text-lg);
+    margin-bottom: var(--space-2xs);
+  }
+
+  .body p:last-child {
+    color: var(--color-text-muted);
+  }
+</style>

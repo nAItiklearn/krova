@@ -1,0 +1,123 @@
+---
+import Icon from './Icon.astro';
+import type { IconName } from './Icon.astro';
+import { url } from '../lib/url';
+
+interface Point {
+  icon: IconName;
+  title: string;
+  text: string;
+}
+
+const points: Point[] = [
+  {
+    icon: 'offline',
+    title: 'No network calls',
+    text: 'Krova never connects to the internet. Nothing is uploaded, downloaded, checked or reported.',
+  },
+  {
+    icon: 'nouser',
+    title: 'No accounts, no telemetry',
+    text: 'There is nothing to sign up for, and no usage data is collected or sent anywhere.',
+  },
+  {
+    icon: 'eyeoff',
+    title: 'Window titles are never logged',
+    text: 'Krova needs to know where a window is in order to move it. It does not log or store window titles.',
+  },
+  {
+    icon: 'file',
+    title: 'One local JSON file',
+    text: 'Your settings and layouts live in a single config.json in your user application-data folder. Open it, back it up, delete it.',
+  },
+];
+---
+
+<section id="privacy" class="section" aria-labelledby="privacy-title">
+  <div class="container">
+    <div class="layout">
+      <header class="section-head">
+        <p class="eyebrow">Privacy</p>
+        <h2 id="privacy-title">Nothing leaves your computer</h2>
+        <p class="lead">
+          A window manager can see which windows you have open. That is why Krova works entirely offline: it makes no
+          network calls at all.
+        </p>
+        <p class="more">
+          <a href={url('/privacy/')}>Read the full privacy details</a>
+        </p>
+      </header>
+
+      <ul class="points">
+        {
+          points.map((p) => (
+            <li>
+              <span class="icon-wrap">
+                <Icon name={p.icon} />
+              </span>
+              <div>
+                <h3>{p.title}</h3>
+                <p>{p.text}</p>
+              </div>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </div>
+</section>
+
+<style>
+  .layout {
+    display: grid;
+    gap: var(--space-xl);
+    align-items: start;
+  }
+
+  .layout .section-head {
+    margin-bottom: 0;
+  }
+
+  .more {
+    margin-top: var(--space-m);
+    font-weight: 650;
+  }
+
+  .points {
+    display: grid;
+    gap: var(--space-m);
+  }
+
+  .points li {
+    display: flex;
+    gap: var(--space-s);
+    align-items: flex-start;
+  }
+
+  .icon-wrap {
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: var(--radius-s);
+    background: var(--accent-tint);
+    color: var(--color-link);
+  }
+
+  h3 {
+    font-size: var(--text-md);
+    margin-bottom: var(--space-3xs);
+  }
+
+  .points p {
+    color: var(--color-text-muted);
+  }
+
+  @media (min-width: 56rem) {
+    .layout {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+      gap: var(--space-2xl);
+    }
+  }
+</style>

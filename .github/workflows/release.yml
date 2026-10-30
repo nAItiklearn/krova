@@ -1,0 +1,91 @@
+name: release
+
+# Builds installers on every manual run (artifacts only). A GitHub Release is created only when a
+# version tag (v*) is pushed. Nothing here deploys the website.
+#
+# Adapted from the Windy workflow. Differences: Krova's Tauri app lives in src-tauri/ (its own
+# Cargo workspace) and its UI in ui/, which must be built before Tauri bundles it; Krova ships
+# for Windows and macOS only. The asset names below are linked from website/src/site.ts
+# (DOWNLOADS) and must stay in sync with it and must not contain a version number.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  NO_STRIP: "true"
+
+jobs:
+  build:
+    name: build (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows
+            os: windows-latest
+            args: "--bundles nsis"
+          - name: macos
+            os: macos-latest
+            args: "--target universal-apple-darwin --bundles dmg"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.name == 'macos' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build the UI
+        shell: bash
+        run: |
+          npm install --prefix ui
+          npm run build --prefix ui
+      - name: Build installers
+        shell: bash
+        run: npx --yes @tauri-apps/cli@2 build ${{ matrix.args }}
+      - name: Give files version-free names
+        shell: bash
+        run: |
+          mkdir -p dist-release
+          b=src-tauri/target
+          [ "${{ matrix.name }}" = macos ] && b=src-tauri/target/universal-apple-darwin
+          pick() { find "$b/release/bundle" -type f -name "$1" | head -n 1; }
+          case "${{ matrix.name }}" in
+            windows) cp "$(pick '*-setup.exe')" dist-release/Krova-windows-x64-setup.exe ;;
+            macos)   cp "$(pick '*.dmg')"       dist-release/Krova-macos-universal.dmg ;;
+          esac
+          ls -la dist-release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: krova-${{ matrix.name }}
+          path: dist-release/*
+          if-no-files-found: error
+
+  publish:
+    name: publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Checksums
+        run: cd assets && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" assets/* \
+            --repo "${{ github.repository }}" \
+            --title "Krova ${{ github.ref_name }}" \
+            --generate-notes

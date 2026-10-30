@@ -1,0 +1,57 @@
+---
+/**
+ * Small inline stroke icons (24x24 grid). Decorative: every use sits next to
+ * visible text, so they are hidden from assistive technology.
+ */
+const paths = {
+  zones: '<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M12 3v18M12 12h9"/>',
+  monitors: '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
+  key: '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M12 8.5l-3.5 3.5H11v3h2v-3h2.5z"/>',
+  edge: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 12h9V3" /><path d="M12 12h9M12 12v9" opacity=".4"/>',
+  motion: '<path d="M4 12h12"/><path d="M12 7l5 5-5 5"/><path d="M21 6v12"/>',
+  shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
+  tray: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 15h20"/><path d="M16 17.5h3"/>',
+  theme: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
+  lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+  offline: '<path d="M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><path d="M12 19.5h.01"/><path d="M3 3l18 18"/>',
+  nouser: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.5-7 8-7s8 3 8 7"/><path d="M3 3l18 18"/>',
+  file: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 13h6M9 17h6"/>',
+  eyeoff: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M3 3l18 18"/>',
+  code: '<path d="M8 8l-5 4 5 4M16 8l5 4-5 4M14 5l-4 14"/>',
+  warn: '<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/>',
+  download: '<path d="M12 3v12M7 10l5 5 5-5M4 20h16"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+} as const;
+
+export type IconName = keyof typeof paths;
+
+interface Props {
+  name: IconName;
+}
+
+const { name } = Astro.props;
+---
+
+<svg
+  class="icon"
+  viewBox="0 0 24 24"
+  width="24"
+  height="24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="1.75"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  aria-hidden="true"
+  focusable="false"
+  set:html={paths[name]}
+/>
+
+<style>
+  .icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    flex: none;
+  }
+</style>

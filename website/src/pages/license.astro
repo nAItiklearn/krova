@@ -1,0 +1,76 @@
+---
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { url } from '../lib/url';
+
+const title = 'License: Krova';
+const description = 'Krova is free and open source software released under the MIT License. Read the full text.';
+
+// The repository's LICENSE file is the single source of truth. It is read at
+// build time. npm scripts run with website/ as the working directory, so the
+// file sits one level up. Fail loudly rather than publish an empty page.
+const licensePath = resolve(process.cwd(), '../LICENSE');
+let raw: string;
+try {
+  raw = readFileSync(licensePath, 'utf8');
+} catch (err) {
+  throw new Error(
+    `Cannot read ${licensePath}. Run the website scripts from the website/ folder of the Krova repository. (${String(err)})`,
+  );
+}
+
+// Paragraphs are separated by blank lines; the file hard-wraps lines at about 80
+// columns, so reflow each paragraph onto one line and let the browser wrap it.
+const paragraphs = raw
+  .replace(/\r\n/g, '\n')
+  .trim()
+  .split(/\n{2,}/)
+  .map((p) => p.split('\n').map((l) => l.trim()).join(' '));
+
+const [heading, copyright, ...body] = paragraphs;
+---
+
+<BaseLayout title={title} description={description}>
+  <div class="container container--narrow">
+    <header class="page-head">
+      <p class="eyebrow">License</p>
+      <h1>{heading}</h1>
+      <p class="lead">
+        Krova is free and open source. In short: you may use, copy, modify, merge, publish, distribute, sublicense
+        and sell it, provided the copyright and permission notice below stay with it. It comes with no warranty. The
+        text below is the license itself and takes precedence over this summary.
+      </p>
+    </header>
+
+    <article class="prose license" aria-label="License text">
+      <p class="copyright">{copyright}</p>
+      {body.map((p) => <p>{p}</p>)}
+      <p class="muted">
+        This is the text of the <code>LICENSE</code> file in the Krova repository. See also the
+        <a href={url('/privacy/')}>privacy page</a>.
+      </p>
+    </article>
+  </div>
+</BaseLayout>
+
+<style>
+  .license {
+    padding: var(--space-m);
+    margin-bottom: var(--section-y);
+    max-width: var(--measure);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-m);
+    background: var(--color-surface);
+  }
+
+  .copyright {
+    font-weight: 650;
+  }
+
+  @media (min-width: 40rem) {
+    .license {
+      padding: var(--space-l);
+    }
+  }
+</style>

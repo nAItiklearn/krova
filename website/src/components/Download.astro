@@ -1,0 +1,150 @@
+---
+import Icon from './Icon.astro';
+import { DOWNLOADS, DOWNLOADS_ENABLED, RELEASES_URL, REPO_CONFIGURED, VERSION_LABEL, latestDownloadUrl } from '../site';
+
+// Dev-only reminder; never rendered in a production build.
+const showDevHint = import.meta.env.DEV && !REPO_CONFIGURED;
+---
+
+<section id="download" class="section" aria-labelledby="download-title">
+  <div class="container">
+    <header class="section-head section-head--center">
+      <p class="eyebrow">Download</p>
+      <h2 id="download-title">Get Krova</h2>
+      <p class="lead">Free and open source. No account, no sign-in, no payment.</p>
+    </header>
+
+    {
+      DOWNLOADS_ENABLED ? (
+        <Fragment>
+          <ul class="downloads">
+            {DOWNLOADS.map((d) => (
+              <li class="card dl">
+                <h3>{d.label}</h3>
+                <p class="muted">{d.requirement}</p>
+                <a class="btn btn-primary" href={latestDownloadUrl(d.file)}>
+                  <Icon name="download" />
+                  Download for {d.short}
+                </a>
+              </li>
+            ))}
+          </ul>
+          <p class="all">
+            Older versions and release notes are on the <a href={RELEASES_URL}>releases page</a>.
+          </p>
+        </Fragment>
+      ) : (
+        <div class="card pending">
+          <span class="icon-wrap">
+            <Icon name="clock" />
+          </span>
+          <h3>Releases will appear here</h3>
+          <p class="muted">
+            Krova {VERSION_LABEL} has not been released yet. When it is, the Windows and macOS builds will be published
+            on the project’s releases page.
+          </p>
+          <a class="btn btn-primary" href={RELEASES_URL}>
+            Go to the releases page
+          </a>
+          {showDevHint && (
+            <p class="dev-hint">
+              Dev note (not shown in production): REPO_URL in <code>src/site.ts</code> is still the placeholder, so this link goes
+              nowhere useful yet.
+            </p>
+          )}
+        </div>
+      )
+    }
+
+    <ul class="reqs" aria-label="System requirements">
+      <li><strong>Windows</strong> 10 or 11</li>
+      <li><strong>macOS</strong> 13 Ventura or later, with Accessibility permission</li>
+      <li><strong>Linux</strong> not supported</li>
+    </ul>
+  </div>
+</section>
+
+<style>
+  .pending {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-xs);
+    max-width: 36rem;
+    margin-inline: auto;
+    padding: var(--space-l) var(--space-m);
+    text-align: center;
+    box-shadow: var(--shadow-2);
+  }
+
+  .pending .btn {
+    margin-top: var(--space-xs);
+  }
+
+  .icon-wrap {
+    display: inline-grid;
+    place-items: center;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 50%;
+    background: var(--accent-tint);
+    color: var(--color-link);
+  }
+
+  h3 {
+    font-size: var(--text-lg);
+  }
+
+  .downloads {
+    display: grid;
+    gap: var(--space-m);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+    max-width: 44rem;
+    margin-inline: auto;
+  }
+
+  .dl {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-xs);
+  }
+
+  .dl .btn {
+    margin-top: var(--space-xs);
+  }
+
+  .btn :global(.icon) {
+    width: 1.2rem;
+    height: 1.2rem;
+  }
+
+  .all {
+    margin-top: var(--space-m);
+    text-align: center;
+    color: var(--color-text-muted);
+  }
+
+  .dev-hint {
+    margin-top: var(--space-s);
+    padding: var(--space-xs);
+    border: 1px dashed var(--color-border-strong);
+    border-radius: var(--radius-s);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+
+  .reqs {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-2xs) var(--space-l);
+    margin-top: var(--space-l);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+
+  .reqs strong {
+    color: var(--color-text);
+  }
+</style>

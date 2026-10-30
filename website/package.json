@@ -1,0 +1,22 @@
+{
+  "name": "krova-website",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Static marketing site for Krova, the offline window zone manager.",
+  "license": "MIT",
+  "engines": {
+    "node": "18.20.8 || ^20.3.0 || >=22.0.0"
+  },
+  "scripts": {
+    "predev": "node scripts/sync-icon.mjs",
+    "dev": "astro dev",
+    "prebuild": "node scripts/sync-icon.mjs",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "astro": "5.18.2"
+  }
+}

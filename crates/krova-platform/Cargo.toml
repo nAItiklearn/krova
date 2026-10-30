@@ -1,0 +1,35 @@
+[package]
+name = "krova-platform"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "OS abstraction for Krova: monitors, window placement, drag input, autostart"
+
+[dependencies]
+krova-core = { path = "../krova-core" }
+thiserror.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52"
+
+[target.'cfg(windows)'.dependencies.windows]
+version = "0.58"
+features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Dwm",
+    "Win32_Graphics_Gdi",
+    "Win32_Security",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Threading",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+]
+
+# macOS: deliberately no third-party crates. src/mac_ffi.rs declares the
+# CoreFoundation / CoreGraphics / ApplicationServices / libdispatch / Objective-C
+# runtime signatures by hand (and links the system frameworks), because the layer
+# was written without a Mac or a compiler and a binding crate's API could not be
+# checked. Add pinned crates here only if a later, compiled iteration needs them.
+[target.'cfg(target_os = "macos")'.dependencies]
