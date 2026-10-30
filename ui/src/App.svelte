@@ -70,7 +70,7 @@
       <rect class="logo-bg" x="2" y="3" width="20" height="18" rx="4" />
       <path class="logo-line" d="M12 3v18M12 12h10" />
     </svg>
-    <span class="name">Krova</span>
+    <h1 class="name">Krova</h1>
   </div>
 
   <nav aria-label="Main">

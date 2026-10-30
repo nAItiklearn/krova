@@ -4,19 +4,16 @@
 // The audit runs with reduced motion so colour transitions cannot be caught half way,
 // which would make the contrast check non-deterministic.
 //
-// Real defects found by this audit are NOT hidden: the general scans switch off only the
-// one rule that the defect trips (KNOWN_ISSUE_RULES) and each defect has its own test in
-// "known UI issues", marked test.fail(). Those tests turn red ("expected to fail, but
-// passed") as soon as the UI is fixed, which is the signal to delete the marker.
+// The defects this audit found earlier (label-in-name of the zone buttons, the hovered
+// armed "Confirm delete" button, small text on a selected zone in the dark theme) are
+// fixed; "fixed UI issues (regression tests)" below pins each one on its own, and no axe
+// rule is switched off any more.
 
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 import { editorUi, expect, openApp, openSettings, test } from './fixtures';
 
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
-
-/** Rules with a tracked defect (see "known UI issues" below). */
-const KNOWN_ISSUE_RULES = ['label-content-name-mismatch'];
 
 interface Finding {
   id: string;
@@ -90,7 +87,7 @@ const scenarios: Scenario[] = [
     },
   },
   {
-    // The pointer is moved away: a hovered armed button is a known issue, tested below.
+    // The pointer is moved away; the hovered armed button has its own test below.
     name: 'editor, delete layout armed (pointer elsewhere)',
     arrange: async (page) => {
       const ui = editorUi(page);
@@ -147,7 +144,7 @@ for (const scheme of ['light', 'dark'] as const) {
       test(`no WCAG A/AA violations: ${scenario.name}`, async ({ page }) => {
         await openApp(page, scenario.query);
         await scenario.arrange(page);
-        expect(await scan(page, { disable: KNOWN_ISSUE_RULES })).toEqual([]);
+        expect(await scan(page)).toEqual([]);
       });
     }
 
@@ -160,22 +157,18 @@ for (const scheme of ['light', 'dark'] as const) {
         'data-theme',
         scheme === 'light' ? 'dark' : 'light',
       );
-      expect(await scan(page, { disable: KNOWN_ISSUE_RULES })).toEqual([]);
+      expect(await scan(page)).toEqual([]);
     });
   });
 }
 
-test.describe('known UI issues (expected to fail until the UI is fixed)', () => {
+// Each of these was a real defect found by the audit above; kept as focused regression tests.
+test.describe('fixed UI issues (regression tests)', () => {
   test.use({ reducedMotion: 'reduce' });
 
   test('zone buttons: the accessible name contains the visible text (WCAG 2.5.3)', async ({
     page,
   }) => {
-    test.fail(
-      true,
-      'UI bug: aria-label is "Zone 1, 50% wide by 100% tall, 1280 by 1400 pixels" but the visible ' +
-        'text is "1", "1280 × 1400", "50% × 100%"; axe: label-content-name-mismatch (serious)',
-    );
     await openApp(page);
     expect(await scan(page, { rules: ['label-content-name-mismatch'] })).toEqual([]);
   });
@@ -184,12 +177,6 @@ test.describe('known UI issues (expected to fail until the UI is fixed)', () => 
     test(`armed "Confirm delete" stays readable while the pointer is on it (${scheme})`, async ({
       page,
     }) => {
-      test.fail(
-        true,
-        'UI bug: .btn.danger:hover:not(:disabled) (specificity 0,4,0) beats .btn.danger.armed ' +
-          '(0,3,0), so a hovered armed button gets the pale --danger-soft background with the ' +
-          'white/surface text of the armed state: contrast about 1.1:1',
-      );
       await page.emulateMedia({ colorScheme: scheme });
       await openApp(page);
       const ui = editorUi(page);
@@ -199,11 +186,6 @@ test.describe('known UI issues (expected to fail until the UI is fixed)', () => 
     });
 
     test(`text on a selected zone has enough contrast (${scheme})`, async ({ page }) => {
-      test.fail(
-        scheme === 'dark',
-        'UI bug (dark theme only): --text-muted #a2abbd on --zone-bg-selected #35508f is 3.37:1, ' +
-          'below 4.5:1, for the small size and percentage lines of a selected zone',
-      );
       await page.emulateMedia({ colorScheme: scheme });
       await openApp(page);
       const ui = editorUi(page);
@@ -216,8 +198,8 @@ test.describe('known UI issues (expected to fail until the UI is fixed)', () => 
 
 test.describe('axe, best-practice rules (informational)', () => {
   // Not a gate: best-practice findings are recorded as test annotations so they show up in
-  // the HTML report without failing the run. At the time of writing: page-has-heading-one
-  // (the brand "Krova" is a span, there is no h1).
+  // the HTML report without failing the run. page-has-heading-one used to show up here
+  // (the brand was a span); the brand is now the page's h1.
   test('record best-practice findings for the editor and Settings', async ({ page }, testInfo) => {
     await openApp(page);
     const editorFindings = await scan(page, { tags: ['best-practice'] });

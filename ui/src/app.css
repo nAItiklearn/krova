@@ -230,8 +230,12 @@ p {
   background: var(--danger-soft);
 }
 
-.btn.danger.armed {
+/* The armed state ("Confirm delete") must stay readable while hovered, so it
+   also has to out-rank .btn.danger:hover:not(:disabled) above. */
+.btn.danger.armed,
+.btn.danger.armed:hover:not(:disabled) {
   background: var(--danger);
+  border-color: var(--danger);
   color: var(--surface);
 }
 

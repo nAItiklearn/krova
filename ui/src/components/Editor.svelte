@@ -71,6 +71,8 @@
   {@const monitor = editor.monitor}
   {@const layout = editor.layout}
   <div class="editor" data-testid="editor">
+    <!-- Keeps the heading outline h1 > h2 > h3 for the panels below. -->
+    <h2 class="sr-only">Zone editor</h2>
     <MonitorTabs />
 
     <div

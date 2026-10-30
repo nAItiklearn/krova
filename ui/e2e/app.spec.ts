@@ -46,12 +46,11 @@ test.describe('first load', () => {
 
     await expect(ui.canvas).toHaveAccessibleName('Layout Halves on Display 1 (primary)');
     await expect(ui.zones).toHaveCount(2);
-    await expect(ui.zone(1)).toHaveAccessibleName(
-      'Zone 1, 50% wide by 100% tall, 1280 by 1400 pixels',
+    await expect(ui.zone(1)).toHaveAccessibleName('Zone 1, 1280 × 1400, 50% × 100%');
+    await expect(ui.zone(1)).toHaveAccessibleDescription(
+      '1280 by 1400 pixels, 50% wide by 100% tall.',
     );
-    await expect(ui.zone(2)).toHaveAccessibleName(
-      'Zone 2, 50% wide by 100% tall, 1280 by 1400 pixels',
-    );
+    await expect(ui.zone(2)).toHaveAccessibleName('Zone 2, 1280 × 1400, 50% × 100%');
     await expect(ui.caption).toHaveText(
       'Display 1 (primary): work area 2560 × 1400 px (screen 2560 × 1440). 2 zones.',
     );

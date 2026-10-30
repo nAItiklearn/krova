@@ -34,9 +34,7 @@ test.describe('templates and saving', () => {
     await expect(ui.caption).toContainText('4 zones.');
     await expect(ui.verticalDividers).toHaveCount(1);
     await expect(ui.horizontalDividers).toHaveCount(1);
-    await expect(ui.zone(4)).toHaveAccessibleName(
-      'Zone 4, 50% wide by 50% tall, 1280 by 700 pixels',
-    );
+    await expect(ui.zone(4)).toHaveAccessibleName('Zone 4, 1280 × 700, 50% × 50%');
 
     // Unsaved: the toolbar and the layout list say so, Save is enabled.
     await expect(ui.unsavedNote).toHaveText('Unsaved changes');
@@ -63,8 +61,8 @@ test.describe('templates and saving', () => {
     await page.getByTestId('template-priority').click();
     await expect(ui.zones).toHaveCount(3);
     await expect(ui.layoutName).toHaveValue('Halves');
-    await expect(ui.zone(1)).toHaveAccessibleName(/^Zone 1, 25% wide by 100% tall/);
-    await expect(ui.zone(2)).toHaveAccessibleName(/^Zone 2, 50% wide by 100% tall/);
+    await expect(ui.zone(1)).toHaveAccessibleName(/^Zone 1, \d+ × \d+, 25% × 100%$/);
+    await expect(ui.zone(2)).toHaveAccessibleName(/^Zone 2, \d+ × \d+, 50% × 100%$/);
   });
 
   test('Undo and Revert both take back an applied template', async ({ page }) => {
@@ -134,11 +132,9 @@ test.describe('splitting zones with the pointer', () => {
     await expect(ui.status).toHaveAttribute('data-kind', 'success');
     await expect(ui.zones).toHaveCount(3);
     await expect(ui.caption).toContainText('3 zones.');
-    await expect(ui.zone(1)).toHaveAccessibleName(
-      /^Zone 1, 30% wide by 100% tall, 768 by 1400 pixels/,
-    );
-    await expect(ui.zone(3)).toHaveAccessibleName(/^Zone 3, 20% wide by 100% tall/);
-    await expect(ui.zone(2)).toHaveAccessibleName(/^Zone 2, 50% wide by 100% tall/);
+    await expect(ui.zone(1)).toHaveAccessibleName('Zone 1, 768 × 1400, 30% × 100%');
+    await expect(ui.zone(3)).toHaveAccessibleName(/^Zone 3, \d+ × \d+, 20% × 100%$/);
+    await expect(ui.zone(2)).toHaveAccessibleName(/^Zone 2, \d+ × \d+, 50% × 100%$/);
     await expect(ui.unsavedNote).toBeVisible();
     await expect(ui.preview).toHaveCount(0);
 
@@ -160,8 +156,8 @@ test.describe('splitting zones with the pointer', () => {
 
     await expect(ui.status).toHaveText('Split zone 2 horizontally at 30%; new zone 3.');
     await expect(ui.zones).toHaveCount(3);
-    await expect(ui.zone(2)).toHaveAccessibleName(/^Zone 2, 50% wide by 30% tall/);
-    await expect(ui.zone(3)).toHaveAccessibleName(/^Zone 3, 50% wide by 70% tall/);
+    await expect(ui.zone(2)).toHaveAccessibleName('Zone 2, 1280 × 420, 50% × 30%');
+    await expect(ui.zone(3)).toHaveAccessibleName('Zone 3, 1280 × 980, 50% × 70%');
     await expect(ui.horizontalDividers).toHaveCount(1);
     await expect(ui.horizontalDividers).toHaveAttribute('data-pos', '0.3');
   });
@@ -221,8 +217,8 @@ test.describe('splitting zones with the pointer', () => {
       await expect(ui.zones).toHaveCount(2);
       await expect(ui.zone(3)).toHaveCount(0);
       await expect(ui.caption).toContainText('2 zones.');
-      await expect(ui.zone(1)).toHaveAccessibleName(/^Zone 1, 50% wide by 100% tall/);
-      await expect(ui.zone(2)).toHaveAccessibleName(/^Zone 2, 50% wide by 100% tall/);
+      await expect(ui.zone(1)).toHaveAccessibleName('Zone 1, 1280 × 1400, 50% × 100%');
+      await expect(ui.zone(2)).toHaveAccessibleName('Zone 2, 1280 × 1400, 50% × 100%');
       await expect(ui.unsavedNote).toHaveCount(0);
       await expect(ui.save).toBeDisabled();
       await expect(ui.undo).toBeDisabled();
@@ -273,8 +269,8 @@ test.describe('dragging dividers', () => {
     await page.mouse.move(x + canvas.width * 0.1, y, { steps: 6 });
 
     // Still dragging: the zones follow the pointer, nothing has been committed.
-    await expect(ui.zone(1)).toHaveAccessibleName(/^Zone 1, 60% wide/);
-    await expect(ui.zone(2)).toHaveAccessibleName(/^Zone 2, 40% wide/);
+    await expect(ui.zone(1)).toHaveAccessibleName(/^Zone 1, \d+ × \d+, 60% × /);
+    await expect(ui.zone(2)).toHaveAccessibleName(/^Zone 2, \d+ × \d+, 40% × /);
     await expect(ui.canvas).toHaveClass(/dragging/);
     await expect(ui.save).toBeDisabled();
     await expect(ui.status).toHaveText('');
@@ -284,8 +280,8 @@ test.describe('dragging dividers', () => {
     await expect(ui.status).toHaveText('Moved the vertical divider from 50% to 60%.');
     await expect(ui.status).toHaveAttribute('data-kind', 'success');
     await expect(ui.dividers).toHaveAttribute('data-pos', '0.6');
-    await expect(ui.zone(1)).toHaveAccessibleName(/^Zone 1, 60% wide/);
-    await expect(ui.zone(2)).toHaveAccessibleName(/^Zone 2, 40% wide/);
+    await expect(ui.zone(1)).toHaveAccessibleName(/^Zone 1, \d+ × \d+, 60% × /);
+    await expect(ui.zone(2)).toHaveAccessibleName(/^Zone 2, \d+ × \d+, 40% × /);
     await expect(ui.save).toBeEnabled();
     await expect(ui.canvas).not.toHaveClass(/dragging/);
   });
@@ -303,10 +299,10 @@ test.describe('dragging dividers', () => {
     await page.mouse.move(x, y);
     await page.mouse.down();
     await page.mouse.move(x + canvas.width * 0.2, y, { steps: 6 });
-    await expect(ui.zone(1)).toHaveAccessibleName(/^Zone 1, 70% wide/);
+    await expect(ui.zone(1)).toHaveAccessibleName(/^Zone 1, \d+ × \d+, 70% × /);
 
     await page.keyboard.press('Escape');
-    await expect(ui.zone(1)).toHaveAccessibleName(/^Zone 1, 50% wide/);
+    await expect(ui.zone(1)).toHaveAccessibleName(/^Zone 1, \d+ × \d+, 50% × /);
     await expect(ui.canvas).not.toHaveClass(/dragging/);
 
     await page.mouse.up();
@@ -314,7 +310,7 @@ test.describe('dragging dividers', () => {
     // Nothing was committed.
     await expect(ui.status).toHaveText('');
     await expect(ui.dividers).toHaveAttribute('data-pos', '0.5');
-    await expect(ui.zone(1)).toHaveAccessibleName(/^Zone 1, 50% wide/);
+    await expect(ui.zone(1)).toHaveAccessibleName(/^Zone 1, \d+ × \d+, 50% × /);
     await expect(ui.save).toBeDisabled();
     await expect(ui.undo).toBeDisabled();
   });
@@ -375,8 +371,8 @@ test.describe('dragging dividers', () => {
     await expect(ui.status).toHaveText('Moved the horizontal divider from 50% to 70%.');
     await expect(ui.horizontalDividers).toHaveAttribute('data-pos', '0.7');
     await expect(ui.verticalDividers).toHaveAttribute('data-pos', '0.5');
-    await expect(ui.zone(1)).toHaveAccessibleName(/^Zone 1, 50% wide by 70% tall/);
-    await expect(ui.zone(3)).toHaveAccessibleName(/^Zone 3, 50% wide by 30% tall/);
+    await expect(ui.zone(1)).toHaveAccessibleName(/^Zone 1, \d+ × \d+, 50% × 70%$/);
+    await expect(ui.zone(3)).toHaveAccessibleName(/^Zone 3, \d+ × \d+, 50% × 30%$/);
   });
 
   test('dividers are not draggable while a split tool is active', async ({ page }) => {
@@ -415,8 +411,8 @@ test.describe('moving dividers with the keyboard', () => {
     await expect(divider).toHaveAttribute('data-pos', '0.46');
     await expect(divider).toBeFocused();
 
-    await expect(ui.zone(1)).toHaveAccessibleName(/^Zone 1, 46% wide/);
-    await expect(ui.zone(2)).toHaveAccessibleName(/^Zone 2, 54% wide/);
+    await expect(ui.zone(1)).toHaveAccessibleName(/^Zone 1, \d+ × \d+, 46% × /);
+    await expect(ui.zone(2)).toHaveAccessibleName(/^Zone 2, \d+ × \d+, 54% × /);
     await expect(ui.save).toBeEnabled();
   });
 
@@ -458,7 +454,7 @@ test.describe('moving dividers with the keyboard', () => {
     await expect(ui.status).toHaveText(TOO_SMALL);
     await expect(ui.status).toHaveAttribute('data-kind', 'error');
     await expect(ui.dividers).toHaveAttribute('data-pos', '0.95');
-    await expect(ui.zone(2)).toHaveAccessibleName(/^Zone 2, 5% wide/);
+    await expect(ui.zone(2)).toHaveAccessibleName(/^Zone 2, \d+ × \d+, 5% × /);
   });
 });
 
@@ -482,7 +478,7 @@ test.describe('deleting zones', () => {
     await expect(ui.zone(2)).toHaveCount(0);
     await expect(ui.zones).toHaveCount(1);
     await expect(ui.caption).toContainText('1 zone.');
-    await expect(ui.zone(1)).toHaveAccessibleName(/^Zone 1, 100% wide by 100% tall/);
+    await expect(ui.zone(1)).toHaveAccessibleName(/^Zone 1, \d+ × \d+, 100% × 100%$/);
     await expect(ui.dividers).toHaveCount(0);
     await expect(ui.unsavedNote).toBeVisible();
 
@@ -491,7 +487,7 @@ test.describe('deleting zones', () => {
     await expect(ui.status).toHaveText('Undid the last change.');
     await expect(ui.zones).toHaveCount(2);
     await expect(ui.zone(2)).toBeVisible();
-    await expect(ui.zone(1)).toHaveAccessibleName(/^Zone 1, 50% wide by 100% tall/);
+    await expect(ui.zone(1)).toHaveAccessibleName(/^Zone 1, \d+ × \d+, 50% × 100%$/);
     await expect(ui.dividers).toHaveCount(1);
     // Back to the saved layout: nothing left to save.
     await expect(ui.unsavedNote).toHaveCount(0);
@@ -797,7 +793,8 @@ test.describe('keyboard operation of the editor', () => {
 
     // Reach zone 1 with Tab, as a keyboard user would.
     const zone1 = ui.zone(1);
-    await expect(zone1).toHaveAccessibleName(/Press Enter to split with a vertical divider/);
+    // The split help is the zone's accessible description (its name stays the visible text).
+    await expect(zone1).toHaveAccessibleDescription(/Press Enter to split with a vertical divider/);
     await tabTo(page, zone1);
     await expect(zone1).toBeFocused();
 
@@ -813,7 +810,7 @@ test.describe('keyboard operation of the editor', () => {
     await page.keyboard.press('Enter');
     await expect(ui.status).toHaveText('Split zone 1 vertically at 30%; new zone 3.');
     await expect(ui.zones).toHaveCount(3);
-    await expect(ui.zone(1)).toHaveAccessibleName(/^Zone 1, 30% wide/);
+    await expect(ui.zone(1)).toHaveAccessibleName(/^Zone 1, \d+ × \d+, 30% × /);
   });
 
   test('a keyboard split too close to the edge reports the backend error', async ({ page }) => {

@@ -190,16 +190,22 @@
     }
   }
 
-  function zoneLabel(z: Zone): string {
-    const px = zonePixels(work, z.rect);
-    const base = `Zone ${z.id}, ${pct(z.rect.w)} wide by ${pct(z.rect.h)} tall, ${px.w} by ${px.h} pixels`;
+  // WCAG 2.5.3 (label in name): the accessible name has to contain the visible
+  // strings, in the same order: the number, "1280 × 1400" and "50% × 100%".
+  // The spelled-out meaning and the keyboard help go into the description.
+  function zoneName(z: Zone, px: PxRect): string {
+    return `Zone ${z.id}, ${px.w} × ${px.h}, ${pct(z.rect.w)} × ${pct(z.rect.h)}`;
+  }
+
+  function zoneDescription(z: Zone, px: PxRect): string {
+    const base = `${px.w} by ${px.h} pixels, ${pct(z.rect.w)} wide by ${pct(z.rect.h)} tall.`;
     if (splitAxis === 'vertical') {
-      return `${base}. Press Enter to split with a vertical divider; Left and Right arrows move the guide.`;
+      return `${base} Press Enter to split with a vertical divider; Left and Right arrows move the guide.`;
     }
     if (splitAxis === 'horizontal') {
-      return `${base}. Press Enter to split with a horizontal divider; Up and Down arrows move the guide.`;
+      return `${base} Press Enter to split with a horizontal divider; Up and Down arrows move the guide.`;
     }
-    return `${base}${selected === z.id ? ', selected' : ''}`;
+    return base;
   }
 
   // ---- dividers ------------------------------------------------------------
@@ -291,7 +297,8 @@
       class:selected={selected === z.id}
       style={rectStyle(z.rect)}
       aria-pressed={splitAxis ? undefined : selected === z.id}
-      aria-label={zoneLabel(z)}
+      aria-label={zoneName(z, px)}
+      aria-describedby="zone-desc-{z.id}"
       data-testid="zone-{z.id}"
       data-zone-id={z.id}
       onclick={(e) => onZoneClick(e, z)}
@@ -305,6 +312,8 @@
         <span class="pctline">{pct(z.rect.w)} × {pct(z.rect.h)}</span>
       </span>
     </button>
+    <!-- Referenced by aria-describedby; hidden elements still count for that. -->
+    <span id="zone-desc-{z.id}" hidden>{zoneDescription(z, px)}</span>
   {/each}
 
   {#each dividers as d}
@@ -459,6 +468,13 @@
     font: 0.78rem/1.2 var(--mono);
     color: var(--text-muted);
     white-space: nowrap;
+  }
+
+  /* The selected fill is the strongest tint, so the small lines use the full
+     text colour there (muted text on the dark selected fill is only 3.4:1). */
+  .zone.selected .dim,
+  .zone.selected .pctline {
+    color: var(--text);
   }
 
   @container (max-width: 110px) {

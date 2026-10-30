@@ -51,14 +51,19 @@ Generated files (`e2e/.results`, `e2e/.report`) are git-ignored by
 | `a11y.spec.ts` | axe-core (WCAG 2.0 to 2.2, A and AA) over 10 states x light and dark; best-practice findings are only recorded as annotations |
 | `privacy.spec.ts` | the page only talks to the local dev server, no external references, CSP, and a self-test of the guard |
 
-## Known UI issues (tests marked `test.fail()`)
+## Known UI issues
 
-Defects found by the audit are tracked, not hidden. The "known UI issues"
-block in `a11y.spec.ts` holds one test per defect, marked `test.fail()`: it is
-reported as passing while the defect exists and turns red ("expected to fail,
-but passed") once the UI is fixed, which is the cue to delete the marker. The
-general axe scans switch off only the single rule a defect trips
-(`KNOWN_ISSUE_RULES`).
+There are none open. The three defects the audit found (zone buttons failing
+WCAG 2.5.3 label-in-name, the hovered armed "Confirm delete" button, small text
+on a selected zone in the dark theme) are fixed and pinned by the "fixed UI
+issues (regression tests)" block in `a11y.spec.ts`; no axe rule is switched off.
+If a new defect turns up, track it the same way: a focused test marked
+`test.fail()` (it turns red once the UI is fixed, which is the cue to delete the
+marker) and switch off only the one rule it trips in the general scans.
+
+A zone button's accessible name is its visible text ("Zone 1, 1280 × 1400,
+50% × 100%"); the spelled-out size and the keyboard help are its accessible
+description.
 
 ## Conventions
 
