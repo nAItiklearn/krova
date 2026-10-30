@@ -52,12 +52,14 @@ impl PxRect {
         Self { x, y, w, h }
     }
 
+    /// Right edge; saturates instead of overflowing on absurd rects from the OS.
     pub fn right(&self) -> i32 {
-        self.x + self.w
+        self.x.saturating_add(self.w)
     }
 
+    /// Bottom edge; saturates instead of overflowing on absurd rects from the OS.
     pub fn bottom(&self) -> i32 {
-        self.y + self.h
+        self.y.saturating_add(self.h)
     }
 
     pub fn contains(&self, px: i32, py: i32) -> bool {
@@ -124,5 +126,16 @@ mod tests {
         assert_eq!(work.normalize(-1920, 0), Some((0.0, 0.0)));
         assert_eq!(work.normalize(0, 0), None);
         assert_eq!(work.normalize(-960, 540), Some((0.5, 0.5)));
+    }
+
+    #[test]
+    fn absurd_rects_saturate_instead_of_overflowing() {
+        let r = PxRect::new(i32::MAX - 10, i32::MAX - 10, 1000, 1000);
+        assert_eq!(r.right(), i32::MAX);
+        assert_eq!(r.bottom(), i32::MAX);
+        assert!(!r.contains(0, 0));
+        let r = PxRect::new(i32::MIN, i32::MIN, -1000, -1000);
+        assert_eq!(r.right(), i32::MIN);
+        assert!(!r.contains(i32::MIN, i32::MIN));
     }
 }

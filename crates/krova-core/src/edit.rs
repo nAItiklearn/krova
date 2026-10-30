@@ -2,7 +2,7 @@
 //! and divider dragging. All coordinates are normalized (0..=1).
 
 use crate::geometry::Rect;
-use crate::zone::{Layout, Zone};
+use crate::zone::{Layout, Zone, MAX_ZONES};
 
 /// Smallest zone side the editor allows, as a fraction of the work area.
 pub const MIN_ZONE: f64 = 0.05;
@@ -34,6 +34,8 @@ pub enum EditError {
     LastZone,
     #[error("there is no divider at that position")]
     NoDivider,
+    #[error("the layout cannot take another zone")]
+    TooManyZones,
 }
 
 /// Union of two rects that share a full edge, if they do.
@@ -48,8 +50,14 @@ fn merged(a: &Rect, b: &Rect) -> Option<Rect> {
 }
 
 impl Layout {
-    fn next_zone_id(&self) -> u32 {
-        self.zones.iter().map(|z| z.id).max().unwrap_or(0) + 1
+    /// Next free zone id, or `None` if ids have run out.
+    fn next_zone_id(&self) -> Option<u32> {
+        self.zones
+            .iter()
+            .map(|z| z.id)
+            .max()
+            .unwrap_or(0)
+            .checked_add(1)
     }
 
     /// Split a zone at normalized position `at` along `axis`. The original
@@ -81,7 +89,10 @@ impl Layout {
                 )
             }
         };
-        let new_id = self.next_zone_id();
+        if self.zones.len() >= MAX_ZONES {
+            return Err(EditError::TooManyZones);
+        }
+        let new_id = self.next_zone_id().ok_or(EditError::TooManyZones)?;
         self.zones[idx].rect = first;
         self.zones.push(Zone {
             id: new_id,
@@ -279,5 +290,38 @@ mod tests {
             templates().remove(0),
             "failed edits must not change the layout"
         );
+    }
+
+    #[test]
+    fn splitting_stops_at_the_zone_limit() {
+        // A full layout: the left half is one wide zone, the right half is 63 thin columns.
+        let thin = 0.5 / (MAX_ZONES - 1) as f64;
+        let mut rects = vec![Rect::new(0.0, 0.0, 0.5, 1.0)];
+        rects.extend((0..MAX_ZONES - 1).map(|i| Rect::new(0.5 + i as f64 * thin, 0.0, thin, 1.0)));
+        let mut l = Layout::new("full", "Full", &rects);
+        assert_eq!(l.zones.len(), MAX_ZONES);
+        let before = l.clone();
+        // Splitting the wide zone is geometrically fine, but there is no room left.
+        assert_eq!(
+            l.split_zone(1, Axis::Vertical, 0.25),
+            Err(EditError::TooManyZones)
+        );
+        assert_eq!(l, before, "a refused split must not change the layout");
+        // One zone fewer and the same split works.
+        l.zones.pop();
+        assert!(l.split_zone(1, Axis::Vertical, 0.25).is_ok());
+        assert_eq!(l.zones.len(), MAX_ZONES);
+    }
+
+    #[test]
+    fn exhausted_zone_ids_do_not_overflow() {
+        let mut l = Layout::new("one", "One", &[Rect::new(0.0, 0.0, 1.0, 1.0)]);
+        l.zones[0].id = u32::MAX;
+        let before = l.clone();
+        assert_eq!(
+            l.split_zone(u32::MAX, Axis::Vertical, 0.5),
+            Err(EditError::TooManyZones)
+        );
+        assert_eq!(l, before);
     }
 }

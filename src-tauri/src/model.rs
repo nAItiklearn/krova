@@ -4,11 +4,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use krova_core::{Config, ConfigError, MonitorDescriptor, MonitorView, PxRect, Settings};
-use krova_platform::overlay::parse_hex_color;
 use krova_platform::{InputHandle, MonitorInfo, Permission, Platform};
 use serde::Serialize;
-
-const DEFAULT_COLOR: &str = "#3b82f6";
 
 /// Everything the app threads share.
 pub struct Shared {
@@ -147,19 +144,10 @@ impl AppModel {
     }
 }
 
-/// Force settings coming from the UI (or the tray) into their valid ranges.
-pub fn sanitize_settings(mut s: Settings) -> Settings {
-    s.highlight_opacity = if s.highlight_opacity.is_finite() {
-        s.highlight_opacity.clamp(0.0, 1.0)
-    } else {
-        Settings::default().highlight_opacity
-    };
-    s.edge_size_px = s.edge_size_px.clamp(2, 64);
-    s.highlight_color = match parse_hex_color(&s.highlight_color) {
-        Some([r, g, b]) => format!("#{r:02x}{g:02x}{b:02x}"),
-        None => DEFAULT_COLOR.to_owned(),
-    };
-    s
+/// Force settings coming from the UI (or the tray) into their valid ranges. The
+/// rules live in `krova_core` so the config loader applies the same ones.
+pub fn sanitize_settings(s: Settings) -> Settings {
+    s.sanitized()
 }
 
 #[cfg(test)]
@@ -273,6 +261,6 @@ mod tests {
         });
         assert_eq!(s.highlight_opacity, Settings::default().highlight_opacity);
         assert_eq!(s.edge_size_px, 2);
-        assert_eq!(s.highlight_color, DEFAULT_COLOR);
+        assert_eq!(s.highlight_color, Settings::default().highlight_color);
     }
 }

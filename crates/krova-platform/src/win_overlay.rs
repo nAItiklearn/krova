@@ -194,6 +194,14 @@ fn apply(hwnd: HWND, scene: Option<&OverlayScene>) {
 
 /// Push premultiplied ARGB `pixels` (`monitor.w * monitor.h`) to the layered window.
 fn paint(hwnd: HWND, monitor: PxRect, pixels: &[u32]) {
+    // The DIB below is sized from the monitor rect and filled from `pixels`; refuse to
+    // touch it unless the two agree exactly.
+    let expected = usize::try_from(monitor.w)
+        .unwrap_or(0)
+        .saturating_mul(usize::try_from(monitor.h).unwrap_or(0));
+    if expected == 0 || pixels.len() != expected {
+        return;
+    }
     unsafe {
         let screen = GetDC(HWND::default());
         let mem = CreateCompatibleDC(screen);

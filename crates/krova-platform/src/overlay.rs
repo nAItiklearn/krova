@@ -112,22 +112,32 @@ fn inset(r: PxRect) -> PxRect {
     PxRect::new(r.x + d, r.y + d, r.w - 2 * d, r.h - 2 * d)
 }
 
+/// Largest overlay bitmap that will be rendered (about 256 MB of pixels). Real monitors
+/// are far below it (8K is 33 Mpx); it only stops a bogus monitor rect from asking for
+/// gigabytes. Above it the overlay is simply not drawn.
+pub const MAX_PIXELS: usize = 64 * 1024 * 1024;
+
 /// Rasterise the scene into `monitor.w * monitor.h` premultiplied ARGB pixels,
-/// row-major, top row first. Returns an empty buffer for an empty monitor.
+/// row-major, top row first. Returns an empty buffer for an empty or implausibly
+/// large monitor.
 pub fn render(scene: &OverlayScene) -> Vec<u32> {
     let (w, h) = (scene.monitor.w, scene.monitor.h);
     if w <= 0 || h <= 0 {
         return Vec::new();
     }
+    let count = (w as usize).saturating_mul(h as usize);
+    if count > MAX_PIXELS {
+        return Vec::new();
+    }
     let mut canvas = Canvas {
         w,
         h,
-        px: vec![0; w as usize * h as usize],
+        px: vec![0; count],
     };
     let local = |r: PxRect| {
         inset(PxRect::new(
-            r.x - scene.monitor.x,
-            r.y - scene.monitor.y,
+            r.x.saturating_sub(scene.monitor.x),
+            r.y.saturating_sub(scene.monitor.y),
             r.w,
             r.h,
         ))
@@ -279,5 +289,22 @@ mod tests {
         ];
         let buf = render(&scene(PxRect::new(0, 0, 200, 100), zones, Some(2)));
         assert_eq!(buf.len(), 200 * 100);
+    }
+
+    #[test]
+    fn an_implausibly_large_monitor_is_not_rendered() {
+        // 100_000 x 100_000 would be 40 GB of pixels.
+        let huge = scene(PxRect::new(0, 0, 100_000, 100_000), vec![], None);
+        assert!(render(&huge).is_empty());
+        // i32::MAX squared must not overflow the size computation either.
+        let absurd = scene(PxRect::new(0, 0, i32::MAX, i32::MAX), vec![], None);
+        assert!(render(&absurd).is_empty());
+    }
+
+    #[test]
+    fn an_8k_monitor_is_still_rendered() {
+        // 7680 x 4320 = 33 Mpx, under the cap.
+        let s = scene(PxRect::new(0, 0, 7680, 4320), vec![], None);
+        assert_eq!(render(&s).len(), 7680 * 4320);
     }
 }

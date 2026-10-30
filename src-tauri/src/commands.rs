@@ -153,6 +153,8 @@ pub fn edit_split_zone(
     axis: AxisArg,
     at: f64,
 ) -> Result<Layout, String> {
+    // The webview is not trusted: check the incoming layout before editing it.
+    layout.validate().map_err(|e| e.to_string())?;
     layout
         .split_zone(zone_id, axis.into(), at)
         .map_err(|e| e.to_string())?;
@@ -161,6 +163,7 @@ pub fn edit_split_zone(
 
 #[tauri::command]
 pub fn edit_remove_zone(mut layout: Layout, zone_id: u32) -> Result<Layout, String> {
+    layout.validate().map_err(|e| e.to_string())?;
     layout.remove_zone(zone_id).map_err(|e| e.to_string())?;
     Ok(layout)
 }
@@ -172,6 +175,7 @@ pub fn edit_move_divider(
     from: f64,
     to: f64,
 ) -> Result<Layout, String> {
+    layout.validate().map_err(|e| e.to_string())?;
     layout
         .move_divider(axis.into(), from, to)
         .map_err(|e| e.to_string())?;
@@ -217,5 +221,25 @@ mod tests {
         let json = r#"{"id":"x","name":"X","zones":[{"id":1,"rect":{"x":0,"y":0,"w":1,"h":1}}]}"#;
         let layout: Layout = serde_json::from_str(json).unwrap();
         assert!(layout.validate().is_ok());
+    }
+
+    #[test]
+    fn edit_commands_refuse_layouts_that_were_never_valid() {
+        // Duplicate ids, an out-of-range rectangle and a hostile id near u32::MAX.
+        let mut dup = templates().remove(0);
+        dup.zones[1].id = 1;
+        let mut off = templates().remove(0);
+        off.zones[0].rect = Rect::new(0.9, 0.0, 0.5, 1.0);
+        let mut max_id = Layout::new("m", "m", &[Rect::new(0.0, 0.0, 1.0, 1.0)]);
+        max_id.zones[0].id = u32::MAX;
+
+        for bad in [dup, off] {
+            assert!(edit_split_zone(bad.clone(), 1, AxisArg::Vertical, 0.25).is_err());
+            assert!(edit_remove_zone(bad.clone(), 1).is_err());
+            assert!(edit_move_divider(bad, AxisArg::Vertical, 0.5, 0.4).is_err());
+        }
+        // A valid layout whose ids are exhausted is refused cleanly, not with a panic.
+        let err = edit_split_zone(max_id, u32::MAX, AxisArg::Vertical, 0.5).unwrap_err();
+        assert!(err.contains("another zone"), "{err}");
     }
 }

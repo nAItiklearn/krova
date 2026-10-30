@@ -10,6 +10,13 @@ use crate::zone::{templates, Layout};
 
 pub const SCHEMA_VERSION: u32 = 1;
 
+/// Largest config file that will be parsed; anything bigger is treated as corrupt.
+pub const MAX_CONFIG_BYTES: u64 = 4 * 1024 * 1024;
+/// Most monitor profiles kept (profiles of disconnected monitors are kept too).
+pub const MAX_MONITORS: usize = 64;
+/// Most layouts a single monitor profile may hold.
+pub const MAX_LAYOUTS_PER_MONITOR: usize = 64;
+
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
     #[error("io error: {0}")]
@@ -71,6 +78,32 @@ pub struct Settings {
     pub theme: Theme,
 }
 
+/// `#rrggbb` (any case, optional `#`, surrounding spaces ignored) as lowercase `#rrggbb`.
+pub fn normalize_hex_color(s: &str) -> Option<String> {
+    let h = s.trim().trim_start_matches('#');
+    if h.len() != 6 || !h.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some(format!("#{}", h.to_ascii_lowercase()))
+}
+
+impl Settings {
+    /// Force every field into its valid range. Applied to settings coming from the
+    /// UI, the tray and the config file, so a hand-edited file cannot carry nonsense.
+    pub fn sanitized(mut self) -> Self {
+        let defaults = Settings::default();
+        self.highlight_opacity = if self.highlight_opacity.is_finite() {
+            self.highlight_opacity.clamp(0.0, 1.0)
+        } else {
+            defaults.highlight_opacity
+        };
+        self.edge_size_px = self.edge_size_px.clamp(2, 64);
+        self.highlight_color =
+            normalize_hex_color(&self.highlight_color).unwrap_or(defaults.highlight_color);
+        self
+    }
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -126,6 +159,7 @@ impl MonitorProfile {
     /// Drop invalid layouts, reseed if none are left, repair a dangling active id.
     fn sanitize(&mut self) {
         self.layouts.retain(|l| l.validate().is_ok());
+        self.layouts.truncate(MAX_LAYOUTS_PER_MONITOR);
         if self.layouts.is_empty() {
             self.layouts = templates();
         }
@@ -155,6 +189,10 @@ impl Default for Config {
 
 impl Config {
     pub fn load(path: &Path) -> Result<(Config, LoadStatus), ConfigError> {
+        // An absurdly large file is never a config we wrote: keep it aside, start fresh.
+        if fs::metadata(path).is_ok_and(|m| m.len() > MAX_CONFIG_BYTES) {
+            return Self::quarantine(path);
+        }
         let text = match fs::read_to_string(path) {
             Ok(t) => t,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -166,10 +204,11 @@ impl Config {
             Ok(v) => v,
             Err(_) => return Self::quarantine(path),
         };
+        // A version too large for u32 is certainly newer than ours, not "0".
         let found = value
             .get("schema_version")
             .and_then(serde_json::Value::as_u64)
-            .unwrap_or(0) as u32;
+            .map_or(0, |v| u32::try_from(v).unwrap_or(u32::MAX));
         if found > SCHEMA_VERSION {
             return Err(ConfigError::TooNew {
                 found,
@@ -182,6 +221,8 @@ impl Config {
         };
         // Migrations from older versions would run here, keyed on `found`.
         cfg.schema_version = SCHEMA_VERSION;
+        cfg.settings = cfg.settings.sanitized();
+        cfg.monitors.truncate(MAX_MONITORS);
         for m in &mut cfg.monitors {
             m.sanitize();
         }
@@ -266,6 +307,8 @@ impl Config {
         let p = self.profile_mut(monitor_id)?;
         if let Some(i) = p.layouts.iter().position(|l| l.id == layout.id) {
             p.layouts[i] = layout;
+        } else if p.layouts.len() >= MAX_LAYOUTS_PER_MONITOR {
+            return Err(ProfileError::TooManyLayouts);
         } else {
             p.layouts.push(layout);
         }
@@ -313,6 +356,8 @@ pub enum ProfileError {
     NoSuchLayout(String),
     #[error("a monitor needs at least one layout")]
     LastLayout,
+    #[error("a monitor can hold at most 64 layouts")]
+    TooManyLayouts,
     #[error("invalid layout: {0}")]
     Invalid(#[from] crate::zone::LayoutError),
 }
@@ -407,6 +452,148 @@ mod profile_tests {
             Err(ProfileError::NoSuchLayout("ghost".to_owned()))
         );
         assert_eq!(c.monitors[0].active_layout, "grid");
+    }
+}
+
+#[cfg(test)]
+mod hardening_tests {
+    use super::*;
+    use crate::geometry::Rect;
+
+    fn one_monitor(hw: &str) -> MonitorDescriptor {
+        MonitorDescriptor {
+            hardware_id: Some(hw.to_owned()),
+            device_path: None,
+            rect: PxRect::new(0, 0, 1920, 1080),
+        }
+    }
+
+    fn full(id: &str) -> Layout {
+        Layout::new(id, "n", &[Rect::new(0.0, 0.0, 1.0, 1.0)])
+    }
+
+    #[test]
+    fn hex_colours_are_normalized() {
+        assert_eq!(normalize_hex_color("#FF8800").as_deref(), Some("#ff8800"));
+        assert_eq!(normalize_hex_color("  3b82f6 ").as_deref(), Some("#3b82f6"));
+        assert_eq!(normalize_hex_color("#fff"), None);
+        assert_eq!(normalize_hex_color("#+f+f+f"), None);
+        assert_eq!(normalize_hex_color("#ggg000"), None);
+        assert_eq!(normalize_hex_color("#12345é"), None);
+        assert_eq!(normalize_hex_color(""), None);
+    }
+
+    #[test]
+    fn settings_are_forced_into_range() {
+        let s = Settings {
+            highlight_opacity: 9.0,
+            edge_size_px: 1000,
+            highlight_color: "  #FF8800 ".to_owned(),
+            ..Settings::default()
+        }
+        .sanitized();
+        assert_eq!(s.highlight_opacity, 1.0);
+        assert_eq!(s.edge_size_px, 64);
+        assert_eq!(s.highlight_color, "#ff8800");
+
+        let s = Settings {
+            highlight_opacity: f32::NAN,
+            edge_size_px: -3,
+            highlight_color: "red".to_owned(),
+            ..Settings::default()
+        }
+        .sanitized();
+        assert_eq!(s.highlight_opacity, Settings::default().highlight_opacity);
+        assert_eq!(s.edge_size_px, 2);
+        assert_eq!(s.highlight_color, Settings::default().highlight_color);
+
+        let d = Settings::default();
+        assert_eq!(d.clone().sanitized(), d, "valid settings are left alone");
+    }
+
+    #[test]
+    fn hand_edited_settings_are_sanitized_on_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("config.json");
+        fs::write(
+            &p,
+            r#"{"schema_version":1,"settings":{"highlight_opacity":7.0,"edge_size_px":100000,"highlight_color":"red"}}"#,
+        )
+        .unwrap();
+        let (c, st) = Config::load(&p).unwrap();
+        assert_eq!(st, LoadStatus::Loaded);
+        assert_eq!(c.settings.highlight_opacity, 1.0);
+        assert_eq!(c.settings.edge_size_px, 64);
+        assert_eq!(c.settings.highlight_color, "#3b82f6");
+    }
+
+    #[test]
+    fn an_oversized_file_is_set_aside_not_parsed() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("config.json");
+        let f = fs::File::create(&p).unwrap();
+        f.set_len(MAX_CONFIG_BYTES + 1).unwrap();
+        drop(f);
+        let (c, st) = Config::load(&p).unwrap();
+        assert_eq!(st, LoadStatus::Recovered);
+        assert_eq!(c, Config::default());
+        assert!(dir.path().join("config.json.bak").exists());
+        assert!(!p.exists());
+    }
+
+    #[test]
+    fn a_schema_version_beyond_u32_counts_as_newer() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("config.json");
+        fs::write(&p, r#"{"schema_version": 4294967296}"#).unwrap();
+        assert!(matches!(
+            Config::load(&p),
+            Err(ConfigError::TooNew {
+                found: u32::MAX,
+                ..
+            })
+        ));
+        assert!(p.exists(), "a newer config is left untouched");
+    }
+
+    #[test]
+    fn profile_and_layout_counts_are_capped_on_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("config.json");
+        let mut c = Config::default();
+        for i in 0..MAX_MONITORS + 5 {
+            c.resolve_monitors(&[one_monitor(&format!("HW{i}"))]);
+        }
+        assert!(c.monitors.len() > MAX_MONITORS);
+        for i in 0..MAX_LAYOUTS_PER_MONITOR + 5 {
+            c.monitors[0].layouts.push(full(&format!("extra{i}")));
+        }
+        c.save(&p).unwrap();
+        let (loaded, _) = Config::load(&p).unwrap();
+        assert_eq!(loaded.monitors.len(), MAX_MONITORS);
+        assert_eq!(loaded.monitors[0].layouts.len(), MAX_LAYOUTS_PER_MONITOR);
+        assert!(loaded.monitors[0].active().is_some());
+    }
+
+    #[test]
+    fn the_layout_count_per_monitor_is_capped_when_saving() {
+        let mut c = Config::default();
+        c.resolve_monitors(&[one_monitor("A")]);
+        let m = c.monitors[0].id.clone();
+        let existing = c.monitors[0].layouts.len();
+        for i in existing..MAX_LAYOUTS_PER_MONITOR {
+            c.save_layout(&m, full(&format!("l{i}"))).unwrap();
+        }
+        assert_eq!(c.monitors[0].layouts.len(), MAX_LAYOUTS_PER_MONITOR);
+        assert_eq!(
+            c.save_layout(&m, full("one-too-many")),
+            Err(ProfileError::TooManyLayouts)
+        );
+        assert!(
+            c.save_layout(&m, full("l10")).is_ok(),
+            "replacing an existing layout is still allowed"
+        );
+        assert_eq!(c.monitors[0].layouts.len(), MAX_LAYOUTS_PER_MONITOR);
     }
 }
 

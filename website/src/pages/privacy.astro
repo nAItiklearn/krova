@@ -38,11 +38,18 @@ const description =
         Krova with your operating system’s network monitor or block it in your firewall. It should behave exactly the
         same.
       </p>
+      <p>
+        Two things sit outside Krova’s own code. The Windows installer downloads Microsoft’s WebView2 runtime if it is
+        not already installed on your computer. And the web view that draws Krova’s window (WebView2 on Windows,
+        WebKit on macOS) and the operating system’s own crash reporting are separate system components that Krova does
+        not control.
+      </p>
 
       <h2>What is stored on your computer</h2>
       <p>
-        Krova keeps one file, <code>config.json</code>, in your user account’s application-data folder (typically under
-        <code>%APPDATA%</code> on Windows and <code>~/Library/Application Support</code> on macOS). It contains:
+        Krova keeps your settings and layouts in one file, <code>config.json</code>, in your user account’s
+        application-data folder (typically <code>%APPDATA%\dev.krova.app</code> on Windows and
+        <code>~/Library/Application Support/dev.krova.app</code> on macOS). It contains:
       </p>
       <ul>
         <li>
@@ -56,21 +63,40 @@ const description =
       </ul>
       <p>
         To recognise a monitor when you plug it back in, Krova stores what the operating system reports about it: the
-        manufacturer and product codes (and the serial number, where the system provides one), the device path, and the
-        monitor’s last size and position. These are what let Krova bring a layout back for the same monitor. They stay
-        in this file on your machine. If you ever share your <code>config.json</code>, for example in a bug report,
-        remove those identifiers first if you would rather not share them.
+        manufacturer and product codes, the device path (which includes an identifier for the port it is plugged
+        into), and the monitor’s last size and position. On macOS this also includes the display’s serial number
+        where the display reports one; on Windows Krova does not store a serial number. These are what let Krova bring
+        a layout back for the same monitor. They stay in this file on your machine. If you ever share your
+        <code>config.json</code>, for example in a bug report, remove those identifiers first if you would rather not
+        share them.
       </p>
       <p>
-        The file is written safely (to a temporary file, then renamed). If it ever turns out to be unreadable, Krova
-        renames it to <code>config.json.bak</code> and starts again with defaults instead of discarding it.
+        The file is written safely (to a temporary file, then renamed), so a temporary <code>config.json.tmp</code>
+        can exist for a moment. If the file ever turns out to be unreadable, Krova renames it to
+        <code>config.json.bak</code> and starts again with defaults instead of discarding it.
       </p>
+      <p>Besides <code>config.json</code>, a few other things exist on your computer while Krova is installed:</p>
+      <ul>
+        <li>
+          On Windows, the web view that draws Krova’s window keeps its own cache and browser profile in a folder under
+          <code>%LOCALAPPDATA%\dev.krova.app</code>.
+        </li>
+        <li>
+          If you turn on “Launch at login”, Krova adds a start-up entry: a value named “Krova” under
+          <code>HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run</code> on Windows, or a
+          <code>dev.krova.app.plist</code> file in <code>~/Library/LaunchAgents</code> on macOS when it is not run from
+          an app bundle (otherwise a regular macOS login item).
+        </li>
+      </ul>
 
       <h2>What Krova does not record</h2>
       <p>
-        To move a window, Krova has to look at the window you are dragging, its position and size, and at where your
-        cursor is. That happens in memory, in the moment. <strong>Window titles are never logged or stored</strong>,
-        and nothing about the windows you move is written to <code>config.json</code>.
+        To notice that you are dragging a window, Krova listens to mouse movement and clicks across your whole
+        computer while it runs. When you press the mouse button on a window it looks at that window’s position and size
+        and whether its program runs as administrator, and during a drag it checks whether your activation key and
+        Escape are held. That all happens in memory, in the moment, and none of it is stored or sent anywhere.
+        <strong>Window titles are never read, logged or stored</strong>, and nothing about the windows you move is
+        written to <code>config.json</code>.
       </p>
 
       <h2>Permissions</h2>
@@ -86,7 +112,9 @@ const description =
       <h2>Removing your data</h2>
       <p>
         Delete <code>config.json</code> (and <code>config.json.bak</code>, if present) to erase the settings and
-        layouts Krova has stored. Krova keeps no copy anywhere else, because it never sends anything anywhere.
+        layouts Krova has stored. To remove everything else, turn off “Launch at login” before uninstalling and delete
+        the <code>dev.krova.app</code> folder under <code>%LOCALAPPDATA%</code> on Windows. Krova keeps no copy of your
+        data anywhere else, because it never sends anything anywhere.
       </p>
 
       <h2>This website</h2>
