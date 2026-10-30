@@ -1,0 +1,69 @@
+---
+/**
+ * One plain window in a mock desktop. Skeleton bars only, no readable text, so
+ * nothing in an illustration can be mistaken for a screenshot or for a real app.
+ * Styles live in src/styles/illustrations.css (.ill-*).
+ *
+ * Position and size are percentages of the desk's work area. Omit them when
+ * CSS (a desk state or an animation) decides the geometry.
+ */
+interface Props {
+  kind: 'doc' | 'term' | 'page';
+  x?: string;
+  y?: string;
+  w?: string;
+  h?: string;
+  class?: string;
+}
+
+const { kind, x, y, w, h, class: extra } = Astro.props;
+const vars = [x && `--x:${x}`, y && `--y:${y}`, w && `--w:${w}`, h && `--h:${h}`].filter(Boolean).join(';');
+---
+
+<div class:list={['ill-win', `ill-win--${kind}`, extra]} style={vars || undefined}>
+  <div class="ill-win__bar"><i></i><i></i><i></i><b></b></div>
+  <div class="ill-win__body">
+    {
+      kind === 'doc' && (
+        <>
+          <span class="ill-ln ill-ln--strong" style="--w:55%" />
+          <span class="ill-ln" style="--w:92%" />
+          <span class="ill-ln" style="--w:84%" />
+          <span class="ill-ln" style="--w:90%" />
+          <span class="ill-bl" style="--h:7cqw" />
+          <span class="ill-ln" style="--w:88%" />
+          <span class="ill-ln" style="--w:70%" />
+          <span class="ill-ln" style="--w:80%" />
+        </>
+      )
+    }
+    {
+      kind === 'term' && (
+        <>
+          <span class="ill-ln ill-ln--accent" style="--w:42%" />
+          <span class="ill-ln" style="--w:76%" />
+          <span class="ill-ln" style="--w:58%" />
+          <span class="ill-ln ill-ln--accent" style="--w:34%" />
+          <span class="ill-ln" style="--w:82%" />
+          <span class="ill-ln" style="--w:64%" />
+          <span class="ill-ln" style="--w:72%" />
+          <span class="ill-ln ill-ln--accent" style="--w:28%" />
+        </>
+      )
+    }
+    {
+      kind === 'page' && (
+        <>
+          <span class="ill-ln" style="--w:46%;height:1.5cqw;border-radius:1cqw" />
+          <span class="ill-ln ill-ln--strong" style="--w:58%" />
+          <span class="ill-bl" style="--h:9cqw" />
+          <span class="ill-ln" style="--w:94%" />
+          <span class="ill-ln" style="--w:88%" />
+          <span class="ill-ln" style="--w:91%" />
+          <span class="ill-ln" style="--w:60%" />
+        </>
+      )
+    }
+  </div>
+  <slot />
+</div>

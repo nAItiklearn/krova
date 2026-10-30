@@ -3,22 +3,28 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import Hero from '../components/Hero.astro';
 import HowItWorks from '../components/HowItWorks.astro';
 import Features from '../components/Features.astro';
-import PrivacySection from '../components/PrivacySection.astro';
-import Limitations from '../components/Limitations.astro';
-import Download from '../components/Download.astro';
+import Customize from '../components/Customize.astro';
+import TryEditor from '../components/TryEditor.astro';
+import Compare from '../components/Compare.astro';
+import PerformanceTeaser from '../components/PerformanceTeaser.astro';
+import OpenSource from '../components/OpenSource.astro';
 import Faq from '../components/Faq.astro';
+import FinalCta from '../components/FinalCta.astro';
 
 const title = 'Krova: free, offline window zone manager for Windows and macOS';
 const description =
-  'Free, open-source, offline window zone manager for Windows 10/11 and macOS 13+. Hold Shift, drag a window, drop it in a zone. No accounts, no telemetry.';
+  'Draw zones on each monitor, hold Shift while dragging a window, release over a zone to snap. Free, MIT, offline, for Windows 10/11 and macOS 13+.';
 ---
 
 <BaseLayout title={title} description={description}>
   <Hero />
   <HowItWorks />
   <Features />
-  <PrivacySection />
-  <Limitations />
-  <Download />
+  <Customize />
+  <TryEditor />
+  <Compare />
+  <PerformanceTeaser />
+  <OpenSource />
   <Faq />
+  <FinalCta />
 </BaseLayout>

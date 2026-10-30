@@ -1,83 +1,102 @@
 ---
-import Icon from './Icon.astro';
-import type { IconName } from './Icon.astro';
-
-interface Feature {
-  icon: IconName;
-  title: string;
-  text: string;
-}
-
-const features: Feature[] = [
-  {
-    icon: 'zones',
-    title: 'Zones you draw',
-    text: 'Split a monitor with a full-screen overlay editor, drag the dividers, or start from a template. Zones are stored as proportions of the screen, so they survive resolution and scaling changes.',
-  },
-  {
-    icon: 'monitors',
-    title: 'A layout per monitor',
-    text: 'Every monitor keeps its own layouts. Unplug one and plug it back in, and its layout comes back, matched by the monitor’s hardware identity.',
-  },
-  {
-    icon: 'key',
-    title: 'Only when you ask',
-    text: 'Zones appear only while you hold your activation key: Shift by default, or Ctrl, Alt or Cmd. Windows’ own Snap Assist is left alone.',
-  },
-  {
-    icon: 'edge',
-    title: 'Optional edge snapping',
-    text: 'Drag to a screen edge or corner to fill a half or a quarter. It never fires on the border between two monitors.',
-  },
-  {
-    icon: 'motion',
-    title: 'Animated or instant',
-    text: 'Windows glide into place with a short ease-out, about 120 ms, or jump there instantly. One setting.',
-  },
-  {
-    icon: 'shield',
-    title: 'Careful with windows',
-    text: 'Respects each window’s minimum and maximum size, handles mixed-DPI monitors, stays clear of the taskbar, menu bar and dock, and only touches windows on your current desktop or Space.',
-  },
-  {
-    icon: 'tray',
-    title: 'Quiet in the tray',
-    text: 'Lives in the system tray or menu bar with no taskbar window. Enable or disable, edit layouts, open settings, launch at login, quit.',
-  },
-  {
-    icon: 'theme',
-    title: 'Dark and light',
-    text: 'Follows your operating system’s appearance, with a setting to force light or dark.',
-  },
-  {
-    icon: 'code',
-    title: 'Free and open source',
-    text: 'MIT licensed: use it, read the code, modify it, share it. No account needed.',
-  },
-];
+import MiniMonitor from './illustrations/MiniMonitor.astro';
+import Cursor from './illustrations/Cursor.astro';
 ---
 
-<section id="features" class="section section--alt" aria-labelledby="features-title">
+<section id="features" class="section" aria-labelledby="features-title">
   <div class="container">
-    <header class="section-head">
+    <header class="sec-head">
       <p class="eyebrow">Features</p>
-      <h2 id="features-title">Everything a zone manager needs, nothing it doesn’t</h2>
-      <p class="lead">A focused tool for placing windows. It does that well and leaves the rest of your desktop alone.</p>
+      <h2 id="features-title">One job, done carefully. <span class="soft">Placing windows.</span></h2>
     </header>
 
     <ul class="grid">
-      {
-        features.map((f) => (
-          <li class="card feature">
-            <span class="icon-wrap">
-              <Icon name={f.icon} />
-            </span>
-            <h3>{f.title}</h3>
-            <p>{f.text}</p>
-          </li>
-        ))
-      }
+      <li class="card">
+        <div class="art" aria-hidden="true">
+          <div class="pair">
+            <MiniMonitor layout="priority" />
+            <MiniMonitor layout="grid" />
+          </div>
+        </div>
+        <h3>A layout for every monitor</h3>
+        <p>Each monitor keeps its own layouts. Unplug one, plug it back in, and its layouts return.</p>
+      </li>
+
+      <li class="card">
+        <div class="art" aria-hidden="true">
+          <div class="tpls">
+            <div class="ill-ed__thumb"><i style="--x:4%;--w:45%" /><i style="--x:51%;--w:45%" /></div>
+            <div class="ill-ed__thumb"><i style="--x:4%;--w:29%" /><i style="--x:35.5%;--w:29%" /><i style="--x:67%;--w:29%" /></div>
+            <div class="ill-ed__thumb">
+              <i style="--x:4%;--y:8%;--w:44%;--h:40%" /><i style="--x:52%;--y:8%;--w:44%;--h:40%" />
+              <i style="--x:4%;--y:52%;--w:44%;--h:40%" /><i style="--x:52%;--y:52%;--w:44%;--h:40%" />
+            </div>
+            <div class="ill-ed__thumb"><i style="--x:4%;--w:21%" /><i style="--x:27%;--w:46%" /><i style="--x:75%;--w:21%" /></div>
+          </div>
+        </div>
+        <h3>A visual zone editor</h3>
+        <p>Start from halves, thirds, a 2x2 grid or priority, or split and drag the dividers until it fits. Undo and save as you go.</p>
+      </li>
+
+      <li class="card">
+        <div class="art" aria-hidden="true">
+          <div class="edge ill-wrap">
+            <div class="ill-monitor ill-monitor--mini">
+              <div class="ill-desk">
+                <div class="ill-work">
+                  <span class="ill-zone ill-zone--solid" style="--x:0.8%;--w:48.6%" />
+                  <span class="ill-zone ill-zone--soft" style="--x:50.6%;--w:48.6%" />
+                  <Cursor x="1%" y="38%" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <h3>Edge snapping, if you want it</h3>
+        <p>Drag to a side for a half, a corner for a quarter, the top to maximize. Off by default, and never on the border between two monitors.</p>
+      </li>
+
+      <li class="card">
+        <div class="art" aria-hidden="true">
+          <svg class="motion" viewBox="0 0 220 90" focusable="false">
+            <rect class="ghost" x="6" y="22" width="52" height="46" rx="6"></rect>
+            <rect class="ghost g2" x="52" y="22" width="52" height="46" rx="6"></rect>
+            <rect class="now" x="106" y="12" width="108" height="66" rx="7"></rect>
+            <path class="trail" d="M60 45h38"></path>
+            <path class="trail" d="M94 39l7 6-7 6"></path>
+          </svg>
+          <div class="art-label"><span>about 120 ms</span><span>or instant</span></div>
+        </div>
+        <h3>Animated or instant</h3>
+        <p>Windows ease into place in about 120 ms, or jump there at once. It is one setting.</p>
+      </li>
+
+      <li class="card">
+        <div class="art" aria-hidden="true">
+          <div class="keys">
+            <kbd class="on">Shift</kbd><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>Win</kbd>
+          </div>
+        </div>
+        <h3>Your key</h3>
+        <p>Shift by default. Switch to Ctrl, Alt or the Windows key (Command on a Mac) if Shift is taken.</p>
+      </li>
+
+      <li class="card">
+        <div class="art" aria-hidden="true">
+          <div class="pair">
+            <MiniMonitor layout="thirds" label="100%" />
+            <MiniMonitor layout="thirds" label="150%" />
+          </div>
+        </div>
+        <h3>Careful with windows</h3>
+        <p>On Windows, Krova accounts for mixed-DPI monitors, the invisible borders around windows, each app&rsquo;s own minimum and maximum size, and the taskbar.</p>
+      </li>
     </ul>
+
+    <p class="also">
+      Also: a tray icon with launch at login. Light and dark follow your system. Minimized, fullscreen and administrator
+      windows are skipped.
+    </p>
   </div>
 </section>
 
@@ -85,31 +104,138 @@ const features: Feature[] = [
   .grid {
     display: grid;
     gap: var(--space-m);
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
   }
 
-  .feature {
-    box-shadow: none;
+  .card {
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-s);
+    border-radius: var(--radius-xl);
   }
 
-  .icon-wrap {
-    display: inline-grid;
+  .art {
+    display: grid;
     place-items: center;
-    width: 2.75rem;
-    height: 2.75rem;
-    margin-bottom: var(--space-s);
-    border-radius: var(--radius-s);
-    background: var(--accent-tint);
-    color: var(--color-link);
+    min-height: 11rem;
+    margin-bottom: var(--space-m);
+    padding: var(--space-m);
+    border-radius: var(--radius-l);
+    background: var(--color-surface-2);
   }
 
-  h3 {
+  .card h3 {
+    padding-inline: var(--space-xs);
     font-size: var(--text-md);
-    margin-bottom: var(--space-2xs);
   }
 
-  p {
+  .card p {
+    margin-top: var(--space-2xs);
+    padding: 0 var(--space-xs) var(--space-xs);
+    font-size: var(--text-sm);
+    line-height: 1.55;
     color: var(--color-text-muted);
-    font-size: var(--text-base);
+  }
+
+  .pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-s);
+    width: 100%;
+    max-width: 18rem;
+    align-items: start;
+  }
+
+  .tpls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+    width: 100%;
+    max-width: 14rem;
+  }
+  .tpls .ill-ed__thumb {
+    border: 1px solid var(--color-border);
+  }
+
+  .edge {
+    width: 100%;
+    max-width: 12rem;
+  }
+
+  .motion {
+    width: 100%;
+    max-width: 15rem;
+    height: auto;
+  }
+  .motion .ghost {
+    fill: none;
+    stroke: var(--ill-line-strong);
+    stroke-width: 1.5;
+    stroke-dasharray: 4 4;
+    opacity: 0.8;
+  }
+  .motion .ghost.g2 {
+    opacity: 0.45;
+  }
+  .motion .now {
+    fill: var(--ill-hi-fill);
+    stroke: var(--ill-hi-stroke);
+    stroke-width: 2;
+  }
+  .motion .trail {
+    fill: none;
+    stroke: var(--color-text-soft);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .art-label {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-s);
+    width: 100%;
+    max-width: 15rem;
+    margin-top: var(--space-xs);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-soft);
+  }
+
+  .keys {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+  .keys kbd {
+    min-width: 3rem;
+    padding: 0.5rem 0.8rem;
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--color-text-muted);
+  }
+  .keys kbd.on {
+    border-color: var(--ill-key-on-edge);
+    background: var(--ill-key-on-bg);
+    color: var(--ill-key-on-text);
+  }
+
+  .also {
+    max-width: 48rem;
+    margin: var(--space-l) auto 0;
+    text-align: center;
+    font-size: var(--text-sm);
+    color: var(--color-text-soft);
+  }
+
+  @media (min-width: 40rem) {
+    .grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (min-width: 64rem) {
+    .grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
   }
 </style>

@@ -1,0 +1,88 @@
+---
+import { loadLatestIdle, idleStats } from '../lib/measurements';
+import { url } from '../lib/url';
+import Icon from './Icon.astro';
+
+const m = loadLatestIdle();
+const s = idleStats(m);
+const one = (n: number) => n.toFixed(1);
+const two = (n: number) => n.toFixed(2);
+---
+
+<section id="performance" class="section" aria-labelledby="perf-title">
+  <div class="container">
+    <header class="sec-head">
+      <p class="eyebrow">Performance</p>
+      <h2 id="perf-title">Measured, not claimed. <span class="soft">One idle run so far.</span></h2>
+    </header>
+
+    <ul class="stats">
+      <li class="card">
+        <p class="big">{one(s.appWs)} <span>MB</span></p>
+        <p>memory used by Krova&rsquo;s own process, idle</p>
+      </li>
+      <li class="card">
+        <p class="big">{one(s.privateMedian)} <span>MB</span></p>
+        <p>Krova plus the web view that draws its window ({m.processCount} processes in all)</p>
+      </li>
+      <li class="card">
+        <p class="big">{two(s.cpuMean)} <span>%</span></p>
+        <p>average CPU over {s.durationS} seconds, as a share of one core</p>
+      </li>
+    </ul>
+
+    <div class="after">
+      <p>
+        One run on one Windows PC, with the settings window open and nothing being dragged. Drag latency, use while
+        dragging, use with the window hidden, and macOS are not measured yet. These numbers will change.
+      </p>
+      <a class="btn btn-secondary" href={url('/performance/')}>
+        See the charts and the method
+        <Icon name="arrow" />
+      </a>
+    </div>
+  </div>
+</section>
+
+<style>
+  .stats {
+    display: grid;
+    gap: var(--space-m);
+  }
+  .card {
+    padding: var(--space-m);
+    border-radius: var(--radius-xl);
+  }
+  .big {
+    font-size: var(--text-2xl);
+    font-weight: 700;
+    letter-spacing: var(--tracking-tight);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .big span {
+    font-size: 0.45em;
+    letter-spacing: 0;
+    color: var(--color-text-soft);
+  }
+  .card p:last-child {
+    margin-top: var(--space-xs);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+  .after {
+    display: grid;
+    justify-items: center;
+    gap: var(--space-m);
+    max-width: 44rem;
+    margin: var(--space-l) auto 0;
+    text-align: center;
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+  @media (min-width: 48rem) {
+    .stats {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+</style>

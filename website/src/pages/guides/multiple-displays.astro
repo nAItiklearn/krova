@@ -1,0 +1,91 @@
+---
+import GuideLayout from '../../layouts/GuideLayout.astro';
+import MiniMonitor from '../../components/illustrations/MiniMonitor.astro';
+import { url } from '../../lib/url';
+---
+
+<GuideLayout
+  slug="multiple-displays"
+  description="How Krova handles more than one monitor: a layout set per monitor, how it recognises a monitor, what happens on reconnect, identical monitors, and why edge snapping ignores the border between screens."
+  lead="Every monitor has its own layouts. Krova recognises a monitor when you plug it back in and brings its layouts back."
+>
+  <figure class="pair" aria-hidden="true">
+    <MiniMonitor layout="priority" label="Display 1" />
+    <MiniMonitor layout="grid" label="Display 2" />
+  </figure>
+
+  <h2 id="per-monitor">One set of layouts per monitor</h2>
+  <ul>
+    <li>
+      The first time Krova sees a monitor, it gives it the four templates (Halves, Thirds, Grid 2x2, Priority) with
+      <strong>Halves</strong> active. Edit, add and activate layouts per monitor in
+      <a href={url('/guides/layout-editor/')}>the layout editor</a>.
+    </li>
+    <li>While you drag, only the monitor under your cursor shows its zones, using its own active layout.</li>
+    <li>
+      Zones are stored as fractions of a monitor, so monitors with different resolutions, shapes or scaling settings can
+      share the same idea of a layout. Krova converts per monitor.
+    </li>
+  </ul>
+
+  <h2 id="recognised">How a monitor is recognised</h2>
+  <p>
+    When Krova starts, and whenever your monitors change, it compares each connected monitor with the ones it has saved,
+    and scores each pair:
+  </p>
+  <ol>
+    <li><strong>Hardware identity</strong> (the biggest weight). Two monitors with <em>different</em> hardware identities are never treated as the same one.</li>
+    <li><strong>Device path</strong>, which identifies the connection the system reports for it, usually the port.</li>
+    <li><strong>Last size</strong>, and then <strong>last position</strong>, of the monitor.</li>
+  </ol>
+  <p>
+    Each saved monitor is used once, best matches first. A pair needs a minimum score to count: a matching size alone is
+    too weak, but the same size at the same position is enough for a monitor that reports no identity. On Windows the hardware identity is the
+    monitor&rsquo;s PnP id (manufacturer and product code, such as <code>DELA0B7</code>), without a serial number. On macOS
+    Krova also stores the display&rsquo;s serial number when the display reports one.
+  </p>
+
+  <h2 id="reconnect">When you reconnect a monitor</h2>
+  <p>
+    Unplugging a monitor does not delete its layouts. Krova keeps its saved profile, and when the same monitor returns,
+    even in a different position or on a different port, its layouts and active layout come back. A monitor Krova has never
+    seen gets a fresh profile with the four templates.
+  </p>
+
+  <h2 id="identical">Two identical monitors</h2>
+  <p>
+    Two monitors of the same model have the same hardware identity on Windows, so Krova tells them apart by device path
+    (the port), then by position. In practice the layouts follow the <em>port</em>, not the physical screen. If you swap
+    two identical monitors between ports, they can swap layouts. If that happens, open the editor, check each tab, and
+    set the active layouts the way you want them. This follows from the matching rules above and has not been tested with
+    real identical monitors.
+  </p>
+
+  <h2 id="edges">Edge snapping and the border between monitors</h2>
+  <p>
+    <a href={url('/guides/edge-snapping/')}>Edge snapping</a> never triggers on the shared border between two monitors:
+    a side only counts as an edge if no other monitor touches it at the cursor&rsquo;s position. If two monitors are
+    staggered, only the part of the border where they touch is ignored; the rest still works.
+  </p>
+
+  <h2 id="dpi">Mixed scaling</h2>
+  <p>
+    On Windows, Krova is designed to work in each monitor&rsquo;s real pixels, so a 100% monitor next to a 150% one is
+    handled separately, and the size of a zone is never taken from one monitor and applied to another. Mixed-scale setups
+    have had little testing so far.
+  </p>
+</GuideLayout>
+
+<style>
+  .pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-m);
+    max-width: 24rem;
+    padding: var(--space-m);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-l);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-1);
+  }
+</style>

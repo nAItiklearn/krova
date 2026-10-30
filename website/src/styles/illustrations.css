@@ -1,0 +1,595 @@
+/*
+  Illustrations: a mock desktop built from HTML and CSS (no images).
+  Everything is sized in container-query units (cqw) of the monitor, so the same
+  markup scales from a 320px phone to the hero. Colours come from the --ill-*
+  tokens, which have a light and a dark set.
+
+  Coordinates for windows and zones are percentages of ".ill-work", the desk
+  without the taskbar. The Priority layout is 25% / 50% / 25% of its width.
+*/
+
+/* The wrapper is the size container: an element cannot query its own container, so the
+   monitor, desk and everything inside size themselves (cqw) against this box. */
+.ill-wrap {
+  position: relative;
+  width: 100%;
+  container-type: inline-size;
+}
+
+.ill-monitor {
+  position: relative;
+  padding: 1.1%;
+  border-radius: 2.2cqw;
+  background: var(--ill-bezel);
+  box-shadow: var(--shadow-2);
+}
+
+.ill-desk {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-radius: 1.3cqw;
+  background: var(--ill-wall);
+  isolation: isolate;
+}
+
+.ill-stand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.ill-stand::before {
+  content: '';
+  width: 9%;
+  height: 4cqw;
+  background: var(--ill-stand);
+}
+.ill-stand::after {
+  content: '';
+  width: 24%;
+  height: 1.2cqw;
+  border-radius: 1cqw;
+  background: var(--ill-stand);
+}
+
+.ill-work {
+  position: absolute;
+  inset: 0 0 var(--bar, 6%) 0;
+}
+
+/* ---- Taskbar (generic, no vendor mark) ---- */
+.ill-taskbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--bar, 6%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.2cqw;
+  background: var(--ill-taskbar);
+  border-top: 1px solid var(--ill-edge);
+  z-index: 5;
+}
+.ill-taskbar i {
+  width: 2cqw;
+  height: 2cqw;
+  border-radius: 0.6cqw;
+  background: var(--ill-line-strong);
+  opacity: 0.7;
+}
+
+/* ---- Windows ---- */
+.ill-win {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: var(--w);
+  height: var(--h);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--ill-win);
+  border: 1px solid var(--ill-win-edge);
+  border-radius: 1.1cqw;
+  z-index: 1;
+}
+
+.ill-win__bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.6cqw;
+  height: 3.4cqw;
+  padding-inline: 1.2cqw;
+  background: var(--ill-win-bar);
+}
+.ill-win__bar i {
+  width: 0.9cqw;
+  height: 0.9cqw;
+  border-radius: 50%;
+  background: var(--ill-dot);
+}
+.ill-win__bar b {
+  margin-left: 1cqw;
+  width: 22%;
+  height: 0.9cqw;
+  border-radius: 1cqw;
+  background: var(--ill-line-strong);
+  opacity: 0.55;
+}
+
+.ill-win__body {
+  flex: 1;
+  display: grid;
+  align-content: start;
+  gap: 0.9cqw;
+  padding: 1.5cqw;
+  overflow: hidden;
+}
+
+.ill-ln {
+  display: block;
+  height: 0.8cqw;
+  width: var(--w, 100%);
+  border-radius: 1cqw;
+  background: var(--ill-line);
+}
+.ill-ln--strong {
+  height: 1.2cqw;
+  background: var(--ill-line-strong);
+  opacity: 0.7;
+}
+.ill-bl {
+  display: block;
+  height: var(--h, 8cqw);
+  border-radius: 0.9cqw;
+  background: var(--ill-block);
+}
+
+/* document: sidebar + lines */
+.ill-win--doc .ill-win__body {
+  grid-template-columns: 30% 1fr;
+  gap: 1.6cqw;
+}
+.ill-win--doc .ill-col {
+  display: grid;
+  align-content: start;
+  gap: 0.9cqw;
+}
+
+/* terminal: dark in both themes */
+.ill-win--term {
+  background: var(--ill-term);
+  border-color: var(--ill-win-edge);
+}
+.ill-win--term .ill-win__bar {
+  background: rgba(255, 255, 255, 0.06);
+}
+.ill-win--term .ill-win__bar i {
+  background: var(--ill-term-line);
+}
+.ill-win--term .ill-ln {
+  background: var(--ill-term-line);
+  opacity: 0.85;
+}
+.ill-win--term .ill-ln--accent {
+  background: var(--ill-term-accent);
+  opacity: 1;
+}
+
+/* ---- Zone overlay ---- */
+.ill-zones {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.ill-zone {
+  position: absolute;
+  left: var(--x);
+  top: var(--y, 1.36%);
+  width: var(--w);
+  height: var(--h, 97.28%);
+  border: max(1px, 0.22cqw) dashed var(--ill-zone-stroke);
+  border-radius: 1.1cqw;
+  background: var(--ill-zone-fill);
+}
+.ill-hi {
+  position: absolute;
+  inset: calc(max(1px, 0.22cqw) * -1);
+  border: max(2px, 0.4cqw) solid var(--ill-hi-stroke);
+  border-radius: inherit;
+  background: var(--ill-hi-fill);
+  opacity: 0;
+}
+
+/* Priority layout (25 / 50 / 25) */
+.ill-zone--1 { --x: 0.8%; --w: 23.4%; }
+.ill-zone--2 { --x: 25.8%; --w: 48.4%; }
+.ill-zone--3 { --x: 75.8%; --w: 23.4%; }
+
+/* ---- Keycap and cursor ---- */
+.ill-key {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--bar, 6%) + 3%);
+  z-index: 6;
+  padding: 0.8em 1.5em;
+  border: 1px solid var(--ill-key-on-edge);
+  border-radius: 0.6em;
+  background: var(--ill-key-on-bg);
+  color: var(--ill-key-on-text);
+  font: 600 clamp(11px, 2.1cqw, 20px) / 1 var(--font-sans);
+  box-shadow: 0 0.1cqw 0 var(--ill-key-on-edge);
+  transform: translate(-50%, 0.25cqw);
+}
+.ill-key--up {
+  background: var(--ill-key-bg);
+  color: var(--ill-key-text);
+  border-color: var(--ill-key-edge);
+  box-shadow: 0 0.4cqw 0 var(--ill-key-edge);
+  transform: translate(-50%, 0);
+}
+
+.ill-cursor {
+  position: absolute;
+  left: var(--cx, 28%);
+  top: var(--cy, 1.6cqw);
+  z-index: 2;
+  width: clamp(12px, 2.6cqw, 28px);
+  pointer-events: none;
+}
+.ill-cursor path {
+  fill: var(--ill-cursor-fill);
+  stroke: var(--ill-cursor-stroke);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+}
+
+/* ---- Desk states ---- */
+
+/* Resting "dragging" state. It is also the static frame for the hero. */
+/* The dragged window is always laid out at its snapped size (zone 2) and only moved and shrunk
+   with transform while it floats, so animating it never triggers layout. */
+.ill-win--drag {
+  --x: 25.8%;
+  --y: 1.36%;
+  --w: 48.4%;
+  --h: 97.28%;
+  z-index: 4;
+  transform-origin: 0 0;
+  transform: translate(10.7%, 10.9%) scale(0.72);
+  box-shadow: 0 1.4cqw 3.4cqw var(--ill-lift);
+}
+.ill-desk--dragging .ill-zone--2 .ill-hi,
+.ill-desk--hero .ill-zone--2 .ill-hi {
+  opacity: 1;
+}
+
+/* Snapped: window fills zone 2, overlay and key gone. */
+.ill-desk--snapped .ill-win--drag {
+  transform: none;
+  box-shadow: none;
+}
+.ill-desk--snapped .ill-zones,
+.ill-desk--snapped .ill-key,
+.ill-desk--snapped .ill-cursor {
+  opacity: 0;
+}
+
+/* Overlay only, nothing dragged. */
+.ill-desk--zones .ill-win--drag,
+.ill-desk--zones .ill-key,
+.ill-desk--zones .ill-cursor {
+  display: none;
+}
+
+/* ---- Hero loop: ~11 s, transform-free but only on one small window ---- */
+@media (prefers-reduced-motion: no-preference) {
+  .ill-desk--hero .ill-win--drag {
+    animation: ill-hero-win 11s ease-in-out infinite both;
+    will-change: transform;
+  }
+  .ill-desk--hero .ill-zones {
+    animation: ill-hero-zones 11s ease-in-out infinite both;
+  }
+  .ill-desk--hero .ill-zone--1 .ill-hi {
+    animation: ill-hero-hi1 11s ease-in-out infinite both;
+  }
+  .ill-desk--hero .ill-zone--2 .ill-hi {
+    animation: ill-hero-hi2 11s ease-in-out infinite both;
+  }
+  .ill-desk--hero .ill-key {
+    animation: ill-hero-key 11s ease-in-out infinite both;
+  }
+  .ill-desk--hero .ill-cursor {
+    animation: ill-hero-cursor 11s linear infinite both;
+  }
+  .ill-pause-input:checked ~ .ill-wrap * {
+    animation-play-state: paused !important;
+  }
+}
+
+/* translate() percentages refer to the window's own size (48.4% x 97.28% of the work area). */
+@keyframes ill-hero-win {
+  0% { transform: translate(29.3%, 19.2%) scale(0.72); opacity: 0; box-shadow: 0 1.4cqw 3.4cqw var(--ill-lift); }
+  4%, 12% { transform: translate(29.3%, 19.2%) scale(0.72); opacity: 1; box-shadow: 0 1.4cqw 3.4cqw var(--ill-lift); }
+  28%, 36% { transform: translate(-45%, 13%) scale(0.72); opacity: 1; box-shadow: 0 1.4cqw 3.4cqw var(--ill-lift); }
+  54%, 62% { transform: translate(10.7%, 10.9%) scale(0.72); opacity: 1; box-shadow: 0 1.4cqw 3.4cqw var(--ill-lift); }
+  70%, 93% { transform: none; opacity: 1; box-shadow: 0 0 0 transparent; }
+  98% { transform: none; opacity: 0; box-shadow: 0 0 0 transparent; }
+  100% { transform: translate(29.3%, 19.2%) scale(0.72); opacity: 0; box-shadow: 0 1.4cqw 3.4cqw var(--ill-lift); }
+}
+
+@keyframes ill-hero-zones {
+  0%, 9% { opacity: 0; }
+  14%, 62% { opacity: 1; }
+  68%, 100% { opacity: 0; }
+}
+
+@keyframes ill-hero-hi1 {
+  0%, 22% { opacity: 0; }
+  27%, 35% { opacity: 1; }
+  40%, 100% { opacity: 0; }
+}
+
+@keyframes ill-hero-hi2 {
+  0%, 46% { opacity: 0; }
+  51%, 64% { opacity: 1; }
+  70%, 100% { opacity: 0; }
+}
+
+@keyframes ill-hero-key {
+  0%, 8% {
+    background: var(--ill-key-bg);
+    color: var(--ill-key-text);
+    border-color: var(--ill-key-edge);
+    box-shadow: 0 0.4cqw 0 var(--ill-key-edge);
+    transform: translate(-50%, 0);
+  }
+  11%, 64% {
+    background: var(--ill-key-on-bg);
+    color: var(--ill-key-on-text);
+    border-color: var(--ill-key-on-edge);
+    box-shadow: 0 0.1cqw 0 var(--ill-key-on-edge);
+    transform: translate(-50%, 0.25cqw);
+  }
+  68%, 100% {
+    background: var(--ill-key-bg);
+    color: var(--ill-key-text);
+    border-color: var(--ill-key-edge);
+    box-shadow: 0 0.4cqw 0 var(--ill-key-edge);
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes ill-hero-cursor {
+  0%, 4% { opacity: 0; }
+  7%, 64% { opacity: 1; }
+  68%, 100% { opacity: 0; }
+}
+
+/* ---- Small monitors (reconnect story, feature cards) ---- */
+.ill-monitor--mini {
+  padding: 3%;
+  border-radius: 4cqw;
+  box-shadow: none;
+}
+.ill-monitor--mini .ill-desk {
+  border-radius: 2.4cqw;
+}
+.ill-monitor--mini .ill-work {
+  inset: 0;
+}
+.ill-zone--solid {
+  border: 1px solid var(--ill-zone-stroke);
+  border-radius: 2cqw;
+  background: var(--ill-hi-fill);
+}
+.ill-zone--soft {
+  border-style: solid;
+  border-width: 1px;
+  background: var(--ill-zone-fill);
+  border-radius: 2cqw;
+}
+.ill-monitor--off {
+  background: transparent;
+  border: 2px dashed var(--color-border-strong);
+}
+.ill-monitor--off .ill-desk {
+  background: transparent;
+}
+
+/* ---- Pause control (CSS only: a checkbox earlier in the same figure) ---- */
+.ill-caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs) var(--space-m);
+  margin-top: var(--space-m);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.ill-pause {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.5rem;
+  padding: 0.3rem 0.95rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-3);
+  color: var(--color-text);
+  font-weight: 600;
+  cursor: pointer;
+}
+.ill-pause svg {
+  width: 0.85rem;
+  height: 0.85rem;
+  fill: currentColor;
+}
+.ill-pause .t-play,
+.ill-pause .i-play {
+  display: none;
+}
+.ill-pause-input:checked ~ .ill-caption .t-play,
+.ill-pause-input:checked ~ .ill-caption .i-play {
+  display: inline;
+}
+.ill-pause-input:checked ~ .ill-caption .t-pause,
+.ill-pause-input:checked ~ .ill-caption .i-pause {
+  display: none;
+}
+.ill-pause-input:focus-visible ~ .ill-caption .ill-pause {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Nothing animates, so there is nothing to pause: remove the control and its checkbox. */
+  .ill-pause,
+  .ill-pause-input {
+    display: none;
+  }
+}
+
+/* ---- Editor mock (Step 1) ---- */
+.ill-ed-wrap {
+  container-type: inline-size;
+}
+.ill-ed {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-l);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
+  font-size: clamp(11px, 2.3cqw, 15px);
+}
+.ill-ed__tabs {
+  display: flex;
+  gap: 0.25em;
+  padding: 0.7em 0.9em 0;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+}
+.ill-ed__tabs span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5em;
+  padding: 0.55em 0.9em;
+  border-radius: 0.6em 0.6em 0 0;
+  color: var(--color-text-soft);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ill-ed__tabs small {
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  font-weight: 400;
+}
+.ill-ed__tabs .is-on {
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: inset 0 -2px 0 var(--color-accent);
+}
+.ill-ed__body {
+  display: grid;
+  gap: 1em;
+  padding: 1.1em;
+}
+.ill-ed__canvas {
+  position: relative;
+  aspect-ratio: 2 / 1;
+  border-radius: 0.7em;
+  background: var(--ill-wall);
+  border: 1px solid var(--ill-edge);
+  overflow: hidden;
+}
+.ill-ed__zone {
+  position: absolute;
+  top: 3%;
+  bottom: 3%;
+  left: var(--x);
+  width: var(--w);
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--ill-zone-stroke);
+  border-radius: 0.5em;
+  background: var(--ill-zone-fill);
+  color: var(--color-text-muted);
+  font-weight: 700;
+}
+.ill-ed__zone.is-sel {
+  border-color: var(--ill-hi-stroke);
+  background: var(--ill-hi-fill);
+  color: var(--color-text);
+}
+.ill-ed__div {
+  position: absolute;
+  top: 3%;
+  bottom: 3%;
+  left: var(--x);
+  width: 0;
+  border-left: 2px solid var(--ill-hi-stroke);
+}
+.ill-ed__div i {
+  position: absolute;
+  top: 50%;
+  left: -0.7em;
+  width: 1.4em;
+  height: 1.4em;
+  border-radius: 50%;
+  background: var(--color-accent);
+  border: 2px solid var(--ill-wall);
+  transform: translateY(-50%);
+}
+.ill-ed__side {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-content: start;
+  gap: 0.6em;
+}
+.ill-ed__side b {
+  grid-column: 1 / -1;
+  font-size: 0.8em;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-soft);
+}
+.ill-ed__tpl {
+  display: grid;
+  gap: 0.3em;
+  padding: 0.4em;
+  border: 1px solid var(--color-border);
+  border-radius: 0.6em;
+  font-size: 0.82em;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+.ill-ed__tpl.is-on {
+  border-color: var(--color-accent);
+  background: var(--accent-tint);
+  color: var(--color-text);
+}
+.ill-ed__thumb {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 0.3em;
+  background: var(--ill-wall);
+  overflow: hidden;
+}
+.ill-ed__thumb i {
+  position: absolute;
+  left: var(--x);
+  top: var(--y, 6%);
+  width: var(--w);
+  height: var(--h, 88%);
+  border-radius: 0.2em;
+  background: var(--ill-hi-fill);
+  border: 1px solid var(--ill-zone-stroke);
+}

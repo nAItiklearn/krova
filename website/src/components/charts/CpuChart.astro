@@ -1,0 +1,138 @@
+---
+/**
+ * CPU: each 2 s sample drawn as a step (the value is the average over the
+ * interval before the sample), so the chart shows exactly what was measured
+ * and nothing is smoothed. Inline SVG made at build time.
+ */
+import type { Sample } from '../../lib/measurements';
+
+interface Props {
+  width: number;
+  samples: Sample[];
+  intervalS: number;
+}
+
+const { width: W, samples, intervalS } = Astro.props;
+
+const narrow = W < 560;
+const H = 240;
+const m = { l: 44, r: 12, t: 22, b: 40 };
+const plotW = W - m.l - m.r;
+const plotH = H - m.t - m.b;
+const duration = samples[samples.length - 1].t;
+const peak = Math.max(...samples.map((s) => s.cpu));
+const yMax = Math.max(1, Math.ceil(peak));
+const x = (t: number) => m.l + (t / duration) * plotW;
+const y = (v: number) => m.t + plotH - (v / yMax) * plotH;
+
+const yTicks = Array.from({ length: yMax * 2 + 1 }, (_, i) => i / 2);
+const xStep = narrow ? 20 : 10;
+const xTicks = Array.from({ length: Math.floor(duration / xStep) + 1 }, (_, i) => i * xStep);
+
+// Step outline: for each sample, a flat segment across the interval it covers.
+let d = `M ${x(0).toFixed(1)} ${y(0).toFixed(1)}`;
+for (const s of samples) {
+  d += ` L ${x(s.t - intervalS).toFixed(1)} ${y(s.cpu).toFixed(1)} L ${x(s.t).toFixed(1)} ${y(s.cpu).toFixed(1)}`;
+}
+const line = d;
+const area = `${d} L ${x(duration).toFixed(1)} ${y(0).toFixed(1)} Z`;
+
+const blips = samples.filter((s) => s.cpu > 0);
+const id = `cpu-t-${W}`;
+const two = (n: number) => n.toFixed(2);
+---
+
+<svg class="chart" viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-labelledby={id}>
+  <title id={id}>
+    CPU use over {duration} seconds, as a percentage of one core, one sample every {intervalS} seconds. It is 0.00 in{' '}
+    {samples.length - blips.length} of {samples.length} samples; the others are {blips.map((b) => `${two(b.cpu)} percent at ${b.t} seconds`).join(' and ')}.
+  </title>
+
+  {
+    yTicks.map((v) => (
+      <g>
+        <line class="grid" x1={m.l} x2={W - m.r} y1={y(v)} y2={y(v)}></line>
+        <text class="tick" x={m.l - 8} y={y(v) + 4} text-anchor="end">{v.toFixed(1)}</text>
+      </g>
+    ))
+  }
+  <text class="axis" x={m.l - 8} y="12" text-anchor="start" dx="-36">% of one core</text>
+
+  {
+    xTicks.map((t) => (
+      <g>
+        <line class="grid v" x1={x(t)} x2={x(t)} y1={y(0)} y2={y(0) + 5}></line>
+        <text class="tick" x={x(t)} y={y(0) + 20} text-anchor="middle">{t}</text>
+      </g>
+    ))
+  }
+  <text class="axis" x={W - m.r} y={H - 4} text-anchor="end">seconds</text>
+
+  <path class="area" d={area}></path>
+  <path class="line" d={line}></path>
+
+  {
+    blips.map((b) => {
+      const anchor = x(b.t) > W - 90 ? 'end' : 'start';
+      return (
+        <g>
+          <circle class="dot" cx={x(b.t - intervalS / 2)} cy={y(b.cpu)} r="3.5"></circle>
+          <text
+            class="note"
+            x={x(b.t - intervalS / 2) + (anchor === 'end' ? -8 : 8)}
+            y={y(b.cpu) - 6}
+            text-anchor={anchor}
+          >
+            {two(b.cpu)} % at {b.t} s
+          </text>
+        </g>
+      );
+    })
+  }
+</svg>
+
+<style>
+  .chart {
+    width: 100%;
+    height: auto;
+    overflow: visible;
+    font-family: var(--font-sans);
+  }
+  .grid {
+    stroke: var(--chart-grid);
+    stroke-width: 1;
+  }
+  .grid.v {
+    stroke: var(--chart-axis);
+  }
+  .tick {
+    fill: var(--chart-axis);
+    font-size: 12px;
+    font-family: var(--font-mono);
+  }
+  .axis {
+    fill: var(--color-text-soft);
+    font-size: 12px;
+  }
+  .area {
+    fill: var(--chart-a);
+    opacity: 0.18;
+  }
+  .line {
+    fill: none;
+    stroke: var(--chart-a);
+    stroke-width: 2;
+    stroke-linejoin: round;
+  }
+  .dot {
+    fill: var(--chart-a);
+    stroke: var(--color-bg);
+    stroke-width: 2;
+  }
+  .note {
+    fill: var(--color-text);
+    font-size: 13px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+</style>

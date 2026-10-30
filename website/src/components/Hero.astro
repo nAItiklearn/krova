@@ -1,136 +1,171 @@
 ---
-import HeroMonitor from './HeroMonitor.astro';
+import Desk from './illustrations/Desk.astro';
 import Icon from './Icon.astro';
-import { VERSION_LABEL } from '../site';
+import { url } from '../lib/url';
+import { RELEASE_PUBLISHED, VERSION_LABEL } from '../site';
+
+const status = RELEASE_PUBLISHED ? `${VERSION_LABEL}, early software` : `${VERSION_LABEL}, not released yet`;
 ---
 
 <section class="hero" aria-labelledby="hero-title">
-  <div class="container grid">
+  <div class="container">
     <div class="copy">
-      <p class="badge"><span class="dot" aria-hidden="true"></span>Early software: {VERSION_LABEL}, not yet released</p>
-      <h1 id="hero-title">Snap windows into <span class="grad-text">zones you define</span>.</h1>
-      <p class="lead">
-        Krova is a free, open-source window zone manager for Windows and macOS. Hold <kbd>Shift</kbd>, drag a
-        window, release over a zone. Everything stays on your computer.
+      <p class="status">
+        <a class="pill pill--warn" href={url('/changelog/')}>
+          <span class="dot" aria-hidden="true"></span>{status}
+          <span class="more">What is in it <Icon name="arrow" /></span>
+        </a>
       </p>
+
+      <h1 id="hero-title">
+        Draw your
+        <span class="chip zones-chip" aria-hidden="true">
+          <svg viewBox="0 0 40 24" width="40" height="24" focusable="false">
+            <rect x="1" y="1" width="9" height="22" rx="2.5"></rect>
+            <rect x="12" y="1" width="16" height="22" rx="2.5" class="on"></rect>
+            <rect x="30" y="1" width="9" height="22" rx="2.5"></rect>
+          </svg>
+        </span>
+        zones.
+        <span class="soft line">Hold <span class="nw"><kbd class="chip">Shift</kbd>,</span> drop a window in.</span>
+      </h1>
+
+      <p class="lead">
+        Krova is a free window zone manager for Windows 10/11 and macOS 13+. Drag a window, hold a key, release over a
+        zone, and it snaps to fit. No account, no telemetry, no network calls by design.
+      </p>
+
       <div class="actions">
-        <a class="btn btn-primary" href="#download">
+        <a class="btn btn-primary" href={url('/download/')}>
           <Icon name="download" />
           Download
         </a>
-        <a class="btn btn-secondary" href="#how">See how it works</a>
+        <a class="btn btn-secondary" href="#try">
+          Try the editor
+          <Icon name="arrow" />
+        </a>
       </div>
-      <ul class="facts" aria-label="At a glance">
-        <li><Icon name="check" />Windows 10/11 and macOS 13+</li>
-        <li><Icon name="check" />MIT licensed, free</li>
-        <li><Icon name="check" />No accounts, no telemetry, no network calls</li>
-      </ul>
+      <p class="fine">Free &middot; MIT license &middot; Windows 10/11 &middot; macOS 13+ (untested on a real Mac)</p>
     </div>
-    <div class="visual">
-      <HeroMonitor />
-    </div>
+
+    <figure class="stage">
+      <input type="checkbox" id="hero-pause" class="ill-pause-input visually-hidden" />
+      <Desk
+        state="hero"
+        stand
+        label="Illustration of a desktop with a layout of three vertical zones. A window is dragged while Shift is held, the zone under it lights up, and on release the window fills that zone."
+      />
+      <figcaption class="ill-caption">
+        <span>Illustration, not a screenshot. Shift is held while the window is dragged; releasing over a zone snaps it.</span>
+        <label class="ill-pause" for="hero-pause">
+          <svg class="i-pause" viewBox="0 0 12 12" aria-hidden="true"><rect x="2" y="1" width="3" height="10" rx="1"></rect><rect x="7" y="1" width="3" height="10" rx="1"></rect></svg>
+          <svg class="i-play" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.5v9l7.5-4.5z"></path></svg>
+          <span class="t-pause">Pause animation</span><span class="t-play">Play animation</span>
+        </label>
+      </figcaption>
+    </figure>
   </div>
 </section>
 
 <style>
   .hero {
-    position: relative;
-    isolation: isolate;
-    overflow: clip;
-    padding-block: var(--space-xl) var(--space-xl);
-  }
-
-  /* Soft brand glows. Decorative only. */
-  .hero::before {
-    content: '';
-    position: absolute;
-    inset: -10% -10% 10% -10%;
-    z-index: -1;
-    pointer-events: none;
-    background:
-      radial-gradient(45% 55% at 18% 25%, var(--glow-1), transparent 70%),
-      radial-gradient(40% 50% at 85% 70%, var(--glow-2), transparent 70%);
-  }
-
-  .grid {
-    display: grid;
-    gap: var(--space-xl);
-    align-items: center;
+    padding-block: clamp(2.5rem, 1rem + 5vw, 5rem) clamp(3rem, 1.5rem + 5vw, 6rem);
   }
 
   .copy {
-    max-width: 40rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
   }
 
-  .badge {
+  .status {
+    margin-bottom: var(--space-l);
+  }
+  .status a {
+    text-decoration: none;
+  }
+  .status .more {
     display: inline-flex;
     align-items: center;
-    gap: var(--space-2xs);
-    margin-bottom: var(--space-m);
-    padding: 0.35rem 0.9rem;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-pill);
-    background: var(--color-surface);
-    color: var(--color-text-muted);
-    font-size: var(--text-sm);
-    font-weight: 600;
+    gap: 0.25rem;
+    margin-left: 0.35rem;
+    padding-left: 0.7rem;
+    border-left: 1px solid var(--color-border);
+    color: var(--color-link);
   }
-
-  .dot {
-    width: 0.55rem;
-    height: 0.55rem;
-    border-radius: 50%;
-    background: var(--grad-brand);
+  .status .more :global(.icon) {
+    width: 0.9rem;
+    height: 0.9rem;
   }
 
   h1 {
-    font-size: var(--text-3xl);
-    font-weight: 800;
-    /* Descenders in the gradient word get clipped by background-clip without this. */
-    padding-bottom: 0.08em;
+    max-width: 22ch;
+    font-size: clamp(2.35rem, 0.9rem + 5.2vw, 4.4rem);
+    letter-spacing: -0.045em;
+    line-height: 1.04;
+  }
+  h1 .line {
+    display: block;
+  }
+  h1 .nw {
+    white-space: nowrap;
+  }
+
+  /* Inline UI chips inside the headline. */
+  h1 .chip {
+    margin-inline: 0.04em;
+    transform: translateY(-0.04em);
+  }
+  .zones-chip {
+    padding: 0.12em 0.2em;
+  }
+  .zones-chip svg {
+    width: 0.95em;
+    height: auto;
+  }
+  .zones-chip rect {
+    fill: var(--accent-tint);
+    stroke: var(--color-border-strong);
+    stroke-width: 1.4;
+  }
+  .zones-chip rect.on {
+    fill: var(--accent-tint-strong);
+    stroke: var(--color-accent);
+    stroke-width: 2;
+  }
+  h1 kbd.chip {
+    min-width: 0;
+    padding: 0.1em 0.38em 0.08em;
+    border-bottom-width: 0.08em;
+    font-family: inherit;
+    font-size: 0.62em;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    color: var(--color-text);
   }
 
   .lead {
     margin-top: var(--space-m);
+    max-width: 38rem;
   }
 
   .actions {
     display: flex;
     flex-wrap: wrap;
+    justify-content: center;
     gap: var(--space-xs);
     margin-top: var(--space-l);
   }
 
-  .facts {
-    display: grid;
-    gap: var(--space-2xs);
-    margin-top: var(--space-l);
+  .fine {
+    margin-top: var(--space-s);
     font-size: var(--text-sm);
-    color: var(--color-text-muted);
+    color: var(--color-text-soft);
   }
 
-  .facts li {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--space-2xs);
-  }
-
-  .facts :global(.icon) {
-    width: 1.1rem;
-    height: 1.1rem;
-    margin-top: 0.2rem;
-    color: var(--color-accent-2);
-  }
-
-  .btn :global(.icon) {
-    width: 1.2rem;
-    height: 1.2rem;
-  }
-
-  @media (min-width: 62rem) {
-    .grid {
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
-      gap: var(--space-2xl);
-    }
+  .stage {
+    max-width: 60rem;
+    margin: clamp(2.5rem, 1.5rem + 4vw, 4.5rem) auto 0;
   }
 </style>

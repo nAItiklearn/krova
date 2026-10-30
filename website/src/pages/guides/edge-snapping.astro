@@ -1,0 +1,116 @@
+---
+import GuideLayout from '../../layouts/GuideLayout.astro';
+import { url } from '../../lib/url';
+---
+
+<GuideLayout
+  slug="edge-snapping"
+  description="Krova's optional edge snapping: drag a window to a screen edge for a half, a corner for a quarter, or the top to maximize. Off by default, adjustable from 2 to 64 px, never on the border between monitors."
+  lead="Drag a window to a screen edge and release: it fills a half, a quarter, or the whole screen. It is off by default."
+>
+  <h2 id="turn-on">Turn it on</h2>
+  <ol>
+    <li>Open <strong>Settings&hellip;</strong> from the tray menu.</li>
+    <li>Under Snapping, switch <strong>Edge snapping</strong> on.</li>
+    <li>
+      Set <strong>Edge size</strong>: how close to the edge the cursor must be, from 2 to 64 px. The default is 8 px.
+    </li>
+  </ol>
+
+  <h2 id="where">What each edge does</h2>
+  <figure class="map">
+    <svg viewBox="0 0 300 184" role="img" aria-labelledby="em-t">
+      <title id="em-t">Edge snapping map. Left and right edges give halves, the top edge maximizes, the four corners give quarters, and the bottom edge between the corners does nothing.</title>
+      <rect class="screen" x="1" y="1" width="298" height="182" rx="8"></rect>
+      <rect class="cell q" x="4" y="4" width="62" height="46" rx="5"></rect>
+      <rect class="cell q" x="234" y="4" width="62" height="46" rx="5"></rect>
+      <rect class="cell q" x="4" y="134" width="62" height="46" rx="5"></rect>
+      <rect class="cell q" x="234" y="134" width="62" height="46" rx="5"></rect>
+      <rect class="cell h" x="70" y="4" width="160" height="46" rx="5"></rect>
+      <rect class="cell h" x="4" y="54" width="62" height="76" rx="5"></rect>
+      <rect class="cell h" x="234" y="54" width="62" height="76" rx="5"></rect>
+      <rect class="cell n" x="70" y="134" width="160" height="46" rx="5"></rect>
+      <text x="35" y="31" text-anchor="middle">Quarter</text>
+      <text x="265" y="31" text-anchor="middle">Quarter</text>
+      <text x="35" y="161" text-anchor="middle">Quarter</text>
+      <text x="265" y="161" text-anchor="middle">Quarter</text>
+      <text x="150" y="31" text-anchor="middle">Maximize</text>
+      <text x="35" y="95" text-anchor="middle">Left</text>
+      <text x="35" y="110" text-anchor="middle">half</text>
+      <text x="265" y="95" text-anchor="middle">Right</text>
+      <text x="265" y="110" text-anchor="middle">half</text>
+      <text x="150" y="161" text-anchor="middle">Nothing</text>
+      <text class="mid" x="150" y="97" text-anchor="middle">cursor here: no edge snap</text>
+    </svg>
+    <figcaption>The bands are as wide as your Edge size setting; they are exaggerated here.</figcaption>
+  </figure>
+
+  <div class="table-scroll" tabindex="0" role="region" aria-label="Edge snapping results">
+    <table class="data-table">
+      <thead><tr><th scope="col">Cursor at</th><th scope="col">The window fills</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Left edge</th><td>The left half of the monitor</td></tr>
+        <tr><th scope="row">Right edge</th><td>The right half</td></tr>
+        <tr><th scope="row">Top edge</th><td>The whole work area (maximize)</td></tr>
+        <tr><th scope="row">A corner</th><td>That quarter of the monitor</td></tr>
+        <tr><th scope="row">Bottom edge, between the corners</th><td>Nothing: that is where the taskbar or Dock lives</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 id="how">How it behaves</h2>
+  <ul>
+    <li><strong>No key needed.</strong> Drag, move the cursor to an edge, and a preview of the target appears; release to snap. Move away from the edge and the preview goes.</li>
+    <li><strong>Zones win.</strong> While you hold the activation key and the zones are showing, edge snapping is off, so the two never fight.</li>
+    <li><strong>Never between monitors.</strong> A side only counts if no other monitor touches it at that point. See <a href={url('/guides/multiple-displays/#edges')}>Multiple displays</a>.</li>
+    <li><strong>Work area.</strong> Halves and quarters are cut from the monitor&rsquo;s work area, which excludes the taskbar, menu bar and Dock.</li>
+    <li>
+      <strong>Windows&rsquo; own edge snapping stays on.</strong> Krova does not switch it off. If both react to the same
+      edge, turn one of them off; they have not been tested together.
+    </li>
+  </ul>
+</GuideLayout>
+
+<style>
+  .map {
+    max-width: 26rem;
+  }
+  .map svg {
+    width: 100%;
+    height: auto;
+  }
+  .screen {
+    fill: var(--ill-wall);
+    stroke: var(--color-border-strong);
+    stroke-width: 1.5;
+  }
+  .cell.q {
+    fill: var(--ill-hi-fill);
+    stroke: var(--ill-hi-stroke);
+    stroke-width: 1;
+  }
+  .cell.h {
+    fill: var(--ill-zone-fill);
+    stroke: var(--ill-zone-stroke);
+    stroke-width: 1;
+  }
+  .cell.n {
+    fill: none;
+    stroke: var(--color-border-strong);
+    stroke-width: 1;
+    stroke-dasharray: 4 4;
+  }
+  .map text {
+    fill: var(--color-text);
+    font: 600 11px var(--font-sans);
+  }
+  .map text.mid {
+    fill: var(--color-text-soft);
+    font-weight: 400;
+  }
+  .map figcaption {
+    margin-top: var(--space-2xs);
+    font-size: var(--text-sm);
+    color: var(--color-text-soft);
+  }
+</style>

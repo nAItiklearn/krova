@@ -1,0 +1,46 @@
+---
+/**
+ * The mock desktop used by the hero and the "How it works" steps.
+ *
+ * state "hero"     the looping demo (animation only when motion is allowed;
+ *                  otherwise a still of the drag in progress)
+ * state "dragging" still: Shift held, zones shown, a window over the middle zone
+ * state "snapped"  still: the window now fills the middle zone
+ * state "zones"    still: only the zone overlay, no window being dragged
+ *
+ * Layout shown is the Priority template (25% / 50% / 25%). An illustration, not
+ * a screenshot: windows are skeleton bars with no text.
+ */
+import MockWin from './MockWin.astro';
+import Cursor from './Cursor.astro';
+
+interface Props {
+  state: 'hero' | 'dragging' | 'snapped' | 'zones';
+  label: string;
+  stand?: boolean;
+}
+
+const { state, label, stand = false } = Astro.props;
+---
+
+<div class="ill-wrap">
+  <div class="ill-monitor" role="img" aria-label={label}>
+    <div class={`ill-desk ill-desk--${state}`}>
+      <div class="ill-work">
+        <MockWin kind="doc" x="0.8%" y="1.36%" w="23.4%" h="97.28%" />
+        <MockWin kind="term" x="75.8%" y="1.36%" w="23.4%" h="97.28%" />
+        <div class="ill-zones">
+          <span class="ill-zone ill-zone--1"><i class="ill-hi"></i></span>
+          <span class="ill-zone ill-zone--2"><i class="ill-hi"></i></span>
+          <span class="ill-zone ill-zone--3"><i class="ill-hi"></i></span>
+        </div>
+        <MockWin kind="page" class="ill-win--drag">
+          <Cursor />
+        </MockWin>
+      </div>
+      <div class="ill-taskbar" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+      <span class="ill-key" aria-hidden="true">Shift</span>
+    </div>
+  </div>
+  {stand && <div class="ill-stand" aria-hidden="true"></div>}
+</div>

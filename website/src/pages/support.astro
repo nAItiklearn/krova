@@ -1,0 +1,209 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { url } from '../lib/url';
+import { ISSUES_URL, REPO_LINKS_ENABLED, APP_VERSION } from '../site';
+
+const title = 'Support: troubleshooting Krova and reporting a problem';
+const description =
+  'Fixes for the real issues you can hit with Krova: nothing happens on Shift-drag, the tray icon is missing, skipped windows, SmartScreen, macOS permissions, resetting the config. And how to report a problem.';
+
+const toc = [
+  ['nothing-happens', 'Nothing happens when I Shift-drag'],
+  ['tray', 'I cannot find the tray icon'],
+  ['skipped', 'One window is never snapped'],
+  ['size', 'The window is not exactly the zone size'],
+  ['blurry', 'Krova’s window looks blurry'],
+  ['smartscreen', 'Windows says “Windows protected your PC”'],
+  ['macos', 'macOS: Accessibility or Gatekeeper'],
+  ['reconnect', 'Layouts did not come back after reconnecting a monitor'],
+  ['reset', 'Reset Krova to defaults'],
+  ['report', 'Report a problem'],
+] as const;
+---
+
+<BaseLayout title={title} description={description}>
+  <div class="container container--narrow">
+    <header class="page-head">
+      <p class="eyebrow">Support</p>
+      <h1>Troubleshooting</h1>
+      <p class="lead">
+        The problems you are most likely to hit, with what to check. There is no support e-mail; if this page does not
+        solve it, <a href="#report">report a problem</a>.
+      </p>
+    </header>
+
+    <nav class="toc" aria-label="On this page">
+      <ul>
+        {toc.map(([id, label]) => <li><a href={`#${id}`}>{label}</a></li>)}
+      </ul>
+    </nav>
+
+    <article class="prose">
+      <h2 id="nothing-happens">Nothing happens when I Shift-drag</h2>
+      <p>Work down this list:</p>
+      <ol>
+        <li>Is Krova running? Its icon is in the tray or menu bar (see below if you cannot see it).</li>
+        <li>Is <strong>Enabled</strong> ticked in the tray menu?</li>
+        <li>
+          Are you dragging a normal window by its title bar, and holding the key from Settings, Activation modifier?
+          It is Shift unless you changed it.
+        </li>
+        <li>
+          Is the window one Krova skips: a minimized or fullscreen window, or (on Windows) an app running as
+          administrator? See <a href="#skipped">below</a>.
+        </li>
+        <li>
+          Are you using Krova&rsquo;s edge snapping expecting zones, or the other way round? Edge snapping needs no key and
+          only works at the screen edges; zones need the key and show anywhere.
+        </li>
+        <li>On macOS: has Krova been given Accessibility access? See <a href="#macos">below</a>.</li>
+      </ol>
+
+      <h2 id="tray">I cannot find the tray icon</h2>
+      <p>
+        Krova starts with no window, so its icon is the only sign it is running. On Windows, new icons are often hidden
+        behind the <strong>^</strong> arrow at the right end of the taskbar: click it, and drag the Krova icon out to keep it
+        visible. On macOS, look in the menu bar. If it is not there at all, start Krova from the Start menu or Applications;
+        a second launch brings the first one&rsquo;s window forward instead of starting another copy.
+      </p>
+      <p>
+        Closing Krova&rsquo;s window only hides it. To stop Krova, choose <strong>Quit Krova</strong> in the tray menu.
+      </p>
+
+      <h2 id="skipped">One window is never snapped</h2>
+      <ul>
+        <li>
+          <strong>Apps running as administrator (Windows).</strong> Windows does not let a normal program move the windows
+          of an elevated one, so Krova skips them. Running Krova itself as administrator is not supported.
+        </li>
+        <li><strong>Fullscreen and borderless fullscreen windows</strong> are skipped.</li>
+        <li><strong>Minimized windows</strong> are skipped.</li>
+        <li>
+          <strong>You pressed on a resize edge</strong>, or the window never moved: that is not a drag, so nothing
+          happens.
+        </li>
+      </ul>
+
+      <h2 id="size">The window is not exactly the zone size</h2>
+      <p>
+        Some apps enforce their own minimum or maximum size. Krova respects it, so the window may come out larger or smaller
+        than the zone, or sit inside it. This is the app refusing, not a zone that is wrong.
+      </p>
+
+      <h2 id="blurry">Krova&rsquo;s window looks blurry</h2>
+      <p>
+        On displays scaled above 100% on Windows, Krova&rsquo;s own window (the editor and settings) can look blurry. This is
+        a known problem that is still being checked. It is not a setting you got wrong.
+      </p>
+
+      <h2 id="smartscreen">Windows says &ldquo;Windows protected your PC&rdquo;</h2>
+      <p>
+        The installer is not code-signed, so SmartScreen does not recognise it. Select <strong>More info</strong>, then
+        <strong>Run anyway</strong>. See <a href={url('/guides/install/#windows')}>the install guide</a>, and
+        <a href={url('/download/#verify')}>how to check the file</a> first if you want to.
+      </p>
+
+      <h2 id="macos">macOS: Accessibility or Gatekeeper</h2>
+      <ul>
+        <li>
+          <strong>Snapping does nothing.</strong> Krova needs Accessibility access: System Settings, Privacy &amp; Security,
+          Accessibility, then turn on Krova. If it is already on, switch it off and on again. Krova shows a banner until
+          access is granted. Until it is, Krova cannot watch the mouse at all; after you grant it, you may need to quit and
+          start Krova again.
+        </li>
+        <li><strong>It may also ask for Input Monitoring.</strong> Allow it under Privacy &amp; Security if it does.</li>
+        <li>
+          <strong>&ldquo;Krova cannot be opened.&rdquo;</strong> The app is unsigned and not notarised. Right-click it in
+          Applications and choose Open, or use <strong>Open Anyway</strong> in Privacy &amp; Security.
+        </li>
+        <li><strong>The macOS build has never been tested on a real Mac.</strong> Anything else going wrong is worth reporting.</li>
+      </ul>
+
+      <h2 id="reconnect">Layouts did not come back after reconnecting a monitor</h2>
+      <p>
+        Krova matches monitors by hardware identity, then device path, then last size and position. Monitors that report
+        little identity, or two identical models, can be confused. See
+        <a href={url('/guides/multiple-displays/#identical')}>Multiple displays</a>. Open the editor, check each monitor&rsquo;s
+        tab, and set the active layout.
+      </p>
+
+      <h2 id="reset">Reset Krova to defaults</h2>
+      <ol>
+        <li>Choose <strong>Quit Krova</strong> from the tray menu.</li>
+        <li>
+          Delete <code>config.json</code> in <code>%APPDATA%\dev.krova.desktop</code> (Windows) or
+          <code>~/Library/Application Support/dev.krova.desktop</code> (macOS).
+        </li>
+        <li>Start Krova. It creates a fresh file with default settings and the four template layouts per monitor.</li>
+      </ol>
+      <p>
+        You do not always have to do this. If Krova finds a <code>config.json</code> it cannot read, it renames it to
+        <code>config.json.bak</code> and starts with defaults. If the file was written by a <em>newer</em> Krova, this
+        version leaves it alone and runs on defaults without saving, and does not tell you that your changes are not being
+        kept.
+      </p>
+
+      <h2 id="report">Report a problem</h2>
+      {
+        REPO_LINKS_ENABLED ? (
+          <p>
+            Open an issue on <a href={ISSUES_URL}>GitHub</a>. Search the existing ones first. There is no e-mail address
+            for support.
+          </p>
+        ) : (
+          <div class="note note--warn">
+            <p>
+              <strong>Krova&rsquo;s repository is not public yet,</strong> so there is nowhere to file an issue yet. This
+              page will link to it once it is.
+            </p>
+          </div>
+        )
+      }
+      <p>A report is easiest to act on when it says:</p>
+      <ul>
+        <li>The Krova version (the footer of Krova&rsquo;s window reads &ldquo;Krova v{APP_VERSION}&rdquo;) and where you got it.</li>
+        <li>Your operating system and its exact version, Windows 10 or 11 or the macOS version.</li>
+        <li>Your monitors: how many, their resolutions, and their scaling (for example 150%).</li>
+        <li>Which app's window you were dragging, and whether it runs as administrator.</li>
+        <li>What you did, what you expected, and what happened, in order.</li>
+        <li>Your activation key and whether edge snapping is on.</li>
+        <li>For a crash or a missing tray icon: whether you installed with the installer, and whether Krova was running before.</li>
+      </ul>
+      <div class="note">
+        <p>
+          <strong>Before you share your config.</strong> <code>config.json</code> can help, but it contains your monitors&rsquo;
+          identifiers: the hardware id, the device path (which includes an identifier for the port) and each monitor&rsquo;s
+          size and position. Remove or blank those fields first if you would rather not share them. Window titles are never
+          stored, so there is nothing about your windows in it.
+        </p>
+      </div>
+    </article>
+  </div>
+</BaseLayout>
+
+<style>
+  .toc {
+    margin-bottom: var(--space-xl);
+    padding: var(--space-m);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-l);
+    background: var(--color-surface);
+  }
+  .toc ul {
+    display: grid;
+    gap: 0.1rem 2rem;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  }
+  .toc a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.25rem;
+    font-size: var(--text-sm);
+  }
+  article {
+    padding-bottom: var(--section-y);
+  }
+  article :global(h2:first-child) {
+    margin-top: 0;
+  }
+</style>

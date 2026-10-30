@@ -1,0 +1,180 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import { guides, guidePath } from '../data/nav';
+import { url } from '../lib/url';
+
+interface Props {
+  slug: string;
+  description: string;
+  lead: string;
+}
+
+const { slug, description, lead } = Astro.props;
+const idx = guides.findIndex((g) => g.slug === slug);
+if (idx < 0) throw new Error(`GuideLayout: unknown guide slug "${slug}". Add it to src/data/nav.ts.`);
+const guide = guides[idx];
+const prev = idx > 0 ? guides[idx - 1] : undefined;
+const next = idx < guides.length - 1 ? guides[idx + 1] : undefined;
+---
+
+<BaseLayout title={`${guide.title}: Krova guide`} description={description}>
+  <div class="container">
+    <div class="layout">
+      <aside class="side" aria-label="Guides">
+        <p class="side-title">Guides</p>
+        <ul>
+          {
+            guides.map((g) => (
+              <li>
+                <a href={url(guidePath(g.slug))} aria-current={g.slug === slug ? 'page' : undefined}>
+                  {g.short}
+                </a>
+              </li>
+            ))
+          }
+          <li>
+            <a href={url('/guides/')}>All guides</a>
+          </li>
+        </ul>
+      </aside>
+
+      <article class="main">
+        <header class="page-head">
+          <p class="eyebrow"><a href={url('/guides/')}>Guides</a> / {guide.short}</p>
+          <h1>{guide.title}</h1>
+          <p class="lead">{lead}</p>
+        </header>
+
+        <div class="prose body">
+          <slot />
+        </div>
+
+        <nav class="pager" aria-label="Previous and next guide">
+          {
+            prev ? (
+              <a class="card" href={url(guidePath(prev.slug))} rel="prev">
+                <span class="dir">Previous</span>
+                <span class="t">{prev.title}</span>
+              </a>
+            ) : (
+              <span />
+            )
+          }
+          {
+            next ? (
+              <a class="card next" href={url(guidePath(next.slug))} rel="next">
+                <span class="dir">Next</span>
+                <span class="t">{next.title}</span>
+              </a>
+            ) : (
+              <span />
+            )
+          }
+        </nav>
+      </article>
+    </div>
+  </div>
+</BaseLayout>
+
+<style>
+  .layout {
+    display: block;
+  }
+
+  .side {
+    display: none;
+  }
+
+  .eyebrow a {
+    color: inherit;
+    text-decoration: none;
+  }
+  .eyebrow a:hover {
+    text-decoration: underline;
+  }
+
+  .main {
+    min-width: 0;
+    padding-bottom: var(--section-y);
+  }
+
+  .body {
+    max-width: 44rem;
+  }
+
+  .pager {
+    display: grid;
+    gap: var(--space-s);
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    max-width: 44rem;
+    margin-top: var(--space-2xl);
+  }
+  .pager a {
+    display: grid;
+    gap: 0.15rem;
+    padding: var(--space-s) var(--space-m);
+    border-radius: var(--radius-l);
+    color: var(--color-text);
+    text-decoration: none;
+  }
+  .pager a:hover {
+    border-color: var(--color-border-strong);
+  }
+  .pager .next {
+    text-align: right;
+  }
+  .dir {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    letter-spacing: var(--tracking-mono);
+    text-transform: uppercase;
+    color: var(--color-text-soft);
+  }
+  .t {
+    font-weight: 650;
+  }
+
+  @media (min-width: 64rem) {
+    .layout {
+      display: grid;
+      grid-template-columns: 13rem minmax(0, 1fr);
+      gap: var(--space-2xl);
+      align-items: start;
+    }
+    .side {
+      display: block;
+      position: sticky;
+      top: 6rem;
+      padding-top: clamp(2.5rem, 1rem + 6vw, 5rem);
+    }
+    .side-title {
+      margin-bottom: var(--space-xs);
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      letter-spacing: var(--tracking-mono);
+      text-transform: uppercase;
+      color: var(--color-text-soft);
+    }
+    .side ul {
+      display: grid;
+      border-left: 1px solid var(--color-border);
+    }
+    .side a {
+      display: block;
+      padding: 0.45rem 0.9rem;
+      margin-left: -1px;
+      border-left: 2px solid transparent;
+      color: var(--color-text-muted);
+      font-size: var(--text-sm);
+      text-decoration: none;
+    }
+    .side a:hover {
+      color: var(--color-text);
+    }
+    .side a[aria-current='page'] {
+      border-left-color: var(--color-accent);
+      color: var(--color-text);
+      font-weight: 600;
+    }
+  }
+</style>

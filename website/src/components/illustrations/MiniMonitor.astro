@@ -1,0 +1,75 @@
+---
+/**
+ * A small monitor showing one layout, for the reconnect story and the feature
+ * cards. `off` draws it as a dashed outline (unplugged). Decorative: the text
+ * around it carries the meaning.
+ */
+interface Props {
+  layout: 'priority' | 'grid' | 'halves' | 'thirds';
+  off?: boolean;
+  soft?: boolean;
+  label?: string;
+}
+
+const { layout, off = false, soft = false, label } = Astro.props;
+
+type Z = { x: number; y: number; w: number; h: number };
+const full = { y: 1.36, h: 97.28 };
+const layouts: Record<Props['layout'], Z[]> = {
+  priority: [
+    { x: 0.8, w: 23.4, ...full },
+    { x: 25.8, w: 48.4, ...full },
+    { x: 75.8, w: 23.4, ...full },
+  ],
+  thirds: [
+    { x: 0.8, w: 31.6, ...full },
+    { x: 34.2, w: 31.6, ...full },
+    { x: 67.6, w: 31.6, ...full },
+  ],
+  halves: [
+    { x: 0.8, w: 48.6, ...full },
+    { x: 50.6, w: 48.6, ...full },
+  ],
+  grid: [
+    { x: 0.8, w: 48.6, y: 1.36, h: 47.9 },
+    { x: 50.6, w: 48.6, y: 1.36, h: 47.9 },
+    { x: 0.8, w: 48.6, y: 50.74, h: 47.9 },
+    { x: 50.6, w: 48.6, y: 50.74, h: 47.9 },
+  ],
+};
+const zones = layouts[layout];
+---
+
+<div class="mini ill-wrap" aria-hidden="true">
+  <div class:list={['ill-monitor', 'ill-monitor--mini', { 'ill-monitor--off': off }]}>
+    <div class="ill-desk">
+      <div class="ill-work">
+        {
+          !off &&
+            zones.map((z) => (
+              <span
+                class:list={['ill-zone', soft ? 'ill-zone--soft' : 'ill-zone--solid']}
+                style={`--x:${z.x}%;--y:${z.y}%;--w:${z.w}%;--h:${z.h}%`}
+              />
+            ))
+        }
+      </div>
+    </div>
+  </div>
+  {label && <span class="mini-label">{label}</span>}
+</div>
+
+<style>
+  .mini {
+    display: grid;
+    gap: 0.4rem;
+    justify-items: center;
+  }
+  .mini > :global(.ill-monitor) {
+    width: 100%;
+  }
+  .mini-label {
+    font-size: var(--text-xs);
+    color: var(--color-text-soft);
+  }
+</style>

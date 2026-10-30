@@ -1,115 +1,94 @@
 ---
+import { faq } from '../data/faq';
+import { inline } from '../lib/inline';
 import { url } from '../lib/url';
-import { ISSUES_URL, REPO_CONFIGURED } from '../site';
-
-const privacy = url('/privacy/');
-const license = url('/license/');
+import { ISSUES_URL, REPO_LINKS_ENABLED } from '../site';
 ---
 
-<section id="faq" class="section section--alt" aria-labelledby="faq-title">
-  <div class="container container--narrow">
-    <header class="section-head section-head--center">
+<section id="faq" class="section" aria-labelledby="faq-title">
+  <div class="container wrap">
+    <header class="head">
       <p class="eyebrow">FAQ</p>
-      <h2 id="faq-title">Questions, answered plainly</h2>
+      <h2 id="faq-title">Frequently asked <span class="soft">questions</span></h2>
+      <p class="muted">
+        Something else? Check <a href={url('/support/')}>Troubleshooting</a>{
+          REPO_LINKS_ENABLED ? (
+            <Fragment> or <a href={ISSUES_URL}>open an issue</a></Fragment>
+          ) : (
+            <Fragment>. Krova&rsquo;s repository is not public yet, so there is nowhere to file an issue yet</Fragment>
+          )
+        }.
+      </p>
     </header>
 
-    <div class="faq">
-      <details>
-        <summary>Is Krova really free?</summary>
-        <p>
-          Yes. It is open source under the <a href={license}>MIT License</a>: you can use it, read the code, modify it
-          and share it. There is no account to create.
-        </p>
-      </details>
-
-      <details>
-        <summary>Does it connect to the internet?</summary>
-        <p>
-          No. Krova makes no network calls, collects no telemetry and needs no account. If you want to check for
-          yourself, block it in your firewall or watch it with your system’s network monitor. Details are on the
-          <a href={privacy}>privacy page</a>.
-        </p>
-      </details>
-
-      <details>
-        <summary>Where are my layouts and settings stored?</summary>
-        <p>
-          In a single <code>config.json</code> file in your user application-data folder. It holds your settings and
-          each monitor’s layouts. Window titles are never logged or stored.
-        </p>
-      </details>
-
-      <details>
-        <summary>What happens when I unplug and reconnect a monitor?</summary>
-        <p>
-          Each monitor’s layouts are saved against its hardware identity, so they come back when it does. Where a
-          monitor doesn’t report a usable identity, Krova falls back to its device path, then to its resolution and
-          position.
-        </p>
-      </details>
-
-      <details>
-        <summary>Does it replace Windows Snap or clash with it?</summary>
-        <p>
-          No. Windows’ own Snap Assist stays on. Krova only acts while you hold its activation key, so the two don’t
-          fight each other.
-        </p>
-      </details>
-
-      <details>
-        <summary>Why won’t it move one of my windows on Windows?</summary>
-        <p>
-          Windows of apps running as administrator (elevated) are skipped. Minimized and full-screen windows are
-          skipped as well.
-        </p>
-      </details>
-
-      <details>
-        <summary>Why does macOS ask for Accessibility permission?</summary>
-        <p>
-          macOS only lets an app move and resize other apps’ windows once you allow it under System Settings, Privacy
-          &amp; Security, Accessibility. Without that permission Krova can’t snap windows.
-        </p>
-      </details>
-
-      <details>
-        <summary>Can I use my keyboard instead of dragging?</summary>
-        <p>
-          Not yet. Layouts you can trigger from the keyboard are planned for v0.2. In v0.1 you snap by dragging a
-          window while holding the activation key.
-        </p>
-      </details>
-
-      <details>
-        <summary>Is there a Linux version?</summary>
-        <p>No. Krova supports Windows 10/11 and macOS 13 or later only.</p>
-      </details>
-
-      <details>
-        <summary>When can I download it?</summary>
-        <p>
-          Krova is at version 0.1 and has not been released yet. The <a href="#download">download section</a> will list
-          the installers once they exist.{' '}
-          {
-            REPO_CONFIGURED && (
-              <Fragment>
-                Found a problem or have an idea? <a href={ISSUES_URL}>Open an issue</a>.
-              </Fragment>
-            )
-          }
-        </p>
-      </details>
+    <div class="groups">
+      {
+        faq.map((g) => (
+          <div class="group card">
+            <h3>{g.title}</h3>
+            <div class="items">
+              {g.items.map((it) => (
+                <details>
+                  <summary>
+                    <span>{it.q}</span>
+                    <i aria-hidden="true" />
+                  </summary>
+                  <p set:html={inline(it.a)} />
+                </details>
+              ))}
+            </div>
+          </div>
+        ))
+      }
     </div>
   </div>
 </section>
 
 <style>
-  .faq {
-    border-top: 1px solid var(--color-border);
+  .wrap {
+    display: grid;
+    gap: var(--space-xl);
+    align-items: start;
+  }
+
+  .head h2 {
+    font-size: var(--text-2xl);
+  }
+  .head .muted {
+    margin-top: var(--space-s);
+    max-width: 24rem;
+    font-size: var(--text-sm);
+  }
+
+  .groups {
+    display: grid;
+    gap: var(--space-s);
+  }
+
+  .group {
+    padding: var(--space-s);
+    border-radius: var(--radius-xl);
+  }
+  .group h3 {
+    padding: 0.4rem 0.6rem 0.8rem;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    letter-spacing: 0;
+    color: var(--color-text-soft);
+  }
+
+  .items {
+    display: grid;
+    gap: 0.4rem;
   }
 
   details {
-    border-bottom: 1px solid var(--color-border);
+    border-radius: var(--radius-m);
+    background: var(--color-surface-2);
+    transition: background-color var(--dur-fast) var(--ease-out);
+  }
+  details[open] {
+    background: var(--color-surface-3);
   }
 
   summary {
@@ -117,42 +96,73 @@ const license = url('/license/');
     align-items: center;
     justify-content: space-between;
     gap: var(--space-s);
-    min-height: 3.5rem;
-    padding-block: var(--space-xs);
-    font-size: var(--text-md);
-    font-weight: 650;
-    line-height: var(--leading-snug);
+    min-height: 3.25rem;
+    padding: 0.7rem 0.9rem;
+    border-radius: var(--radius-m);
+    font-size: var(--text-base);
+    font-weight: 600;
+    line-height: 1.35;
     cursor: pointer;
     list-style: none;
   }
-
   summary::-webkit-details-marker {
     display: none;
   }
-
-  summary::after {
-    content: '';
-    flex: none;
-    width: 0.6rem;
-    height: 0.6rem;
-    margin-right: 0.3rem;
-    border-right: 2px solid currentColor;
-    border-bottom: 2px solid currentColor;
-    transform: rotate(45deg);
-    transition: transform var(--dur) var(--ease-out);
-  }
-
-  details[open] > summary::after {
-    transform: rotate(-135deg);
-  }
-
   summary:focus-visible {
     outline-offset: 0;
   }
 
+  /* plus / minus drawn with two bars */
+  summary i {
+    position: relative;
+    flex: none;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 50%;
+    background: var(--color-surface-3);
+  }
+  details[open] summary i {
+    background: var(--color-surface);
+  }
+  summary i::before,
+  summary i::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 0.65rem;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--color-text);
+    transform: translate(-50%, -50%);
+    transition: transform var(--dur) var(--ease-out);
+  }
+  summary i::after {
+    transform: translate(-50%, -50%) rotate(90deg);
+  }
+  details[open] summary i::after {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+
   details p {
-    padding-bottom: var(--space-m);
-    max-width: var(--measure);
+    padding: 0 0.9rem 1rem;
+    max-width: 60ch;
+    font-size: var(--text-sm);
+    line-height: 1.6;
     color: var(--color-text-muted);
+  }
+  details p :global(a) {
+    text-decoration: underline;
+  }
+
+  @media (min-width: 60rem) {
+    .wrap {
+      grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr);
+      gap: var(--space-2xl);
+    }
+    .head {
+      position: sticky;
+      top: 6rem;
+    }
   }
 </style>

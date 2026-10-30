@@ -1,0 +1,275 @@
+---
+import Icon from './Icon.astro';
+import { CHECKED_ISO, CHECKED_LABEL, columns, rows, sources } from '../data/compare';
+import type { Cell } from '../data/compare';
+import { ISSUES_URL, REPO_LINKS_ENABLED } from '../site';
+
+const empty = rows.length === 0;
+
+const word = (c: Cell): string =>
+  c.kind === 'yes' ? 'Yes' : c.kind === 'no' ? 'No' : c.kind === 'part' ? 'Partly' : c.kind === 'unknown' ? 'Not confirmed' : '';
+---
+
+<section id="compare" class="section" aria-labelledby="compare-title">
+  <div class="container">
+    <header class="sec-head">
+      <p class="eyebrow">Compare</p>
+      <h2 id="compare-title">Where Krova fits. <span class="soft">And where it does not yet.</span></h2>
+      <p class="lead">
+        On Windows, PowerToys FancyZones already has a hold-Shift zone overlay, zones you draw and a layout per
+        monitor, and it can snap from the keyboard. Krova is free and MIT-licensed, with the same drawn-zone workflow
+        on Windows and macOS. It is new, and it has no keyboard snapping yet.
+      </p>
+    </header>
+
+    {
+      empty ? (
+        <p class="note">
+          <strong>Comparison data is not filled in.</strong> src/data/compare.ts has no rows. The table is built from
+          docs/compare-research.md and shows nothing else.
+        </p>
+      ) : (
+        <Fragment>
+          <p class="scroll-hint" aria-hidden="true">Scroll sideways to see the other tools &rarr;</p>
+          <div class="table-scroll" tabindex="0" role="region" aria-label="Comparison table. Scroll sideways on small screens.">
+            <table class="cmp">
+              <caption class="visually-hidden">
+                Krova compared with Windows Snap, PowerToys FancyZones, Rectangle, Magnet and macOS tiling, checked on {CHECKED_LABEL}.
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col" class="corner"><span class="visually-hidden">Feature</span></th>
+                  {columns.map((c) => (
+                    <th scope="col" class:list={{ me: c.id === 'krova' }}>
+                      <span class="name">{c.name}</span>
+                      <span class="sub">{c.note}</span>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr>
+                    <th scope="row">{r.label}</th>
+                    {columns.map((c) => {
+                      const cell = r.cells[c.id];
+                      return (
+                        <td class:list={['cell', cell.kind, { me: c.id === 'krova' }]}>
+                          {cell.kind === 'unknown' ? (
+                            <span class="dash" aria-hidden="true">&mdash;</span>
+                          ) : cell.kind === 'text' ? null : (
+                            <span class="mark" aria-hidden="true">
+                              <Icon name={cell.kind === 'yes' ? 'check' : cell.kind === 'no' ? 'cross' : 'dash'} />
+                            </span>
+                          )}
+                          {word(cell) && <span class="visually-hidden">{word(cell)}{cell.text ? ': ' : ''}</span>}
+                          {cell.text && <span class="txt">{cell.text}</span>}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="foot">
+            <p>
+              <span aria-hidden="true">&mdash;</span> means we could not confirm the answer in the product&rsquo;s own
+              documentation. It does not mean &ldquo;no&rdquo;. Everything else was read from official pages and checked
+              on <time datetime={CHECKED_ISO}>{CHECKED_LABEL}</time>. Documentation can be wrong or out of date, and
+              prices and versions change. Krova&rsquo;s column describes version 0.1 as designed; the macOS build has not
+              been run on a real Mac, and &ldquo;no network calls&rdquo; is a design rule backed by a source review, not a
+              proof.
+            </p>
+            <p>
+              The table covers five widely used tools and is not exhaustive; other zone tools exist, for example MacsyZones
+              on macOS. Rectangle Pro is a separate paid app and is not in the table. Windows 11 and Windows 10 differ in what Snap
+              offers; the table lists what Microsoft documents for both. Windows, macOS, PowerToys, Rectangle and Magnet are
+              trademarks of their owners; this page is not affiliated with them.
+              {REPO_LINKS_ENABLED && (
+                <Fragment>
+                  {' '}Spotted something out of date? <a href={ISSUES_URL}>Open an issue</a>.
+                </Fragment>
+              )}
+            </p>
+            <details class="sources">
+              <summary>Sources, accessed {CHECKED_LABEL}</summary>
+              <ul>
+                {sources.map((s) => (
+                  <li>
+                    <a href={s.url} rel="noopener noreferrer">{s.name}</a>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </div>
+        </Fragment>
+      )
+    }
+  </div>
+</section>
+
+<style>
+  .table-scroll {
+    border-radius: var(--radius-l);
+    box-shadow: var(--shadow-1);
+  }
+
+  .scroll-hint {
+    margin-bottom: var(--space-xs);
+    text-align: right;
+    font-size: var(--text-sm);
+    color: var(--color-text-soft);
+  }
+  @media (min-width: 72rem) {
+    .scroll-hint {
+      display: none;
+    }
+  }
+
+  .cmp {
+    width: 100%;
+    min-width: 62rem;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: var(--text-sm);
+    line-height: 1.4;
+  }
+
+  .cmp th,
+  .cmp td {
+    padding: 0.8rem 0.9rem;
+    text-align: left;
+    vertical-align: top;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .cmp thead th {
+    border-top: 0;
+    vertical-align: bottom;
+    background: var(--color-surface);
+  }
+
+  .cmp thead th .name {
+    display: block;
+    font-size: var(--text-base);
+    font-weight: 700;
+    color: var(--color-text);
+    letter-spacing: var(--tracking-snug);
+  }
+  .cmp thead th .sub {
+    display: block;
+    font-weight: 400;
+    font-size: var(--text-xs);
+    color: var(--color-text-soft);
+  }
+
+  /* First column stays visible while the table scrolls sideways. */
+  .cmp tbody th {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    width: 10.5rem;
+    min-width: 10.5rem;
+    background: var(--color-surface);
+    font-weight: 600;
+    box-shadow: 1px 0 0 var(--color-border);
+  }
+  .cmp thead th.corner {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    width: 10.5rem;
+  }
+
+  /* Krova column highlight */
+  .cmp .me {
+    background: var(--accent-tint);
+  }
+  .cmp thead th.me {
+    color: var(--color-accent-text);
+    background: var(--color-surface);
+    background-image: linear-gradient(var(--accent-tint), var(--accent-tint));
+    box-shadow: inset 0 2px 0 var(--color-accent);
+  }
+  .cmp thead th.me .name {
+    color: var(--color-accent-text);
+  }
+
+  .cell {
+    display: table-cell;
+  }
+  .cell .mark {
+    display: inline-grid;
+    place-items: center;
+    width: 1.25rem;
+    height: 1.25rem;
+    margin-right: 0.45rem;
+    border-radius: 50%;
+    vertical-align: -0.2rem;
+  }
+  .cell .mark :global(.icon) {
+    width: 0.8rem;
+    height: 0.8rem;
+    stroke-width: 2.4;
+  }
+  .cell.yes .mark {
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+  }
+  .cell.no .mark {
+    background: var(--color-surface-3);
+    color: var(--color-text-muted);
+    border: 1px solid var(--color-border-strong);
+  }
+  .cell.part .mark {
+    background: var(--color-warn-bg);
+    color: var(--color-warn);
+    border: 1px solid var(--color-warn-border);
+  }
+  .cell .txt {
+    color: var(--color-text);
+  }
+  .cell.text .txt {
+    color: var(--color-text-muted);
+  }
+  .cell .dash {
+    color: var(--color-text-soft);
+    font-size: var(--text-base);
+  }
+
+  .foot {
+    display: grid;
+    gap: var(--space-xs);
+    max-width: 52rem;
+    margin: var(--space-l) auto 0;
+    font-size: var(--text-xs);
+    line-height: 1.6;
+    color: var(--color-text-muted);
+    text-align: center;
+  }
+
+  .sources {
+    margin-top: var(--space-2xs);
+  }
+  .sources summary {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.5rem;
+    padding: 0 0.5rem;
+    cursor: pointer;
+    color: var(--color-link);
+    font-weight: 600;
+  }
+  .sources ul {
+    display: grid;
+    gap: 0.25rem;
+    margin-top: var(--space-2xs);
+    text-align: left;
+    list-style: none;
+  }
+  .sources li {
+    overflow-wrap: anywhere;
+  }
+</style>

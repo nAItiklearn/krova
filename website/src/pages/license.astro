@@ -4,8 +4,9 @@ import { resolve } from 'node:path';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { url } from '../lib/url';
 
-const title = 'License: Krova';
-const description = 'Krova is free and open source software released under the MIT License. Read the full text.';
+const title = 'License and terms: Krova';
+const description =
+  'Krova is free and MIT licensed: use, copy, modify and share it. It is provided as is, with no warranty, and nothing is sold. Read the full license text.';
 
 // The repository's LICENSE file is the single source of truth. It is read at
 // build time. npm scripts run with website/ as the working directory, so the
@@ -26,7 +27,12 @@ const paragraphs = raw
   .replace(/\r\n/g, '\n')
   .trim()
   .split(/\n{2,}/)
-  .map((p) => p.split('\n').map((l) => l.trim()).join(' '));
+  .map((p) =>
+    p
+      .split('\n')
+      .map((l) => l.trim())
+      .join(' '),
+  );
 
 const [heading, copyright, ...body] = paragraphs;
 ---
@@ -34,38 +40,83 @@ const [heading, copyright, ...body] = paragraphs;
 <BaseLayout title={title} description={description}>
   <div class="container container--narrow">
     <header class="page-head">
-      <p class="eyebrow">License</p>
-      <h1>{heading}</h1>
-      <p class="lead">
-        Krova is free and open source. In short: you may use, copy, modify, merge, publish, distribute, sublicense
-        and sell it, provided the copyright and permission notice below stay with it. It comes with no warranty. The
-        text below is the license itself and takes precedence over this summary.
-      </p>
+      <p class="eyebrow">License and terms</p>
+      <h1>License and terms</h1>
+      <p class="lead">Krova is free and open source. In short, in plain language:</p>
     </header>
 
-    <article class="prose license" aria-label="License text">
+    <ul class="summary">
+      <li>
+        <strong>Free to use, copy, modify and share.</strong> You may use Krova for anything, change it, and give copies to
+        others, as long as the copyright and permission notice below stay with it.
+      </li>
+      <li>
+        <strong>Provided as is.</strong> There is no warranty of any kind, and the authors are not liable for damage it
+        might cause. Krova is early software.
+      </li>
+      <li>
+        <strong>Nothing is sold,</strong> so there is no purchase, subscription, licence key or account, and nothing to
+        refund.
+      </li>
+      <li>
+        <strong>Your data stays with you.</strong> See the <a href={url('/privacy/')}>Privacy page</a>.
+      </li>
+    </ul>
+    <p class="muted precedence">
+      This summary is not part of the license. The text below is the license itself, and it takes precedence.
+    </p>
+
+    <article class="license" aria-label="License text">
+      <h2 class="license-title">{heading}</h2>
       <p class="copyright">{copyright}</p>
       {body.map((p) => <p>{p}</p>)}
-      <p class="muted">
-        This is the text of the <code>LICENSE</code> file in the Krova repository. See also the
-        <a href={url('/privacy/')}>privacy page</a>.
-      </p>
     </article>
+    <p class="muted file">
+      This is the text of the <code>LICENSE</code> file in the Krova repository, read when this site is built.
+    </p>
   </div>
 </BaseLayout>
 
 <style>
-  .license {
-    padding: var(--space-m);
-    margin-bottom: var(--section-y);
+  .summary {
+    display: grid;
+    gap: var(--space-s);
     max-width: var(--measure);
+    padding: var(--space-m) var(--space-m) var(--space-m) 2.4rem;
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-m);
+    border-radius: var(--radius-l);
     background: var(--color-surface);
+    list-style: disc;
+  }
+  .summary li::marker {
+    color: var(--color-accent-text);
+  }
+  .precedence {
+    margin-top: var(--space-s);
+    font-size: var(--text-sm);
   }
 
+  .license {
+    display: grid;
+    gap: var(--space-s);
+    margin-top: var(--space-xl);
+    padding: var(--space-m);
+    max-width: var(--measure);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-l);
+    background: var(--color-surface-2);
+    font-size: var(--text-sm);
+  }
+  .license-title {
+    font-size: var(--text-lg);
+  }
   .copyright {
     font-weight: 650;
+  }
+  .file {
+    margin-top: var(--space-s);
+    padding-bottom: var(--section-y);
+    font-size: var(--text-sm);
   }
 
   @media (min-width: 40rem) {

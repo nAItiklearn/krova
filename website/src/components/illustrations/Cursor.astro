@@ -1,0 +1,13 @@
+---
+/** Mouse pointer for mock desktops. Style: .ill-cursor in illustrations.css. */
+interface Props {
+  x?: string;
+  y?: string;
+}
+const { x, y } = Astro.props;
+const vars = [x && `--cx:${x}`, y && `--cy:${y}`].filter(Boolean).join(';');
+---
+
+<svg class="ill-cursor" viewBox="0 0 16 22" aria-hidden="true" focusable="false" style={vars || undefined}>
+  <path d="M1 1v16l4.2-3.8 3 6.8 2.7-1.2-3-6.6H14z"></path>
+</svg>

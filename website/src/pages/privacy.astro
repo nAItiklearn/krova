@@ -1,8 +1,11 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { ISSUES_URL, REPO_CONFIGURED, REPO_URL } from '../site';
+import { ISSUES_URL, REPO_LINKS_ENABLED, REPO_URL } from '../site';
 import { url } from '../lib/url';
 
+// The app facts on this page were corrected by the security review (docs/SECURITY-REVIEW.md, F-14)
+// and checked against src-tauri/tauri.conf.json (bundle identifier dev.krova.desktop). Only the
+// "This website" section and one sentence about the source code changed when the site was redesigned.
 const title = 'Privacy: Krova';
 const description =
   'Krova makes no network calls, has no accounts or telemetry, and never logs window titles. Here is exactly what it stores on your computer, and where.';
@@ -34,20 +37,25 @@ const description =
         pings. Because it never connects out, there is no server on the other side that could receive your data.
       </p>
       <p>
-        You do not have to take our word for it. The source code is open under the MIT License, and you can watch
-        Krova with your operating system’s network monitor or block it in your firewall. It should behave exactly the
-        same.
+        You do not have to take our word for it. {
+          REPO_LINKS_ENABLED ? (
+            <Fragment>The source code is open under the MIT License, and you</Fragment>
+          ) : (
+            <Fragment>You</Fragment>
+          )
+        } can watch Krova with your operating system&rsquo;s network monitor or block it in your firewall. It should behave
+        exactly the same.
       </p>
       <p>
-        Two things sit outside Krova’s own code. The Windows installer downloads Microsoft’s WebView2 runtime if it is
-        not already installed on your computer. And the web view that draws Krova’s window (WebView2 on Windows,
-        WebKit on macOS) and the operating system’s own crash reporting are separate system components that Krova does
+        Two things sit outside Krova&rsquo;s own code. The Windows installer downloads Microsoft&rsquo;s WebView2 runtime if it is
+        not already installed on your computer. And the web view that draws Krova&rsquo;s window (WebView2 on Windows,
+        WebKit on macOS) and the operating system&rsquo;s own crash reporting are separate system components that Krova does
         not control.
       </p>
 
       <h2>What is stored on your computer</h2>
       <p>
-        Krova keeps your settings and layouts in one file, <code>config.json</code>, in your user account’s
+        Krova keeps your settings and layouts in one file, <code>config.json</code>, in your user account&rsquo;s
         application-data folder (typically <code>%APPDATA%\dev.krova.desktop</code> on Windows and
         <code>~/Library/Application Support/dev.krova.desktop</code> on macOS). It contains:
       </p>
@@ -64,7 +72,7 @@ const description =
       <p>
         To recognise a monitor when you plug it back in, Krova stores what the operating system reports about it: the
         manufacturer and product codes, the device path (which includes an identifier for the port it is plugged
-        into), and the monitor’s last size and position. On macOS this also includes the display’s serial number
+        into), and the monitor&rsquo;s last size and position. On macOS this also includes the display&rsquo;s serial number
         where the display reports one; on Windows Krova does not store a serial number. These are what let Krova bring
         a layout back for the same monitor. They stay in this file on your machine. If you ever share your
         <code>config.json</code>, for example in a bug report, remove those identifiers first if you would rather not
@@ -78,11 +86,11 @@ const description =
       <p>Besides <code>config.json</code>, a few other things exist on your computer while Krova is installed:</p>
       <ul>
         <li>
-          On Windows, the web view that draws Krova’s window keeps its own cache and browser profile in a folder under
+          On Windows, the web view that draws Krova&rsquo;s window keeps its own cache and browser profile in a folder under
           <code>%LOCALAPPDATA%\dev.krova.desktop</code>.
         </li>
         <li>
-          If you turn on “Launch at login”, Krova adds a start-up entry: a value named “Krova” under
+          If you turn on &ldquo;Launch at login&rdquo;, Krova adds a start-up entry: a value named &ldquo;Krova&rdquo; under
           <code>HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run</code> on Windows, or a
           <code>dev.krova.desktop.plist</code> file in <code>~/Library/LaunchAgents</code> on macOS when it is not run from
           an app bundle (otherwise a regular macOS login item).
@@ -92,7 +100,7 @@ const description =
       <h2>What Krova does not record</h2>
       <p>
         To notice that you are dragging a window, Krova listens to mouse movement and clicks across your whole
-        computer while it runs. When you press the mouse button on a window it looks at that window’s position and size
+        computer while it runs. When you press the mouse button on a window it looks at that window&rsquo;s position and size
         and whether its program runs as administrator, and during a drag it checks whether your activation key and
         Escape are held. That all happens in memory, in the moment, and none of it is stored or sent anywhere.
         <strong>Window titles are never read, logged or stored</strong>, and nothing about the windows you move is
@@ -102,7 +110,7 @@ const description =
       <h2>Permissions</h2>
       <p>
         On macOS, Krova asks for <strong>Accessibility</strong> permission (System Settings, Privacy &amp; Security,
-        Accessibility). macOS requires it before any app can move and resize other apps’ windows. Depending on your
+        Accessibility). macOS requires it before any app can move and resize other apps&rsquo; windows. Depending on your
         macOS version it may also ask for <strong>Input Monitoring</strong> so that it can notice a window being
         dragged. Krova only watches the left mouse button and checks whether your activation key and Escape are held;
         it does not read or record what you type. On Windows no special permission is requested; windows of apps
@@ -112,36 +120,47 @@ const description =
       <h2>Removing your data</h2>
       <p>
         Delete <code>config.json</code> (and <code>config.json.bak</code>, if present) to erase the settings and
-        layouts Krova has stored. To remove everything else, turn off “Launch at login” before uninstalling and delete
+        layouts Krova has stored. To remove everything else, turn off &ldquo;Launch at login&rdquo; before uninstalling and delete
         the <code>dev.krova.desktop</code> folder under <code>%LOCALAPPDATA%</code> on Windows. Krova keeps no copy of your
-        data anywhere else, because it never sends anything anywhere.
+        data anywhere else, because it never sends anything anywhere. The
+        <a href={url('/guides/install/#uninstall')}>install guide</a> has the full list and the steps.
       </p>
 
       <h2>This website</h2>
       <p>
-        This site is a set of static pages. It sets no cookies, runs no analytics, has no forms and loads no scripts,
-        fonts, images or embeds from other servers. Like any web server, whatever hosts these pages may keep ordinary
-        access logs; the site itself does nothing to add to that.
+        This site is a set of static pages. It sets no cookies, runs no analytics, has no forms and loads nothing from
+        other servers: no fonts, images, scripts or embeds. It runs one small script of its own, a file served from this
+        site, that remembers your light or dark choice in your browser&rsquo;s local storage (the key
+        <code>krova-theme</code>). Nothing is sent anywhere. Like any web server, whatever hosts these pages may keep
+        ordinary access logs; the site itself does nothing to add to that.
+      </p>
+      <p>
+        The live editor on the home page is also part of this site. It runs in your browser against sample monitors and
+        keeps the layouts you edit in your browser&rsquo;s local storage (the key <code>krova-demo</code>). It makes no
+        network requests and cannot touch your windows.
       </p>
       <p>
         Downloading an installer necessarily contacts the server that hosts it (for example GitHub, if you get it from
-        the releases page). That request is handled under that service’s own privacy policy, not by Krova.
+        the releases page). That request is handled under that service&rsquo;s own privacy policy, not by Krova.
       </p>
 
       <h2>Questions</h2>
       <p>
         {
-          REPO_CONFIGURED ? (
+          REPO_LINKS_ENABLED ? (
             <Fragment>
               If something here is unclear or looks wrong, please <a href={ISSUES_URL}>open an issue</a> in the{' '}
               <a href={REPO_URL}>project repository</a>.
             </Fragment>
           ) : (
-            <Fragment>If something here is unclear or looks wrong, please open an issue in the project repository.</Fragment>
+            <Fragment>
+              If something here is unclear or looks wrong, please open an issue in the project repository once it is
+              public. It is not public yet.
+            </Fragment>
           )
         }
       </p>
-      <p class="muted">Last updated: 30 October 2026. See also the <a href={url('/license/')}>license</a>.</p>
+      <p class="muted">Last updated: 30 October 2026. See also <a href={url('/license/')}>License and terms</a>.</p>
     </article>
   </div>
 </BaseLayout>
@@ -149,5 +168,8 @@ const description =
 <style>
   article {
     padding-bottom: var(--section-y);
+  }
+  article :global(h2:first-child) {
+    margin-top: 0;
   }
 </style>

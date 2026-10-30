@@ -1,0 +1,72 @@
+---
+import GuideLayout from '../../layouts/GuideLayout.astro';
+import SnapFlow from '../../components/SnapFlow.astro';
+import { url } from '../../lib/url';
+---
+
+<GuideLayout
+  slug="first-snap"
+  description="Your first snap with Krova: drag a window, hold Shift, release over a zone. How to cancel, which windows are skipped, and how to change the key."
+  lead="Drag a window, hold Shift, release over a zone. That is the whole gesture."
+>
+  <h2 id="before">Before you start</h2>
+  <ul>
+    <li>Krova is running: its icon is in the tray or menu bar. See <a href={url('/guides/install/#tray')}>Find Krova</a>.</li>
+    <li>In the tray menu, <strong>Enabled</strong> is ticked.</li>
+    <li>
+      Every monitor starts with four layouts (Halves, Thirds, Grid 2x2 and Priority), and <strong>Halves</strong> is the
+      active one, so your first snap has two zones. To change that, see <a href={url('/guides/layout-editor/')}>the layout editor</a>.
+    </li>
+  </ul>
+
+  <h2 id="snap">Snap a window</h2>
+  <ol>
+    <li>Press on a window&rsquo;s title bar and start dragging it.</li>
+    <li>
+      Without letting go of the mouse, hold <kbd>Shift</kbd>. The zones of the monitor under your cursor appear, and the
+      zone under the cursor lights up.
+    </li>
+    <li>Move over the zone you want.</li>
+    <li>
+      Release the mouse button. The window moves to fill the zone. By default it eases in over about 120 ms; you can make
+      it instant in Settings.
+    </li>
+  </ol>
+
+  <SnapFlow />
+
+  <h2 id="cancel">Cancel</h2>
+  <ul>
+    <li>Release <kbd>Shift</kbd> before the mouse button: the zones hide and nothing moves.</li>
+    <li>Press <kbd>Esc</kbd>: the gesture is abandoned.</li>
+    <li>Release the mouse while no zone is lit: the window stays where you dropped it.</li>
+  </ul>
+
+  <h2 id="notes">Good to know</h2>
+  <ul>
+    <li>
+      <strong>Only the monitor under your cursor</strong> shows its zones, using that monitor&rsquo;s active layout. See
+      <a href={url('/guides/multiple-displays/')}>Multiple displays</a>.
+    </li>
+    <li>
+      <strong>Different key.</strong> Open Settings (tray menu) and change <em>Activation modifier</em> to Shift, Ctrl,
+      Alt, or the Windows key (Command on a Mac).
+    </li>
+    <li>
+      <strong>Move or resize?</strong> A press that resizes a window, or never moves it, is not a drag. A window has to
+      travel a few pixels before Krova treats it as one.
+    </li>
+    <li>
+      <strong>Skipped windows.</strong> Minimized and fullscreen windows are skipped, and so are windows of apps running as
+      administrator on Windows. Some apps refuse to go below a minimum size, so the window may not fill the zone exactly.
+      More in <a href={url('/support/')}>Troubleshooting</a>.
+    </li>
+    <li>
+      <strong>Edge snapping</strong> is separate. If you switch it on, dragging to a screen edge snaps without any key.
+      See <a href={url('/guides/edge-snapping/')}>Edge snapping</a>.
+    </li>
+    <li>
+      <strong>No keyboard snapping.</strong> There are no global shortcuts to snap the focused window yet.
+    </li>
+  </ul>
+</GuideLayout>

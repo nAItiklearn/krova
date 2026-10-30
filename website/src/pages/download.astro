@@ -1,0 +1,269 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Icon from '../components/Icon.astro';
+import { url } from '../lib/url';
+import {
+  CHECKSUMS_FILE,
+  DOWNLOADS,
+  DOWNLOADS_ENABLED,
+  RELEASES_URL,
+  RELEASE_PUBLISHED,
+  REPO_LINKS_ENABLED,
+  REPO_URL,
+  VERSION_LABEL,
+  latestDownloadUrl,
+} from '../site';
+
+const title = 'Download Krova: Windows installer and macOS disk image';
+const description =
+  'Krova is free and MIT licensed. The Windows installer and macOS disk image are unsigned: here is what to expect, how to get past the warnings, and how to check the download.';
+
+const win = DOWNLOADS.find((d) => d.id === 'windows')!;
+const mac = DOWNLOADS.find((d) => d.id === 'macos')!;
+
+const state = DOWNLOADS_ENABLED ? 'released' : RELEASE_PUBLISHED ? 'private' : 'unreleased';
+---
+
+<BaseLayout title={title} description={description}>
+  <div class="container">
+    <header class="page-head">
+      <p class="eyebrow">Download</p>
+      <h1>Download Krova</h1>
+      <p class="lead">
+        Free, MIT license, no account. Two builds: a Windows installer and a macOS disk image. Both are unsigned, so
+        your system will warn you before the first run. Here is exactly what to expect.
+      </p>
+    </header>
+
+    {
+      state === 'unreleased' && (
+        <div class="note note--warn status">
+          <p>
+            <strong>The first release is not published yet.</strong> There is nothing to download today. This page is
+            ready so you can see what each build needs before it exists. {VERSION_LABEL} is early software; the{' '}
+            <a href={url('/changelog/')}>changelog</a> lists what it will contain and what it will not.
+          </p>
+          <p>
+            In the meantime you can <a href={url('/#try')}>try the editor in your browser</a>.
+          </p>
+        </div>
+      )
+    }
+    {
+      state === 'private' && (
+        <div class="note note--warn status">
+          <p>
+            <strong>A release exists, but Krova&rsquo;s repository is not public yet,</strong> so this site has no
+            public download link. This page will show the buttons once the repository is public.
+          </p>
+        </div>
+      )
+    }
+
+    <div class="builds">
+      <article class="card build" aria-labelledby="win-title">
+        <header>
+          <h2 id="win-title">Windows</h2>
+          <p class="req">{win.requirement}</p>
+        </header>
+        <p class="file"><code>{win.file}</code></p>
+
+        <h3>What you get</h3>
+        <ul>
+          <li>An installer for one user. It does not ask for administrator rights.</li>
+          <li>Krova goes into <code>%LOCALAPPDATA%\Krova</code>, with a Start menu shortcut. A desktop shortcut and &ldquo;Run Krova&rdquo; are offered on the last page.</li>
+          <li>If Microsoft&rsquo;s WebView2 runtime is not on your PC, the installer downloads it. That download is the installer&rsquo;s, not Krova&rsquo;s.</li>
+          <li>Krova starts in the notification area. No window opens by itself.</li>
+        </ul>
+
+        <h3>The SmartScreen warning</h3>
+        <p>The installer is not code-signed, so Windows shows &ldquo;Windows protected your PC&rdquo;. To continue:</p>
+        <ol>
+          <li>Select <strong>More info</strong>.</li>
+          <li>Select <strong>Run anyway</strong>.</li>
+        </ol>
+        <p class="muted small">
+          If you would rather not, wait for a signed build, or build from source (below). Windows is warning about an
+          unknown publisher, not about something it found inside the file.
+        </p>
+
+        <div class="get">
+          {
+            DOWNLOADS_ENABLED ? (
+              <a class="btn btn-primary" href={latestDownloadUrl(win.file)}>
+                <Icon name="download" />
+                Download for Windows
+              </a>
+            ) : (
+              <p class="pill pill--warn"><span class="dot" aria-hidden="true"></span>Not available yet</p>
+            )
+          }
+        </div>
+      </article>
+
+      <article class="card build" aria-labelledby="mac-title">
+        <header>
+          <h2 id="mac-title">macOS</h2>
+          <p class="req">{mac.requirement}, Apple silicon and Intel</p>
+        </header>
+        <p class="file"><code>{mac.file}</code></p>
+
+        <div class="note note--warn">
+          <p><strong>Never tested on a real Mac.</strong> The macOS build has not been run on a Mac yet. Treat it as experimental.</p>
+        </div>
+
+        <h3>What you get</h3>
+        <ul>
+          <li>A disk image. Open it and drag Krova to Applications.</li>
+          <li>A menu bar icon, with no Dock icon.</li>
+        </ul>
+
+        <h3>Gatekeeper</h3>
+        <p>The app is unsigned and not notarised, so macOS blocks the first launch. To open it:</p>
+        <ol>
+          <li>In Applications, right-click (or Control-click) <strong>Krova</strong> and choose <strong>Open</strong>.</li>
+          <li>Choose <strong>Open</strong> in the dialog.</li>
+        </ol>
+        <p class="muted small">
+          If the dialog has no Open button (newer macOS versions can do this), open System Settings, Privacy &amp;
+          Security, scroll to Security, and choose <strong>Open Anyway</strong> next to Krova.
+        </p>
+
+        <h3>Permissions</h3>
+        <p>
+          Krova needs <strong>Accessibility</strong> access to move other apps&rsquo; windows (System Settings, Privacy
+          &amp; Security, Accessibility). macOS may also ask for <strong>Input Monitoring</strong>. Without Accessibility,
+          snapping cannot work, and a restart of Krova may be needed after you grant it.
+        </p>
+
+        <div class="get">
+          {
+            DOWNLOADS_ENABLED ? (
+              <a class="btn btn-primary" href={latestDownloadUrl(mac.file)}>
+                <Icon name="download" />
+                Download for macOS
+              </a>
+            ) : (
+              <p class="pill pill--warn"><span class="dot" aria-hidden="true"></span>Not available yet</p>
+            )
+          }
+        </div>
+      </article>
+    </div>
+
+    <div class="below prose">
+      <h2 id="verify">Check your download</h2>
+      <p>
+        Each release will publish <code>{CHECKSUMS_FILE}</code> next to the installers: one SHA-256 hash per file.
+        Compute the hash of what you downloaded and compare it with the line for that file.
+      </p>
+      <p><strong>Windows</strong> (PowerShell), from the folder with the file:</p>
+      <pre tabindex="0"><code>Get-FileHash .\{win.file} -Algorithm SHA256</code></pre>
+      <p><strong>macOS</strong> (Terminal):</p>
+      <pre tabindex="0"><code>shasum -a 256 {mac.file}</code></pre>
+      <p>
+        The two should match exactly (letter case does not matter). A match proves the download was not corrupted on the
+        way. It cannot prove who built the file, because the checksum comes from the same place as the file and the
+        installers are unsigned.
+      </p>
+
+      <h2 id="source">Build from source</h2>
+      {
+        REPO_LINKS_ENABLED ? (
+          <p>
+            The code is open. Build instructions are in the <a href={REPO_URL}>repository README</a>, and all releases
+            are on the <a href={RELEASES_URL}>releases page</a>.
+          </p>
+        ) : (
+          <p>
+            Building from source is the other way to get Krova, and the way to avoid the unsigned-installer warnings.
+            The instructions are in the repository, which is not public yet.
+          </p>
+        )
+      }
+
+      <h2>After installing</h2>
+      <p>
+        <a href={url('/guides/install/')}>The install guide</a> covers the tray icon, the permissions, uninstalling and
+        removing all of Krova&rsquo;s data. <a href={url('/guides/first-snap/')}>Your first snap</a> walks through the first drag.
+        Linux is not supported.
+      </p>
+    </div>
+  </div>
+</BaseLayout>
+
+<style>
+  .status {
+    margin-bottom: var(--space-l);
+  }
+
+  .builds {
+    display: grid;
+    gap: var(--space-m);
+  }
+
+  .build {
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-l) var(--space-m);
+    border-radius: var(--radius-xl);
+  }
+
+  .build h2 {
+    font-size: var(--text-xl);
+  }
+  .req {
+    margin-top: var(--space-3xs);
+    color: var(--color-text-muted);
+  }
+  .file {
+    margin-top: var(--space-s);
+  }
+
+  .build h3 {
+    margin-top: var(--space-l);
+    margin-bottom: var(--space-2xs);
+    font-size: var(--text-base);
+  }
+
+  .build ul,
+  .build ol {
+    display: grid;
+    gap: var(--space-2xs);
+    padding-left: 1.25em;
+    list-style: disc;
+  }
+  .build ol {
+    list-style: decimal;
+  }
+  .build .note {
+    margin-top: var(--space-m);
+  }
+  .small {
+    margin-top: var(--space-xs);
+    font-size: var(--text-sm);
+  }
+
+  .get {
+    margin-top: auto;
+    padding-top: var(--space-l);
+  }
+
+  .below {
+    margin-top: var(--space-2xl);
+    padding-bottom: var(--section-y);
+  }
+  .below > h2:first-child {
+    margin-top: 0;
+  }
+
+  @media (min-width: 56rem) {
+    .builds {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: stretch;
+    }
+    .build {
+      padding: var(--space-xl) var(--space-l);
+    }
+  }
+</style>

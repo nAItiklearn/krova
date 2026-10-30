@@ -1,0 +1,104 @@
+---
+/**
+ * Memory: two horizontal bars, drawn at build time as inline SVG from the
+ * parsed measurement. No chart library, no script. The numbers are repeated in
+ * a table on the page, so the chart is never the only source.
+ */
+interface Props {
+  width: number;
+  own: number;
+  all: number;
+  processCount: number;
+}
+
+const { width: W, own, all, processCount } = Astro.props;
+
+const narrow = W < 560;
+const left = 2;
+const right = narrow ? 82 : 96;
+const plotW = W - left - right;
+const max = Math.ceil((Math.max(own, all) * 1.08) / 50) * 50;
+const x = (v: number) => left + (v / max) * plotW;
+const ticks = Array.from({ length: max / 50 + 1 }, (_, i) => i * 50).filter((t) => !narrow || t % 100 === 0);
+
+const rowH = 80;
+const top = 4;
+const barH = 28;
+const rows = [
+  { label: 'Krova’s own process', sub: 'working set', v: own, cls: 'a' },
+  { label: `All ${processCount} processes, with the web view`, sub: 'private memory', v: all, cls: 'b' },
+];
+const H = top + rows.length * rowH + 28;
+const axisY = top + rows.length * rowH;
+const f = (n: number) => n.toFixed(1);
+const id = `mem-t-${W}`;
+---
+
+<svg class="chart" viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-labelledby={id}>
+  <title id={id}>
+    Memory while idle: Krova&rsquo;s own process {f(own)} MB working set; all {processCount} processes including the web view {f(all)} MB private memory.
+  </title>
+
+  {
+    ticks.map((t) => (
+      <g>
+        <line class="grid" x1={x(t)} x2={x(t)} y1={top} y2={axisY}></line>
+        <text class="tick" x={x(t)} y={axisY + 18} text-anchor="middle">{t}</text>
+      </g>
+    ))
+  }
+  <text class="tick" x={W - 2} y={axisY + 18} text-anchor="end">MB</text>
+
+  {
+    rows.map((r, i) => {
+      const y = top + i * rowH;
+      return (
+        <g>
+          <text class="lab" x={left} y={y + 16}>{r.label}</text>
+          <text class="sub" x={left} y={y + 33}>{r.sub}</text>
+          <rect class={`bar ${r.cls}`} x={x(0)} y={y + 42} width={(x(r.v) - x(0)).toFixed(1)} height={barH} rx="5"></rect>
+          <text class="val" x={x(r.v) + 8} y={y + 42 + barH / 2 + 5}>{f(r.v)} MB</text>
+        </g>
+      );
+    })
+  }
+</svg>
+
+<style>
+  .chart {
+    width: 100%;
+    height: auto;
+    overflow: visible;
+    font-family: var(--font-sans);
+  }
+  .grid {
+    stroke: var(--chart-grid);
+    stroke-width: 1;
+  }
+  .tick {
+    fill: var(--chart-axis);
+    font-size: 12px;
+    font-family: var(--font-mono);
+  }
+  .lab {
+    fill: var(--color-text);
+    font-size: 15px;
+    font-weight: 650;
+  }
+  .sub {
+    fill: var(--color-text-soft);
+    font-size: 13px;
+  }
+  .bar.a {
+    fill: var(--chart-a);
+  }
+  .bar.b {
+    fill: var(--chart-b);
+  }
+  .val {
+    fill: var(--color-text);
+    font-size: 15px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+</style>

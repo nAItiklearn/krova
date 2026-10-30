@@ -1,29 +1,62 @@
 ---
+import Icon from './Icon.astro';
 import { url } from '../lib/url';
+import { guides, guidePath, navAfterGuides, navBeforeGuides } from '../data/nav';
 
 const home = url('/');
 const path = Astro.url.pathname;
-
-const links = [
-  { href: `${home}#how`, label: 'How it works', current: false },
-  { href: `${home}#features`, label: 'Features', current: false },
-  { href: url('/privacy/'), label: 'Privacy', current: path.includes('/privacy') },
-  { href: `${home}#download`, label: 'Download', current: false },
-];
+const here = (href: string): boolean => {
+  const target = url(href.split('#')[0]);
+  return !href.includes('#') && path === target;
+};
+const inGuides = path.startsWith(url('/guides/'));
 ---
 
 <header class="site-header">
   <div class="container bar">
-    <a class="brand" href={home} aria-label="Krova home">
-      <img src={url('/favicon.svg')} width="32" height="32" alt="" />
+    <a class="brand" href={home} aria-label="Krova, home">
+      <img src={url('/favicon.svg')} width="28" height="28" alt="" />
       <span>Krova</span>
     </a>
-    <nav aria-label="Primary">
+
+    <nav class="nav-desktop" aria-label="Primary">
       <ul>
         {
-          links.map((l) => (
+          navBeforeGuides.map((l) => (
             <li>
-              <a href={l.href} aria-current={l.current ? 'page' : undefined}>
+              <a href={url(l.href)} aria-current={here(l.href) ? 'page' : undefined}>
+                {l.label}
+              </a>
+            </li>
+          ))
+        }
+        <li>
+          <details class="dd" data-menu>
+            <summary class:list={{ current: inGuides }}>
+              Guides <Icon name="chevron" />
+            </summary>
+            <div class="dd-panel">
+              <ul>
+                {
+                  guides.map((g) => (
+                    <li>
+                      <a href={url(guidePath(g.slug))} aria-current={path === url(guidePath(g.slug)) ? 'page' : undefined}>
+                        {g.title}
+                      </a>
+                    </li>
+                  ))
+                }
+                <li class="all">
+                  <a href={url('/guides/')} aria-current={path === url('/guides/') ? 'page' : undefined}>All guides</a>
+                </li>
+              </ul>
+            </div>
+          </details>
+        </li>
+        {
+          navAfterGuides.map((l) => (
+            <li>
+              <a href={url(l.href)} aria-current={here(l.href) ? 'page' : undefined}>
                 {l.label}
               </a>
             </li>
@@ -31,73 +64,300 @@ const links = [
         }
       </ul>
     </nav>
+
+    <div class="actions">
+      <button type="button" class="theme-btn" data-theme-toggle hidden aria-label="Switch theme">
+        <span class="i-moon"><Icon name="moon" /></span>
+        <span class="i-sun"><Icon name="sun" /></span>
+      </button>
+      <a class="btn btn-primary btn-sm" href={url('/download/')} aria-current={here('/download/') ? 'page' : undefined}>Download</a>
+
+      <details class="mnav" data-menu>
+        <summary>
+          <Icon name="menu" />
+          <span>Menu</span>
+        </summary>
+        <nav class="mnav-panel" aria-label="Mobile">
+          <ul>
+            {
+              navBeforeGuides.map((l) => (
+                <li><a href={url(l.href)}>{l.label}</a></li>
+              ))
+            }
+            <li>
+              <a href={url('/guides/')}>Guides</a>
+              <ul class="sub">
+                {guides.map((g) => <li><a href={url(guidePath(g.slug))}>{g.short}</a></li>)}
+              </ul>
+            </li>
+            {
+              navAfterGuides.map((l) => (
+                <li><a href={url(l.href)}>{l.label}</a></li>
+              ))
+            }
+          </ul>
+        </nav>
+      </details>
+    </div>
   </div>
 </header>
 
 <style>
   .site-header {
+    position: relative;
+    z-index: 20;
     border-bottom: 1px solid var(--color-border);
     background: var(--color-bg);
   }
 
   .bar {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
-    column-gap: var(--space-m);
-    row-gap: var(--space-3xs);
-    padding-block: var(--space-2xs);
+    gap: var(--space-m);
+    min-height: 4rem;
   }
 
   .brand {
     display: inline-flex;
     align-items: center;
-    gap: var(--space-xs);
+    gap: 0.6rem;
     min-height: 2.75rem;
+    margin-right: auto;
     color: var(--color-text);
     font-size: var(--text-md);
-    font-weight: 750;
-    letter-spacing: var(--tracking-tight);
+    font-weight: 700;
+    letter-spacing: var(--tracking-snug);
     text-decoration: none;
   }
 
-  nav ul {
-    display: flex;
-    flex-wrap: wrap;
-    column-gap: var(--space-xs);
+  .nav-desktop {
+    display: none;
   }
 
-  nav a {
+  .nav-desktop > ul {
+    display: flex;
+    align-items: center;
+    gap: 0.1rem;
+  }
+
+  .nav-desktop a,
+  .dd > summary {
     display: inline-flex;
     align-items: center;
-    min-height: 2.75rem;
-    padding-inline: var(--space-2xs);
-    border-radius: var(--radius-s);
+    gap: 0.25rem;
+    min-height: 2.5rem;
+    padding: 0 0.7rem;
+    border-radius: var(--radius-pill);
     color: var(--color-text-muted);
     font-size: var(--text-sm);
+    font-weight: 550;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .dd > summary::-webkit-details-marker,
+  .mnav > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .nav-desktop a:hover,
+  .dd > summary:hover,
+  .dd[open] > summary,
+  .dd > summary.current,
+  .nav-desktop a[aria-current='page'] {
+    color: var(--color-text);
+    background: var(--color-surface-3);
+  }
+
+  .dd > summary :global(.icon) {
+    width: 0.9rem;
+    height: 0.9rem;
+    transition: transform var(--dur-fast) var(--ease-out);
+  }
+  .dd[open] > summary :global(.icon) {
+    transform: rotate(180deg);
+  }
+
+  .dd {
+    position: relative;
+  }
+
+  .dd-panel {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    left: 50%;
+    min-width: 14rem;
+    padding: 0.4rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-m);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-2);
+    transform: translateX(-50%);
+  }
+
+  .dd-panel ul {
+    display: grid;
+  }
+
+  .dd-panel a {
+    display: flex;
+    width: 100%;
+    border-radius: var(--radius-s);
+  }
+
+  .dd-panel .all {
+    margin-top: 0.3rem;
+    padding-top: 0.3rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .actions .btn {
+    min-height: 2.5rem;
+  }
+
+  .theme-btn {
+    display: inline-grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+  }
+  .theme-btn[hidden] {
+    display: none;
+  }
+  .theme-btn:hover {
+    color: var(--color-text);
+    background: var(--color-surface-3);
+  }
+  .theme-btn :global(.icon) {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+  .theme-btn .i-sun {
+    display: none;
+  }
+  @media (prefers-color-scheme: dark) {
+    :global(:root:not([data-theme])) .theme-btn .i-moon {
+      display: none;
+    }
+    :global(:root:not([data-theme])) .theme-btn .i-sun {
+      display: block;
+    }
+  }
+  :global(:root[data-theme='dark']) .theme-btn .i-moon {
+    display: none;
+  }
+  :global(:root[data-theme='dark']) .theme-btn .i-sun {
+    display: block;
+  }
+
+  /* ---- Mobile menu ---- */
+  .mnav > summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 2.5rem;
+    padding: 0 0.85rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pill);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: var(--text-sm);
     font-weight: 600;
+    cursor: pointer;
+    list-style: none;
+  }
+  .mnav > summary :global(.icon) {
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+
+  .mnav-panel {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: calc(100dvh - 4rem);
+    overflow-y: auto;
+    padding: var(--space-s) var(--gutter) var(--space-m);
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-bg);
+    box-shadow: var(--shadow-2);
+  }
+  .mnav-panel ul {
+    display: grid;
+  }
+  .mnav-panel a {
+    display: flex;
+    align-items: center;
+    min-height: 2.75rem;
+    color: var(--color-text);
+    font-weight: 550;
     text-decoration: none;
   }
-
-  nav a:hover,
-  nav a[aria-current='page'] {
-    color: var(--color-text);
+  .mnav-panel .sub {
+    padding-left: var(--space-s);
+    border-left: 1px solid var(--color-border);
+    margin-bottom: var(--space-2xs);
+  }
+  .mnav-panel .sub a {
+    color: var(--color-text-muted);
+    font-weight: 450;
+    min-height: 2.5rem;
   }
 
-  nav a[aria-current='page'] {
-    text-decoration: underline;
-    text-decoration-thickness: 2px;
-    text-underline-offset: 0.35em;
-  }
-
-  @media (max-width: 40rem) {
-    .bar {
+  /* Very narrow phones: the menu button keeps its icon, its label stays for screen readers. */
+  @media (max-width: 26rem) {
+    .mnav > summary {
+      padding: 0;
+      width: 2.5rem;
       justify-content: center;
     }
-    nav ul {
-      justify-content: center;
-      column-gap: 0;
+    .mnav > summary span {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+    .bar {
+      gap: var(--space-xs);
+    }
+  }
+
+  @media (min-width: 60rem) {
+    .site-header {
+      position: sticky;
+      top: 0;
+      background: color-mix(in srgb, var(--color-bg) 88%, transparent);
+      -webkit-backdrop-filter: blur(14px);
+      backdrop-filter: blur(14px);
+    }
+    .nav-desktop {
+      display: block;
+    }
+    .brand {
+      margin-right: 0;
+    }
+    .actions {
+      margin-left: auto;
+    }
+    .mnav {
+      display: none;
     }
   }
 </style>

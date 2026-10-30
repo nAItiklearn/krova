@@ -1,0 +1,110 @@
+---
+/** One snap, as a flow: drag, hold the key, then either release the mouse or cancel. */
+---
+
+<figure class="flow">
+  <ol>
+    <li class="step"><span class="n">1</span><span>Drag a window by its title bar</span></li>
+    <li class="edge"><span>hold <kbd>Shift</kbd></span></li>
+    <li class="step"><span class="n">2</span><span>Zones appear; the one under the cursor lights up</span></li>
+    <li class="edge"><span>then either</span></li>
+    <li class="split">
+      <ul>
+        <li class="ok">
+          <span class="edge"><span>release the mouse over a zone</span></span>
+          <span class="step end"><span class="tick" aria-hidden="true">&#10003;</span><span>The window snaps to the zone</span></span>
+        </li>
+        <li class="no">
+          <span class="edge"><span>release <kbd>Shift</kbd>, or press <kbd>Esc</kbd></span></span>
+          <span class="step end"><span class="tick" aria-hidden="true">&times;</span><span>Zones hide, nothing moves</span></span>
+        </li>
+      </ul>
+    </li>
+  </ol>
+  <figcaption>Releasing the mouse while no zone is lit also leaves the window where it is.</figcaption>
+</figure>
+
+<style>
+  .flow {
+    margin-top: var(--space-m);
+  }
+  .flow ol,
+  .flow ul {
+    display: grid;
+    gap: var(--space-2xs);
+    list-style: none;
+    padding: 0;
+  }
+
+  .step {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.8rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-m);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-1);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    line-height: 1.35;
+  }
+  .n,
+  .tick {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 1.6rem;
+    height: 1.6rem;
+    border-radius: 50%;
+  }
+  .n {
+    background: var(--accent-tint-strong);
+    color: var(--color-accent-text);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+  .tick {
+    font-weight: 700;
+  }
+  .ok .tick {
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+  }
+  .no .tick {
+    background: var(--color-surface-3);
+    border: 1px solid var(--color-border-strong);
+    color: var(--color-text-muted);
+  }
+
+  .edge {
+    display: flex;
+    padding-left: 0.9rem;
+    color: var(--color-text-soft);
+    font-size: var(--text-sm);
+  }
+  .edge > span::before {
+    content: '\2193\00a0\00a0';
+  }
+
+  .split ul {
+    gap: var(--space-s);
+  }
+  .split li {
+    display: grid;
+    gap: 0.25rem;
+    align-content: start;
+  }
+
+  figcaption {
+    margin-top: var(--space-s);
+    font-size: var(--text-sm);
+    color: var(--color-text-soft);
+  }
+
+  @media (min-width: 40rem) {
+    .split ul {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+</style>

@@ -9,11 +9,12 @@
     "node": "18.20.8 || ^20.3.0 || >=22.0.0"
   },
   "scripts": {
-    "predev": "node scripts/sync-icon.mjs",
+    "predev": "node scripts/sync-icon.mjs && node scripts/sync-demo.mjs",
     "dev": "astro dev",
-    "prebuild": "node scripts/sync-icon.mjs",
+    "prebuild": "node scripts/sync-icon.mjs && node scripts/sync-demo.mjs --force",
     "build": "astro build",
     "preview": "astro preview",
+    "check:links": "node scripts/check-links.mjs",
     "astro": "astro"
   },
   "dependencies": {

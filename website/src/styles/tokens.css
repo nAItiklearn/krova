@@ -1,42 +1,52 @@
 /*
   Design tokens. Every colour, size and space used by the site comes from here.
 
-  Palette is derived from the Krova icon gradient (#4f46e5 indigo -> #0ea5e9 sky).
-  Contrast notes (WCAG 2.x, computed from the hex values):
-    light  text #12122a on #fbfbfe ........ ~17:1
-    light  muted #4b4d66 on #fbfbfe ....... ~8:1
-    light  link #4338ca on #ffffff ........ ~8:1
-    dark   text #eceefb on #0a0b17 ........ ~17:1
-    dark   muted #a9adc9 on #12142a ....... ~8:1
-    dark   link #a5b4fc on #0a0b17 ........ ~9.7:1
-    button white on #4f46e5 / #4338ca ..... 6.3:1 / 7.9:1
-  White text is never placed on the sky end of the gradient (2.8:1).
+  One accent, taken from the Krova icon (assets/icon/krova.svg): indigo #4f46e5.
+  The icon's sky-blue end (#0ea5e9) is not used as a second accent.
+
+  Light is the :root default. Dark applies in two cases:
+    1. the visitor has not chosen and the OS prefers dark  (:root:not([data-theme]))
+    2. the visitor chose Dark                              (:root[data-theme="dark"])
+  public/theme.js sets data-theme before first paint, so there is no flash.
+
+  Contrast (WCAG 2.x, computed from the hex values; AA needs 4.5 for text, 3 for large text / UI):
+    light  text        #0f1020 on #fafafc ... ~18:1
+    light  muted       #55576d on #fafafc ... ~6.8:1
+    light  soft        #686a80 on #fafafc ... ~5.1:1  (muted half of headlines, large text)
+    light  link        #4338ca on #ffffff ... ~7.9:1
+    light  button      #ffffff on #4f46e5 ... ~6.3:1
+    dark   text        #ececf5 on #0b0c14 ... ~16:1
+    dark   muted       #a2a5bd on #0b0c14 ... ~8.0:1
+    dark   soft        #8a8da6 on #0b0c14 ... ~6.0:1
+    dark   link        #a5b4fc on #0b0c14 ... ~9.7:1
+    dark   button      #ffffff on #4f46e5 ... ~6.3:1
 */
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
 
   /* ---- Typefaces: system stacks only, nothing is downloaded ---- */
   --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
 
-  /* ---- Type scale: fluid, roughly a 1.25 ratio ---- */
-  --text-xs: clamp(0.78rem, 0.76rem + 0.1vw, 0.84rem);
-  --text-sm: clamp(0.875rem, 0.85rem + 0.12vw, 0.95rem);
-  --text-base: clamp(1rem, 0.96rem + 0.2vw, 1.125rem);
-  --text-md: clamp(1.125rem, 1.05rem + 0.4vw, 1.3rem);
-  --text-lg: clamp(1.3rem, 1.15rem + 0.7vw, 1.6rem);
-  --text-xl: clamp(1.6rem, 1.3rem + 1.5vw, 2.25rem);
-  --text-2xl: clamp(2rem, 1.5rem + 2.5vw, 3.1rem);
-  --text-3xl: clamp(2.35rem, 1.5rem + 4.2vw, 4.25rem);
+  /* ---- Type scale (fluid) ---- */
+  --text-xs: clamp(0.78rem, 0.77rem + 0.06vw, 0.82rem);
+  --text-sm: clamp(0.875rem, 0.86rem + 0.08vw, 0.925rem);
+  --text-base: clamp(1rem, 0.97rem + 0.15vw, 1.0625rem);
+  --text-md: clamp(1.0625rem, 1.02rem + 0.25vw, 1.2rem);
+  --text-lg: clamp(1.25rem, 1.1rem + 0.6vw, 1.5rem);
+  --text-xl: clamp(1.6rem, 1.25rem + 1.4vw, 2.25rem);
+  --text-2xl: clamp(2rem, 1.25rem + 3vw, 3.5rem);
+  --text-3xl: clamp(2.5rem, 1.1rem + 5.6vw, 5rem);
 
-  --leading-tight: 1.1;
+  --leading-tight: 1.05;
   --leading-snug: 1.3;
   --leading-body: 1.6;
-  --tracking-tight: -0.02em;
-  --tracking-wide: 0.08em;
+  --tracking-tight: -0.035em;
+  --tracking-snug: -0.018em;
+  --tracking-mono: 0.12em;
 
-  /* ---- Spacing scale ---- */
+  /* ---- Spacing ---- */
   --space-3xs: 0.25rem;
   --space-2xs: 0.5rem;
   --space-xs: 0.75rem;
@@ -48,99 +58,215 @@
   --space-3xl: 7rem;
 
   --gutter: clamp(1rem, 0.5rem + 2.5vw, 2rem);
-  --section-y: clamp(3.5rem, 2rem + 6vw, 6.5rem);
+  --section-y: clamp(3.5rem, 1.5rem + 6vw, 6.5rem);
   --container: 72rem;
   --container-narrow: 46rem;
-  --measure: 62ch;
+  --measure: 64ch;
 
   /* ---- Shape ---- */
   --radius-s: 8px;
   --radius-m: 14px;
   --radius-l: 22px;
+  --radius-xl: 28px;
   --radius-pill: 999px;
 
   /* ---- Motion ---- */
   --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
   --dur-fast: 150ms;
-  --dur: 220ms;
+  --dur: 240ms;
 
-  /* ---- Palette (light) ---- */
-  --color-bg: #fbfbfe;
+  /* ---- Surfaces and text (light) ---- */
+  --color-bg: #fafafc;
   --color-surface: #ffffff;
-  --color-surface-2: #f1f2fa;
-  --color-border: #d9dcee;
-  --color-border-strong: #7c809c;
-  --color-text: #12122a;
-  --color-text-muted: #4b4d66;
+  --color-surface-2: #f3f3f8;
+  --color-surface-3: #ebebf3;
+  --color-border: #e4e4ee;
+  --color-border-strong: #8a8ca3;
+  --color-text: #0f1020;
+  --color-text-muted: #55576d;
+  --color-text-soft: #686a80;
 
+  /* ---- The one accent ---- */
   --color-accent: #4f46e5;
   --color-accent-hover: #4338ca;
   --color-on-accent: #ffffff;
   --color-link: #4338ca;
-  --color-accent-2: #0369a1;
+  --color-accent-text: #4338ca;
   --color-focus: #4338ca;
+  --accent-tint: rgba(79, 70, 229, 0.08);
+  --accent-tint-strong: rgba(79, 70, 229, 0.14);
 
-  --accent-tint: rgba(79, 70, 229, 0.1);
-  --grad-brand: linear-gradient(135deg, #4f46e5, #0ea5e9);
-  --grad-text: linear-gradient(100deg, #4f46e5 0%, #0369a1 100%);
-  --glow-1: rgba(79, 70, 229, 0.14);
-  --glow-2: rgba(14, 165, 233, 0.13);
+  --color-ok: #15803d;
+  --color-warn: #a16207;
+  --color-warn-bg: #fef9e7;
+  --color-warn-border: #e6cf85;
 
-  --shadow-1: 0 1px 2px rgba(18, 18, 42, 0.06), 0 6px 20px rgba(18, 18, 42, 0.06);
-  --shadow-2: 0 2px 4px rgba(18, 18, 42, 0.06), 0 18px 48px rgba(40, 40, 120, 0.14);
+  --shadow-1: 0 1px 2px rgba(15, 16, 32, 0.04), 0 8px 24px rgba(15, 16, 32, 0.05);
+  --shadow-2: 0 1px 2px rgba(15, 16, 32, 0.05), 0 24px 64px rgba(30, 30, 90, 0.12);
 
-  /* ---- Zone mockup colours ---- */
-  --mon-bezel: #232542;
-  --mon-screen: #eef0fb;
-  --mon-stand: #c9cde6;
-  --zone-fill: rgba(79, 70, 229, 0.07);
-  --zone-stroke: rgba(79, 70, 229, 0.5);
-  --zone-hi-fill: rgba(79, 70, 229, 0.26);
-  --zone-hi-stroke: #4f46e5;
-  --win-bg: #ffffff;
-  --win-bar: #e3e6f7;
-  --win-line: #c9cde6;
-  --win-block: #dfe3f6;
-  --win-stroke: #8b90b3;
-  --cursor-fill: #12122a;
-  --cursor-stroke: #ffffff;
+  /* ---- Charts ---- */
+  --chart-a: #4f46e5;
+  --chart-b: #7c7f99;
+  --chart-grid: #e4e4ee;
+  --chart-axis: #686a80;
+
+  /* ---- Illustrations: a mock desktop that looks right in light ---- */
+  --ill-bezel: #1d1f33;
+  --ill-stand: #c8cbe0;
+  --ill-wall: #e9eaf6;
+  --ill-edge: #cfd1e6;
+  --ill-taskbar: rgba(255, 255, 255, 0.78);
+  --ill-win: #ffffff;
+  --ill-win-edge: #c9cce2;
+  --ill-win-bar: #eceefa;
+  --ill-dot: #b9bdd8;
+  --ill-line: #d6d9ec;
+  --ill-line-strong: #aeb3d2;
+  --ill-block: #dfe2f5;
+  --ill-term: #181a2e;
+  --ill-term-line: #4a4f7a;
+  --ill-term-accent: #8f8bff;
+  --ill-zone-fill: rgba(79, 70, 229, 0.07);
+  --ill-zone-stroke: rgba(79, 70, 229, 0.55);
+  --ill-hi-fill: rgba(79, 70, 229, 0.24);
+  --ill-hi-stroke: #4f46e5;
+  --ill-cursor-fill: #0f1020;
+  --ill-cursor-stroke: #ffffff;
+  --ill-key-bg: #ffffff;
+  --ill-key-text: #0f1020;
+  --ill-key-edge: #b4b8d4;
+  --ill-key-on-bg: #4f46e5;
+  --ill-key-on-text: #ffffff;
+  --ill-key-on-edge: #3a32c4;
+  --ill-lift: rgba(30, 30, 90, 0.28);
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --color-bg: #0a0b17;
-    --color-surface: #12142a;
-    --color-surface-2: #0e1024;
-    --color-border: #262a4a;
-    --color-border-strong: #6b7094;
-    --color-text: #eceefb;
-    --color-text-muted: #a9adc9;
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --color-bg: #0b0c14;
+    --color-surface: #12131d;
+    --color-surface-2: #0e0f18;
+    --color-surface-3: #191a27;
+    --color-border: #25273a;
+    --color-border-strong: #6c6f8c;
+    --color-text: #ececf5;
+    --color-text-muted: #a2a5bd;
+    --color-text-soft: #8a8da6;
 
+    --color-accent-hover: #5b53ec;
     --color-link: #a5b4fc;
-    --color-accent-2: #38bdf8;
-    --color-focus: #7dd3fc;
+    --color-accent-text: #a5b4fc;
+    --color-focus: #c7d2fe;
+    --accent-tint: rgba(129, 140, 248, 0.12);
+    --accent-tint-strong: rgba(129, 140, 248, 0.2);
 
-    --accent-tint: rgba(129, 140, 248, 0.16);
-    --grad-text: linear-gradient(100deg, #a5b4fc 0%, #38bdf8 100%);
-    --glow-1: rgba(99, 102, 241, 0.26);
-    --glow-2: rgba(14, 165, 233, 0.16);
+    --color-ok: #4ade80;
+    --color-warn: #facc15;
+    --color-warn-bg: #1f1b0c;
+    --color-warn-border: #6b5a1a;
 
-    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 20px rgba(0, 0, 0, 0.3);
-    --shadow-2: 0 2px 4px rgba(0, 0, 0, 0.4), 0 18px 48px rgba(0, 0, 0, 0.5);
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.28);
+    --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.45), 0 24px 64px rgba(0, 0, 0, 0.5);
 
-    --mon-bezel: #2b2e55;
-    --mon-screen: #0d0f21;
-    --mon-stand: #23264a;
-    --zone-fill: rgba(129, 140, 248, 0.09);
-    --zone-stroke: rgba(165, 180, 252, 0.5);
-    --zone-hi-fill: rgba(99, 102, 241, 0.42);
-    --zone-hi-stroke: #a5b4fc;
-    --win-bg: #1b1e3d;
-    --win-bar: #272b52;
-    --win-line: #3a3f73;
-    --win-block: #23274b;
-    --win-stroke: #5b6197;
-    --cursor-fill: #ffffff;
-    --cursor-stroke: #0a0b17;
+    --chart-a: #818cf8;
+    --chart-b: #7d819f;
+    --chart-grid: #25273a;
+    --chart-axis: #8a8da6;
+
+    --ill-bezel: #2a2d4d;
+    --ill-stand: #23264a;
+    --ill-wall: #0f1124;
+    --ill-edge: #2a2d4d;
+    --ill-taskbar: rgba(24, 26, 48, 0.85);
+    --ill-win: #1a1c36;
+    --ill-win-edge: #34385f;
+    --ill-win-bar: #23264a;
+    --ill-dot: #4a4f7a;
+    --ill-line: #2f3358;
+    --ill-line-strong: #4e5385;
+    --ill-block: #262a50;
+    --ill-term: #0a0b17;
+    --ill-term-line: #3e4370;
+    --ill-term-accent: #a5b4fc;
+    --ill-zone-fill: rgba(129, 140, 248, 0.09);
+    --ill-zone-stroke: rgba(165, 180, 252, 0.6);
+    --ill-hi-fill: rgba(99, 102, 241, 0.4);
+    --ill-hi-stroke: #a5b4fc;
+    --ill-cursor-fill: #ffffff;
+    --ill-cursor-stroke: #0b0c14;
+    --ill-key-bg: #23264a;
+    --ill-key-text: #ececf5;
+    --ill-key-edge: #4a4f7a;
+    --ill-key-on-bg: #5b53ec;
+    --ill-key-on-text: #ffffff;
+    --ill-key-on-edge: #a5b4fc;
+    --ill-lift: rgba(0, 0, 0, 0.6);
   }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --color-bg: #0b0c14;
+  --color-surface: #12131d;
+  --color-surface-2: #0e0f18;
+  --color-surface-3: #191a27;
+  --color-border: #25273a;
+  --color-border-strong: #6c6f8c;
+  --color-text: #ececf5;
+  --color-text-muted: #a2a5bd;
+  --color-text-soft: #8a8da6;
+
+  --color-accent-hover: #5b53ec;
+  --color-link: #a5b4fc;
+  --color-accent-text: #a5b4fc;
+  --color-focus: #c7d2fe;
+  --accent-tint: rgba(129, 140, 248, 0.12);
+  --accent-tint-strong: rgba(129, 140, 248, 0.2);
+
+  --color-ok: #4ade80;
+  --color-warn: #facc15;
+  --color-warn-bg: #1f1b0c;
+  --color-warn-border: #6b5a1a;
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.28);
+  --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.45), 0 24px 64px rgba(0, 0, 0, 0.5);
+
+  --chart-a: #818cf8;
+  --chart-b: #7d819f;
+  --chart-grid: #25273a;
+  --chart-axis: #8a8da6;
+
+  --ill-bezel: #2a2d4d;
+  --ill-stand: #23264a;
+  --ill-wall: #0f1124;
+  --ill-edge: #2a2d4d;
+  --ill-taskbar: rgba(24, 26, 48, 0.85);
+  --ill-win: #1a1c36;
+  --ill-win-edge: #34385f;
+  --ill-win-bar: #23264a;
+  --ill-dot: #4a4f7a;
+  --ill-line: #2f3358;
+  --ill-line-strong: #4e5385;
+  --ill-block: #262a50;
+  --ill-term: #0a0b17;
+  --ill-term-line: #3e4370;
+  --ill-term-accent: #a5b4fc;
+  --ill-zone-fill: rgba(129, 140, 248, 0.09);
+  --ill-zone-stroke: rgba(165, 180, 252, 0.6);
+  --ill-hi-fill: rgba(99, 102, 241, 0.4);
+  --ill-hi-stroke: #a5b4fc;
+  --ill-cursor-fill: #ffffff;
+  --ill-cursor-stroke: #0b0c14;
+  --ill-key-bg: #23264a;
+  --ill-key-text: #ececf5;
+  --ill-key-edge: #4a4f7a;
+  --ill-key-on-bg: #5b53ec;
+  --ill-key-on-text: #ffffff;
+  --ill-key-on-edge: #a5b4fc;
+  --ill-lift: rgba(0, 0, 0, 0.6);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
 }

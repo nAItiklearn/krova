@@ -4,29 +4,40 @@
  *
  * Keep this file free of `import.meta` and framework imports: it is also
  * loaded by astro.config.mjs.
+ *
+ * Link rules (enforced by the components, not by convention):
+ *   - A link to the repository, its source, its releases or its issues renders
+ *     only when REPO_LINKS_ENABLED is true (repository configured AND public).
+ *   - A direct download button renders only when DOWNLOADS_ENABLED is true
+ *     (repository public AND a release published).
+ *   - Otherwise the page says so in words ("The first release is not
+ *     published yet", "Krova's repository is not public yet").
  */
 
 export const SITE_NAME = 'Krova';
 export const VERSION_LABEL = 'v0.1';
+/** Must equal "version" in src-tauri/tauri.conf.json. */
+export const APP_VERSION = '0.1.0';
 export const COPYRIGHT_HOLDER = 'Krova contributors';
 
 /* ------------------------------------------------------------------ *
  * Repository
  * ------------------------------------------------------------------ */
 
-/**
- * TODO(owner): confirm this once the repository exists. The owner is taken
- * from the Windy repo's remote (nAItiklearn); the repository name "krova" is
- * an assumption. No trailing slash.
- *
- * While the value contains "TODO", the site treats the repository as not
- * configured: the download section shows "Releases will appear here", and
- * links to the source code are hidden.
- */
+/** No trailing slash. The repository exists but is currently PRIVATE. */
 export const REPO_URL = 'https://github.com/nAItiklearn/krova';
+
+/**
+ * Flip to true only after the repository has been made public. Until then no
+ * link to github.com/nAItiklearn/krova is rendered anywhere on the site.
+ */
+export const REPO_PUBLIC = false;
 
 /** True once REPO_URL no longer contains the TODO placeholder. */
 export const REPO_CONFIGURED = !/todo/i.test(REPO_URL);
+
+/** The one switch every repo / source / releases / issues link checks. */
+export const REPO_LINKS_ENABLED = REPO_CONFIGURED && REPO_PUBLIC;
 
 const repoBase = REPO_URL.replace(/\/+$/, '');
 
@@ -39,10 +50,9 @@ export const ISSUES_URL = `${repoBase}/issues`;
  * ------------------------------------------------------------------ */
 
 /**
- * TODO(owner): flip to true only after the first release exists and its
- * assets (listed in DOWNLOADS) are attached. Until then, even with REPO_URL
- * set, the site will not render direct download buttons, so no link can point
- * at a release that does not exist yet.
+ * Flip to true only after the first release exists and its assets (listed in
+ * DOWNLOADS, plus SHA256SUMS.txt) are attached. Until then no download button
+ * is rendered, so no link can point at a release that does not exist yet.
  */
 export const RELEASE_PUBLISHED = false;
 
@@ -66,7 +76,7 @@ export const DOWNLOADS: readonly DownloadAsset[] = [
     id: 'windows',
     label: 'Windows',
     short: 'Windows',
-    requirement: 'Windows 10 or 11',
+    requirement: 'Windows 10 or 11, 64-bit',
     file: 'Krova-windows-x64-setup.exe',
   },
   {
@@ -78,8 +88,11 @@ export const DOWNLOADS: readonly DownloadAsset[] = [
   },
 ];
 
+/** Published by the release workflow next to the installers. */
+export const CHECKSUMS_FILE = 'SHA256SUMS.txt';
+
 /** Direct links are only rendered when this is true. */
-export const DOWNLOADS_ENABLED = REPO_CONFIGURED && RELEASE_PUBLISHED;
+export const DOWNLOADS_ENABLED = REPO_LINKS_ENABLED && RELEASE_PUBLISHED;
 
 /** Stable link to an asset of the newest release. */
 export function latestDownloadUrl(file: string): string {

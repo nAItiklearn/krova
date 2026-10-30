@@ -1,0 +1,324 @@
+---
+import Desk from './illustrations/Desk.astro';
+import { url } from '../lib/url';
+
+/**
+ * A drawing of Krova's Settings window with its default values. Labels and
+ * options are taken from ui/src/components/SettingsView.svelte and
+ * crates/krova-core/src/config.rs (defaults: Shift, animate, edge snapping off,
+ * 8 px, #3b82f6 at 35%, theme System, launch at login off, enabled on).
+ */
+const modifiers = ['Shift', 'Ctrl', 'Alt', 'Windows key / Command'];
+const swatches = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#22c55e', '#6b7280'];
+---
+
+<section id="customize" class="section" aria-labelledby="customize-title">
+  <div class="container">
+    <header class="sec-head">
+      <p class="eyebrow">Customize</p>
+      <h2 id="customize-title">A short list of settings. <span class="soft">All of them are here.</span></h2>
+    </header>
+
+    <div class="layout">
+      <figure class="preview">
+        <div class="hi-default">
+          <Desk
+            state="dragging"
+            label="Illustration of the zone highlight with its default colour, a blue at 35 percent opacity, over the middle zone."
+          />
+        </div>
+        <figcaption>
+          Illustration. The highlight with its defaults: <code>#3b82f6</code> at 35%. Pick any colour and opacity.
+        </figcaption>
+      </figure>
+
+      <figure class="panel-fig">
+        <div class="panel" role="group" aria-label="Illustration of the Settings window, with default values">
+          <section class="group">
+            <h3>Snapping</h3>
+
+            <div class="field">
+              <p class="label">Activation modifier</p>
+              <p class="seg" role="presentation">
+                {
+                  modifiers.map((m, i) => (
+                    <span class:list={['opt', { on: i === 0 }]}>
+                      {m}
+                      {i === 0 && <span class="visually-hidden"> (selected, the default)</span>}
+                    </span>
+                  ))
+                }
+              </p>
+              <p class="desc">Hold it while dragging a window to show the zones. Let go of it to cancel.</p>
+            </div>
+
+            <div class="field">
+              <p class="label">Move behavior</p>
+              <p class="seg" role="presentation">
+                <span class="opt on">Animate<span class="visually-hidden"> (selected, the default)</span></span>
+                <span class="opt">Instant</span>
+              </p>
+            </div>
+
+            <div class="row">
+              <div>
+                <p class="label">Edge snapping</p>
+                <p class="desc">Halves, quarters and maximize from the screen edges. Off by default.</p>
+              </div>
+              <span class="switch" aria-hidden="true"><i></i></span>
+              <span class="visually-hidden">Off by default</span>
+            </div>
+
+            <div class="field dim">
+              <p class="label">Edge size <span class="mono val">8 px</span></p>
+              <span class="range" aria-hidden="true"><i style="--p:10%"></i></span>
+              <p class="desc">From 2 to 64 px.</p>
+            </div>
+          </section>
+
+          <section class="group">
+            <h3>Appearance</h3>
+
+            <div class="field">
+              <p class="label">Highlight color</p>
+              <p class="sw" role="presentation">
+                {swatches.map((c, i) => <span class:list={['swatch', { on: i === 0 }]} style={`--c:${c}`} aria-hidden="true" />)}
+                <span class="mono hex">#3b82f6</span>
+              </p>
+            </div>
+
+            <div class="field">
+              <p class="label">Highlight opacity <span class="mono val">35%</span></p>
+              <span class="range" aria-hidden="true"><i style="--p:35%"></i></span>
+            </div>
+
+            <div class="field">
+              <p class="label">Theme</p>
+              <p class="seg" role="presentation">
+                <span class="opt on">System<span class="visually-hidden"> (selected, the default)</span></span>
+                <span class="opt">Light</span>
+                <span class="opt">Dark</span>
+              </p>
+            </div>
+          </section>
+
+          <section class="group general">
+            <h3>General</h3>
+            <p class="gen"><span class="switch on" aria-hidden="true"><i></i></span> Enable Krova <span class="muted">(on by default)</span></p>
+            <p class="gen"><span class="switch" aria-hidden="true"><i></i></span> Launch at login <span class="muted">(off by default)</span></p>
+          </section>
+        </div>
+        <figcaption>
+          Illustration of the Settings window with default values. Changes there save automatically. The live editor
+          below has the real Settings tab.
+          <a href="#try">Try it</a>.
+        </figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<style>
+  .layout {
+    display: grid;
+    gap: var(--space-xl);
+    align-items: center;
+  }
+
+  /* The real default highlight colour, not the site accent. */
+  .hi-default {
+    --ill-hi-fill: rgba(59, 130, 246, 0.35);
+    --ill-hi-stroke: #3b82f6;
+    --ill-zone-stroke: rgba(59, 130, 246, 0.6);
+    --ill-zone-fill: rgba(59, 130, 246, 0.08);
+  }
+
+  figcaption {
+    margin-top: var(--space-s);
+    font-size: var(--text-sm);
+    color: var(--color-text-soft);
+  }
+
+  .panel {
+    display: grid;
+    gap: var(--space-s);
+    padding: var(--space-s);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    background: var(--color-surface-2);
+    box-shadow: var(--shadow-2);
+  }
+
+  .group {
+    display: grid;
+    gap: var(--space-m);
+    padding: var(--space-m);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-l);
+    background: var(--color-surface);
+  }
+
+  .group h3 {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    letter-spacing: var(--tracking-mono);
+    text-transform: uppercase;
+    color: var(--color-text-soft);
+  }
+
+  .field {
+    display: grid;
+    gap: 0.4rem;
+  }
+
+  .label {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-s);
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+
+  .desc {
+    font-size: var(--text-xs);
+    line-height: 1.5;
+    color: var(--color-text-muted);
+  }
+
+  .mono {
+    font-family: var(--font-mono);
+    font-weight: 500;
+  }
+  .val {
+    color: var(--color-text-muted);
+  }
+
+  .seg {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-self: start;
+    justify-self: start;
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-s);
+    overflow: hidden;
+  }
+  .opt {
+    padding: 0.4rem 0.8rem;
+    background: var(--color-surface);
+    font-size: var(--text-sm);
+    color: var(--color-text);
+  }
+  .opt + .opt {
+    border-left: 1px solid var(--color-border-strong);
+  }
+  .opt.on {
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-m);
+  }
+
+  .switch {
+    position: relative;
+    flex: none;
+    width: 2.75rem;
+    height: 1.625rem;
+    border: 1.5px solid var(--color-border-strong);
+    border-radius: var(--radius-pill);
+    background: var(--color-surface-3);
+  }
+  .switch i {
+    position: absolute;
+    top: 2.5px;
+    left: 2.5px;
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: 50%;
+    background: var(--color-text-soft);
+  }
+  .switch.on {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+  }
+  .switch.on i {
+    left: auto;
+    right: 2.5px;
+    background: #fff;
+  }
+
+  /* Edge size is greyed out in the app while edge snapping is off; only the slider is dimmed here,
+     so the text keeps its contrast. */
+  .dim .range {
+    opacity: 0.55;
+  }
+
+  .range {
+    position: relative;
+    display: block;
+    height: 0.3rem;
+    margin-block: 0.55rem;
+    border-radius: var(--radius-pill);
+    background: var(--color-surface-3);
+    border: 1px solid var(--color-border);
+  }
+  .range i {
+    position: absolute;
+    left: var(--p);
+    top: 50%;
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: 50%;
+    background: var(--color-accent);
+    border: 2px solid var(--color-surface);
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 0 1px var(--color-border-strong);
+  }
+
+  .sw {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.55rem;
+  }
+  .swatch {
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    background: var(--c);
+  }
+  .swatch.on {
+    box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-text);
+  }
+  .hex {
+    margin-left: 0.35rem;
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+
+  .general {
+    gap: var(--space-xs);
+  }
+  .gen {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+  .gen .muted {
+    font-weight: 400;
+  }
+
+  @media (min-width: 56rem) {
+    .layout {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: var(--space-2xl);
+    }
+  }
+</style>

@@ -1,0 +1,149 @@
+---
+import GuideLayout from '../../layouts/GuideLayout.astro';
+import { url } from '../../lib/url';
+import { DOWNLOADS, DOWNLOADS_ENABLED } from '../../site';
+
+const win = DOWNLOADS.find((d) => d.id === 'windows')!;
+const mac = DOWNLOADS.find((d) => d.id === 'macos')!;
+---
+
+<GuideLayout
+  slug="install"
+  description="Install Krova on Windows or macOS: the SmartScreen and Gatekeeper warnings, macOS permissions, finding the tray icon, and how to uninstall and remove all of Krova's data."
+  lead="Install Krova on Windows or macOS, find its icon, and remove it completely if you change your mind. Both builds are unsigned, so read the warnings first."
+>
+  {
+    !DOWNLOADS_ENABLED && (
+      <div class="note note--warn">
+        <p>
+          <strong>The first release is not published yet.</strong> These steps describe what the installers do. They
+          were written from the installer&rsquo;s build script and the app&rsquo;s code, not from watching other
+          people install it.
+        </p>
+      </div>
+    )
+  }
+
+  <h2 id="windows">Windows 10 and 11</h2>
+  <ol>
+    <li>
+      Get <code>{win.file}</code> from the <a href={url('/download/')}>Download page</a>. It is a 64-bit installer.
+      You can <a href={url('/download/#verify')}>check its hash</a> first.
+    </li>
+    <li>
+      Run it. Windows shows <strong>Windows protected your PC</strong>, because the installer is not signed. Select
+      <strong>More info</strong>, then <strong>Run anyway</strong>.
+    </li>
+    <li>
+      Follow the installer. It installs for your user only and does not ask for administrator rights. If Microsoft&rsquo;s
+      WebView2 runtime is missing, it downloads it, which needs an internet connection once.
+    </li>
+    <li>
+      On the last page, leave <strong>Run Krova</strong> ticked, and tick <strong>Create desktop shortcut</strong> if you
+      want one. Otherwise start Krova from the Start menu.
+    </li>
+  </ol>
+
+  <h2 id="tray">Find Krova</h2>
+  <p>
+    Krova starts hidden: no window opens, and it has no taskbar button. Look for its icon in the notification area at the
+    right end of the taskbar. Windows often puts new icons behind the <strong>^</strong> arrow (&ldquo;Show hidden
+    icons&rdquo;); drag the Krova icon out of there to keep it visible.
+  </p>
+  <p>Right-click the icon (on a Mac, click it) to open the menu:</p>
+  <ul>
+    <li><strong>Enabled</strong>: tick to turn Krova on. When off, dragging windows never shows zones.</li>
+    <li><strong>Edit layouts&hellip;</strong>: opens the layout editor.</li>
+    <li><strong>Settings&hellip;</strong>: opens the settings.</li>
+    <li><strong>Launch at login</strong>: start Krova when you sign in.</li>
+    <li><strong>Quit Krova</strong>: stops it.</li>
+  </ul>
+  <p>
+    Closing Krova&rsquo;s window only hides it; the app keeps running in the tray. Starting Krova a second time does not
+    open a second copy: it brings the first one&rsquo;s window forward.
+  </p>
+
+  <h2 id="macos">macOS 13 and later</h2>
+  <div class="note note--warn">
+    <p><strong>Never tested on a real Mac.</strong> The macOS build is unsigned, not notarised, and has not been run on a Mac. Expect problems, and treat what follows as the intended behaviour.</p>
+  </div>
+  <ol>
+    <li>Get <code>{mac.file}</code> from the <a href={url('/download/')}>Download page</a>. It runs on Apple silicon and Intel.</li>
+    <li>Open the disk image and drag <strong>Krova</strong> to <strong>Applications</strong>.</li>
+    <li>
+      The first launch is blocked by Gatekeeper. In Applications, right-click (or Control-click) <strong>Krova</strong>,
+      choose <strong>Open</strong>, then <strong>Open</strong> again. If the dialog has no Open button, go to System
+      Settings, Privacy &amp; Security, scroll to Security, and choose <strong>Open Anyway</strong>.
+    </li>
+    <li>
+      Grant <strong>Accessibility</strong>: System Settings, Privacy &amp; Security, Accessibility, and turn on
+      <strong>Krova</strong>. If Krova is already listed, switch it off and on again. Krova shows a banner in its window
+      until access is granted. If snapping still does nothing, quit Krova and start it again.
+    </li>
+    <li>
+      macOS may also ask for <strong>Input Monitoring</strong>, so that Krova can notice a window being dragged. Krova
+      only watches the left mouse button and whether your activation key and Escape are held; it does not read what you type.
+    </li>
+  </ol>
+  <p>Krova lives in the menu bar and has no Dock icon. The menu is the same as on Windows.</p>
+
+  <h2 id="uninstall">Uninstall and remove all your data</h2>
+  <h3>Windows</h3>
+  <ol>
+    <li>Choose <strong>Quit Krova</strong> from the tray menu.</li>
+    <li>Open Settings, Apps, Installed apps, find <strong>Krova</strong> and choose Uninstall.</li>
+    <li>
+      On the first page of the uninstaller, tick <strong>Delete the application data</strong>, then continue. That
+      removes both data folders below. If you leave it unticked, they stay.
+    </li>
+  </ol>
+  <p>This is everything Krova can leave on a Windows PC:</p>
+  <div class="table-scroll" tabindex="0" role="region" aria-label="Where Krova keeps data on Windows">
+    <table class="data-table">
+      <thead>
+        <tr><th scope="col">What</th><th scope="col">Where</th><th scope="col">Removed by the uninstaller</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Settings and layouts (<code>config.json</code>, and <code>config.json.bak</code> if it was ever recovered)</td>
+          <td><code>%APPDATA%\dev.krova.desktop</code></td>
+          <td>Only with &ldquo;Delete the application data&rdquo;</td>
+        </tr>
+        <tr>
+          <td>The web view&rsquo;s cache and browser profile (WebView2)</td>
+          <td><code>%LOCALAPPDATA%\dev.krova.desktop</code></td>
+          <td>Only with &ldquo;Delete the application data&rdquo;</td>
+        </tr>
+        <tr>
+          <td>The start-up entry, if Launch at login was on</td>
+          <td>Value <code>Krova</code> under <code>HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run</code></td>
+          <td>Yes</td>
+        </tr>
+        <tr>
+          <td>The program, Start menu and desktop shortcuts</td>
+          <td><code>%LOCALAPPDATA%\Krova</code></td>
+          <td>Yes</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>To remove the data by hand, quit Krova first, then run this in PowerShell:</p>
+  <pre tabindex="0"><code>Remove-Item -Recurse -Force "$env:APPDATA\dev.krova.desktop" -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force "$env:LOCALAPPDATA\dev.krova.desktop" -ErrorAction SilentlyContinue
+Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "Krova" -ErrorAction SilentlyContinue</code></pre>
+
+  <h3>macOS</h3>
+  <ol>
+    <li>Turn off <strong>Launch at login</strong> in Krova, then choose <strong>Quit Krova</strong>.</li>
+    <li>Drag <strong>Krova</strong> from Applications to the Bin.</li>
+    <li>Delete <code>~/Library/Application Support/dev.krova.desktop</code> (your settings and layouts).</li>
+    <li>
+      If a start-up entry is left, remove it in System Settings, General, Login Items, or delete
+      <code>~/Library/LaunchAgents/dev.krova.desktop.plist</code> if it exists.
+    </li>
+    <li>Remove Krova from the Accessibility list (and Input Monitoring, if it is there) in Privacy &amp; Security.</li>
+  </ol>
+  <p class="muted">
+    The list of what Krova stores, and why, is on the <a href={url('/privacy/')}>Privacy page</a>.
+  </p>
+</GuideLayout>

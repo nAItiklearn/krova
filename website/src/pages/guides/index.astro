@@ -1,0 +1,84 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { guides, guidePath } from '../../data/nav';
+import { url } from '../../lib/url';
+
+const title = 'Guides: install and use Krova';
+const description =
+  'Short guides for Krova: install it, make your first snap, use the layout editor, work with several monitors, edge snapping and keyboard shortcuts.';
+---
+
+<BaseLayout title={title} description={description}>
+  <div class="container">
+    <header class="page-head">
+      <p class="eyebrow">Guides</p>
+      <h1>Guides</h1>
+      <p class="lead">Short, step by step, and checked against how the app is built. Something wrong? See <a href={url('/support/')}>Troubleshooting</a>.</p>
+    </header>
+
+    <ul class="grid">
+      {
+        guides.map((g, i) => (
+          <li>
+            <a class="card" href={url(guidePath(g.slug))}>
+              <span class="n">{String(i + 1).padStart(2, '0')}</span>
+              <span class="t">{g.title}</span>
+              <span class="s">{g.summary}</span>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</BaseLayout>
+
+<style>
+  .grid {
+    display: grid;
+    gap: var(--space-m);
+    padding-bottom: var(--section-y);
+  }
+
+  .card {
+    display: grid;
+    gap: 0.4rem;
+    height: 100%;
+    padding: var(--space-m);
+    border-radius: var(--radius-xl);
+    color: var(--color-text);
+    text-decoration: none;
+    transition:
+      border-color var(--dur-fast) var(--ease-out),
+      transform var(--dur-fast) var(--ease-out);
+  }
+  .card:hover {
+    border-color: var(--color-border-strong);
+    transform: translateY(-2px);
+  }
+  .n {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    letter-spacing: 0.06em;
+    color: var(--color-accent-text);
+  }
+  .t {
+    font-size: var(--text-lg);
+    font-weight: 700;
+    letter-spacing: var(--tracking-snug);
+  }
+  .s {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+
+  @media (min-width: 40rem) {
+    .grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (min-width: 64rem) {
+    .grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+</style>

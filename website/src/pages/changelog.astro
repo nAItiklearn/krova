@@ -1,0 +1,127 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { releases, releaseLabel } from '../data/changelog';
+import { inline } from '../lib/inline';
+import { url } from '../lib/url';
+import { ISSUES_URL, REPO_LINKS_ENABLED } from '../site';
+
+const title = 'Changelog: what is in each Krova release';
+const description =
+  'Krova 0.1.0 has not been released yet. This page lists what the first release contains and its known limitations. Future versions are added here.';
+const anchor = (v: string) => `v${v.replace(/\./g, '-')}`;
+const anyReleased = releases.some((r) => r.status === 'released');
+---
+
+<BaseLayout title={title} description={description}>
+  <div class="container container--narrow">
+    <header class="page-head">
+      <p class="eyebrow">Changelog</p>
+      <h1>Changelog</h1>
+      <p class="lead">
+        {
+          anyReleased
+            ? 'What changed in each version, newest first.'
+            : 'No version has been released yet. This is what the first one contains, and what it does not do.'
+        }
+      </p>
+    </header>
+
+    <div class="releases">
+      {
+        releases.map((r) => (
+          <article class="release" id={anchor(r.version)} aria-labelledby={`${anchor(r.version)}-h`}>
+            <header>
+              <h2 id={`${anchor(r.version)}-h`}>
+                Version {r.version}
+              </h2>
+              <p class:list={['pill', { 'pill--warn': r.status === 'unreleased' }]}>
+                {r.status === 'unreleased' && <span class="dot" aria-hidden="true" />}
+                {r.status === 'released' && r.date ? <time datetime={r.date}>{r.date}</time> : releaseLabel(r)}
+              </p>
+            </header>
+            <p class="summary">{r.summary}</p>
+
+            {r.sections.map((sec) => (
+              <section>
+                <h3>{sec.title}</h3>
+                <ul>
+                  {sec.items.map((it) => (
+                    <li set:html={inline(it)} />
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </article>
+        ))
+      }
+    </div>
+
+    <p class="foot muted">
+      Questions about a limitation? See <a href={url('/support/')}>Troubleshooting</a>{
+        REPO_LINKS_ENABLED ? (
+          <Fragment> or <a href={ISSUES_URL}>open an issue</a></Fragment>
+        ) : null
+      }. Dates appear here only once a version has actually been released.
+    </p>
+  </div>
+</BaseLayout>
+
+<style>
+  .releases {
+    display: grid;
+    gap: var(--space-xl);
+  }
+
+  .release {
+    padding: var(--space-l) var(--space-m);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-1);
+  }
+
+  .release > header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-xs) var(--space-m);
+  }
+  .release h2 {
+    font-size: var(--text-xl);
+  }
+  .summary {
+    margin-top: var(--space-s);
+    color: var(--color-text-muted);
+  }
+
+  .release section {
+    margin-top: var(--space-l);
+  }
+  .release h3 {
+    font-size: var(--text-md);
+  }
+  .release ul {
+    display: grid;
+    gap: var(--space-xs);
+    margin-top: var(--space-xs);
+    padding-left: 1.25em;
+    list-style: disc;
+    max-width: 62ch;
+  }
+  .release li::marker {
+    color: var(--color-text-soft);
+  }
+
+  .foot {
+    margin-top: var(--space-l);
+    padding-bottom: var(--section-y);
+    font-size: var(--text-sm);
+  }
+
+  @media (min-width: 40rem) {
+    .release {
+      padding: var(--space-xl);
+    }
+  }
+</style>

@@ -1,91 +1,190 @@
 ---
 import { url } from '../lib/url';
-import { COPYRIGHT_HOLDER, REPO_CONFIGURED, REPO_URL, RELEASES_URL, VERSION_LABEL } from '../site';
+import { footerColumns } from '../data/nav';
+import { COPYRIGHT_HOLDER, REPO_LINKS_ENABLED, REPO_URL, VERSION_LABEL } from '../site';
 
 const home = url('/');
 ---
 
 <footer class="site-footer">
   <div class="container">
-    <div class="top">
-      <a class="brand" href={home} aria-label="Krova home">
-        <img src={url('/favicon.svg')} width="28" height="28" alt="" />
-        <span>Krova</span>
-      </a>
-      <nav aria-label="Footer">
-        <ul>
-          <li><a href={`${home}#faq`}>FAQ</a></li>
-          <li><a href={url('/privacy/')}>Privacy</a></li>
-          <li><a href={url('/license/')}>License</a></li>
-          {REPO_CONFIGURED && <li><a href={RELEASES_URL}>Releases</a></li>}
-          {REPO_CONFIGURED && <li><a href={REPO_URL}>Source code</a></li>}
-        </ul>
-      </nav>
+    <div class="grid">
+      <div class="about">
+        <a class="brand" href={home} aria-label="Krova, home">
+          <img src={url('/favicon.svg')} width="28" height="28" alt="" />
+          <span>Krova</span>
+        </a>
+        <p>Free, offline window zone manager for Windows 10/11 and macOS 13+. Hold a key, drag a window, drop it in a zone.</p>
+        <div class="theme" data-theme-set-group hidden role="group" aria-label="Theme">
+          <span class="theme-label">Theme</span>
+          <div class="seg">
+            <button type="button" data-theme-set="system" aria-pressed="false">System</button>
+            <button type="button" data-theme-set="light" aria-pressed="false">Light</button>
+            <button type="button" data-theme-set="dark" aria-pressed="false">Dark</button>
+          </div>
+        </div>
+      </div>
+
+      {
+        footerColumns.map((col) => (
+          <nav class="col" aria-label={`Footer: ${col.title}`}>
+            <h2>{col.title}</h2>
+            <ul>
+              {col.links.map((l) => (
+                <li>
+                  <a href={url(l.href)}>{l.label}</a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        ))
+      }
     </div>
-    <p class="small">
-      &copy; 2026 {COPYRIGHT_HOLDER}. Free and open source under the MIT License. Early software ({VERSION_LABEL}).
-    </p>
-    <p class="small">
-      Krova is an independent project. Windows is a trademark of the Microsoft group of companies and macOS is a
-      trademark of Apple Inc.; Krova is not affiliated with or endorsed by either.
-    </p>
-    <p class="small">This site sets no cookies, runs no analytics and loads nothing from other servers.</p>
+
+    <div class="legal">
+      <p>
+        &copy; 2026 {COPYRIGHT_HOLDER}. Free and open source under the MIT License. Early software ({VERSION_LABEL}).
+        {REPO_LINKS_ENABLED && <Fragment> <a href={REPO_URL}>Source code</a>.</Fragment>}
+      </p>
+      <p>
+        Krova is an independent project. Windows is a trademark of the Microsoft group of companies and macOS is a
+        trademark of Apple Inc.; Krova is not affiliated with or endorsed by either. Other product names belong to
+        their owners.
+      </p>
+      <p>
+        This site sets no cookies, runs no analytics and loads nothing from other servers. One small script remembers
+        your light or dark choice in your browser.
+      </p>
+    </div>
   </div>
 </footer>
 
 <style>
   .site-footer {
     margin-top: auto;
-    padding-block: var(--space-xl) var(--space-l);
+    padding-block: var(--space-2xl) var(--space-l);
     border-top: 1px solid var(--color-border);
     background: var(--color-surface-2);
   }
 
-  .top {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-s) var(--space-l);
-    margin-bottom: var(--space-m);
+  .grid {
+    display: grid;
+    gap: var(--space-xl) var(--space-l);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .about {
+    grid-column: 1 / -1;
+    max-width: 24rem;
   }
 
   .brand {
     display: inline-flex;
     align-items: center;
-    gap: var(--space-xs);
+    gap: 0.6rem;
     min-height: 2.75rem;
     color: var(--color-text);
-    font-weight: 750;
+    font-size: var(--text-md);
+    font-weight: 700;
+    letter-spacing: var(--tracking-snug);
     text-decoration: none;
   }
 
-  ul {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-3xs) var(--space-s);
+  .about p {
+    margin-top: var(--space-xs);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
   }
 
-  nav a {
-    display: inline-flex;
+  .theme {
+    display: flex;
     align-items: center;
-    min-height: 2.75rem;
+    gap: var(--space-xs);
+    margin-top: var(--space-m);
+  }
+  .theme[hidden] {
+    display: none;
+  }
+  .theme-label {
+    font-size: var(--text-sm);
     color: var(--color-text-muted);
+  }
+
+  .seg {
+    display: inline-flex;
+    padding: 3px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pill);
+    background: var(--color-surface-3);
+  }
+  .seg button {
+    min-height: 2.25rem;
+    padding: 0 0.9rem;
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--color-text-muted);
+    font: inherit;
     font-size: var(--text-sm);
     font-weight: 600;
+    cursor: pointer;
   }
-
-  nav a:hover {
+  .seg button:hover {
     color: var(--color-text);
   }
+  .seg button[aria-pressed='true'] {
+    background: var(--color-surface);
+    color: var(--color-text);
+    box-shadow: var(--shadow-1);
+  }
 
-  .small {
-    max-width: 60rem;
+  .col h2 {
+    margin-bottom: var(--space-xs);
     font-size: var(--text-sm);
+    letter-spacing: 0;
+  }
+
+  .col ul {
+    display: grid;
+  }
+
+  .col a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.25rem;
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    text-decoration: none;
+  }
+  .col a:hover {
+    color: var(--color-text);
+    text-decoration: underline;
+  }
+
+  .legal {
+    display: grid;
+    gap: var(--space-2xs);
+    margin-top: var(--space-2xl);
+    padding-top: var(--space-m);
+    border-top: 1px solid var(--color-border);
+    max-width: 64rem;
+    font-size: var(--text-xs);
+    line-height: 1.6;
     color: var(--color-text-muted);
   }
 
-  .small + .small {
-    margin-top: var(--space-2xs);
+  @media (min-width: 40rem) {
+    .grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .grid {
+      grid-template-columns: 1.6fr repeat(4, minmax(0, 1fr));
+    }
+    .about {
+      grid-column: auto;
+    }
   }
 </style>

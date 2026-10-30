@@ -10,16 +10,22 @@ const description = 'This page does not exist.';
   <div class="container container--narrow">
     <header class="page-head">
       <p class="eyebrow">404</p>
-      <h1>That page isn’t here</h1>
+      <h1>That page isn&rsquo;t here</h1>
       <p class="lead">The address may be mistyped, or the page may have moved.</p>
-      <p class="back"><a class="btn btn-primary" href={url('/')}>Back to the home page</a></p>
+      <p class="back">
+        <a class="btn btn-primary" href={url('/')}>Back to the home page</a>
+        <a class="btn btn-secondary" href={url('/guides/')}>Browse the guides</a>
+      </p>
     </header>
   </div>
 </BaseLayout>
 
 <style>
   .back {
-    margin-top: var(--space-m);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+    margin-top: var(--space-l);
   }
   header {
     padding-bottom: var(--section-y);

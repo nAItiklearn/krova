@@ -1,0 +1,83 @@
+---
+import Icon from './Icon.astro';
+import { url } from '../lib/url';
+import { REPO_LINKS_ENABLED, REPO_URL } from '../site';
+
+const points = ['MIT license', 'No account', 'No ads', 'No telemetry'];
+---
+
+<section id="open-source" class="section section--tight" aria-labelledby="oss-title">
+  <div class="container">
+    <div class="box card">
+      <div class="text">
+        <p class="eyebrow">Free and open source</p>
+        <h2 id="oss-title">Nothing to buy. <span class="soft">Nothing to sign up for.</span></h2>
+        <p class="muted">
+          Krova is released under the <a href={url('/license/')}>MIT license</a>: use it, copy it, change it, share it.
+          {
+            REPO_LINKS_ENABLED ? (
+              <Fragment>
+                The <a href={REPO_URL}>source code</a> is the proof for every claim on this site.
+              </Fragment>
+            ) : (
+              <Fragment>Krova&rsquo;s repository is not public yet, so the source cannot be read yet.</Fragment>
+            )
+          }
+        </p>
+      </div>
+      <ul class="points">
+        {
+          points.map((p) => (
+            <li>
+              <Icon name="check" />
+              {p}
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </div>
+</section>
+
+<style>
+  .box {
+    display: grid;
+    gap: var(--space-l);
+    align-items: center;
+    padding: var(--space-l) var(--space-m);
+    border-radius: var(--radius-xl);
+  }
+  .eyebrow {
+    margin-bottom: var(--space-xs);
+  }
+  h2 {
+    font-size: var(--text-xl);
+    margin-bottom: var(--space-xs);
+  }
+  .points {
+    display: grid;
+    gap: var(--space-xs);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .points li {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-weight: 600;
+    font-size: var(--text-sm);
+  }
+  .points :global(.icon) {
+    width: 1.25rem;
+    height: 1.25rem;
+    padding: 0.2rem;
+    border-radius: 50%;
+    background: var(--accent-tint-strong);
+    color: var(--color-accent-text);
+  }
+  @media (min-width: 48rem) {
+    .box {
+      grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+      padding: var(--space-xl);
+    }
+  }
+</style>

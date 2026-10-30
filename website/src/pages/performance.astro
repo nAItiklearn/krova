@@ -1,0 +1,305 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import MemoryChart from '../components/charts/MemoryChart.astro';
+import CpuChart from '../components/charts/CpuChart.astro';
+import { idleStats, loadLatestIdle } from '../lib/measurements';
+import { REPO_LINKS_ENABLED, REPO_URL, VERSION_LABEL } from '../site';
+import { url } from '../lib/url';
+
+const title = 'Performance: Krova’s measured memory and CPU use';
+const description =
+  'One idle run of Krova on a Windows PC: its own process uses about 43 MB, the settings window’s web view adds most of the rest, and CPU is near zero. Method, limits, and what is not measured yet.';
+
+const m = loadLatestIdle();
+const s = idleStats(m);
+
+const mb = (n: number) => n.toFixed(1);
+const pct = (n: number) => n.toFixed(2);
+const prettyDate = new Date(`${m.date}T00:00:00Z`).toLocaleDateString('en-GB', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+const zeroCount = m.samples.length - s.cpuNonZero.length;
+const scriptPath = 'docs/measurements/measure-idle.ps1';
+const dataPath = `docs/measurements/${m.file}`;
+---
+
+<BaseLayout title={title} description={description}>
+  <div class="container">
+    <header class="page-head">
+      <p class="eyebrow">Performance</p>
+      <h1>What Krova uses, <span class="soft">measured once.</span></h1>
+      <p class="lead">
+        One {s.durationS}-second idle run on one Windows PC, {prettyDate}. This is {VERSION_LABEL}: a single run, with a known
+        gap list below, and the numbers will change. No other app was measured, so there is no comparison here.
+      </p>
+    </header>
+
+    <ul class="stats">
+      <li class="card">
+        <p class="big">{mb(s.appWs)} <span>MB</span></p>
+        <p>Krova&rsquo;s own process (working set)</p>
+      </li>
+      <li class="card">
+        <p class="big">{mb(s.privateMedian)} <span>MB</span></p>
+        <p>all {m.processCount} processes, including the web view (private memory)</p>
+      </li>
+      <li class="card">
+        <p class="big">{pct(s.cpuMean)} <span>%</span></p>
+        <p>average CPU, as a share of one core (peak {pct(s.cpuMax)} %)</p>
+      </li>
+    </ul>
+
+    <div class="conclusion note">
+      <p>
+        <strong>In plain words.</strong> The part that does the snapping is a native process of about {Math.round(s.appWs)} MB
+        that uses close to no CPU while idle. In this build, most of the memory is the embedded web view (Microsoft
+        WebView2 on Windows) that draws the settings and editor window: roughly {Math.round(s.outsideApprox / 10) * 10} MB of the {mb(s.privateMedian)} MB sits outside
+        Krova&rsquo;s own process. That figure subtracts two different memory measures, so read it as approximate.
+      </p>
+    </div>
+
+    <section class="block" aria-labelledby="mem-title">
+      <h2 id="mem-title">Memory</h2>
+      <p class="muted intro">
+        Two bars, two different questions. The first is Krova&rsquo;s own process. The second adds the {m.processCount - 1} web view processes
+        that draw its window.
+      </p>
+      <figure class="chart-fig">
+        <div class="only-narrow"><MemoryChart width={400} own={s.appWs} all={s.privateMedian} processCount={m.processCount} /></div>
+        <div class="only-wide"><MemoryChart width={720} own={s.appWs} all={s.privateMedian} processCount={m.processCount} /></div>
+        <figcaption>
+          Memory while idle, in MB. Krova&rsquo;s own process is shown as working set. The total is private memory,
+          which counts memory that belongs only to those processes.
+        </figcaption>
+      </figure>
+
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Memory figures">
+        <table class="data-table">
+          <caption>The numbers behind the memory chart (from {m.file})</caption>
+          <thead>
+            <tr><th scope="col">Measure</th><th scope="col" class="num">MB</th><th scope="col">Meaning</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">Krova process, working set</th><td class="num">{mb(s.appWs)}</td><td>Memory of <code>krova-app.exe</code> in RAM.</td></tr>
+            <tr>
+              <th scope="row">All {m.processCount} processes, private</th>
+              <td class="num">{mb(s.privateMedian)}</td>
+              <td>Median of {m.samples.length} samples (range {mb(s.privateMin)} to {mb(s.privateMax)}). Memory only these processes own.</td>
+            </tr>
+            <tr>
+              <th scope="row">All {m.processCount} processes, working sets added</th>
+              <td class="num">{mb(s.wsSumMin)}&ndash;{mb(s.wsSumMax)}</td>
+              <td>Not used as a headline: it counts pages shared between processes more than once.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="block" aria-labelledby="cpu-title">
+      <h2 id="cpu-title">CPU</h2>
+      <p class="muted intro">
+        Share of one CPU core used by all {m.processCount} processes together, sampled every {s.intervalS} seconds for {s.durationS} seconds.
+        It sits at 0.00 almost the whole time, with two small blips.
+      </p>
+      <figure class="chart-fig">
+        <div class="only-narrow"><CpuChart width={400} samples={m.samples} intervalS={s.intervalS} /></div>
+        <div class="only-wide"><CpuChart width={720} samples={m.samples} intervalS={s.intervalS} /></div>
+        <figcaption>
+          CPU use, % of one core, one step per {s.intervalS}-second sample. The machine has {m.host.cores}, so {pct(s.cpuMax)} % of one core
+          is about {(s.cpuMax / parseInt(m.host.cores, 10)).toFixed(2)} % of the whole CPU.
+        </figcaption>
+      </figure>
+
+      <div class="table-scroll" tabindex="0" role="region" aria-label="CPU figures">
+        <table class="data-table">
+          <caption>The numbers behind the CPU chart</caption>
+          <thead>
+            <tr><th scope="col">Sample</th><th scope="col" class="num">% of one core</th></tr>
+          </thead>
+          <tbody>
+            {s.cpuNonZero.map((b) => <tr><th scope="row">At {b.t} s</th><td class="num">{pct(b.cpu)}</td></tr>)}
+            <tr><th scope="row">The other {zeroCount} of {m.samples.length} samples</th><td class="num">0.00</td></tr>
+            <tr><th scope="row">Average over {s.durationS} s</th><td class="num">{pct(s.cpuMean)}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="block" aria-labelledby="method-title">
+      <h2 id="method-title">Method and limits</h2>
+      <div class="card method">
+        <dl>
+          <div><dt>Machine</dt><dd>{m.host.cpu}, {m.host.cores}, {m.host.ram}, {m.host.os}</dd></div>
+          <div><dt>Build</dt><dd>Krova 0.1.0, release build.</dd></div>
+          <div><dt>State</dt><dd>{m.state || 'See the data file.'}</dd></div>
+          <div><dt>Run</dt><dd>One run, {s.durationS} seconds, one sample every {s.intervalS} seconds, {m.processCount} processes counted (<code>krova-app.exe</code> plus the {m.processCount - 1} web view processes started for Krova).</dd></div>
+          <div><dt>Data</dt><dd>Raw output: <code>{dataPath}</code>. Every number on this page is read from that file when the site is built.</dd></div>
+        </dl>
+        <p class="rerun">
+          <strong>Re-run it yourself.</strong>
+          {
+            m.scriptPresent ? (
+              <Fragment>
+                The script is <code>{scriptPath}</code>: start Krova, then run
+                <code class="block">powershell -NoProfile -ExecutionPolicy Bypass -File measure-idle.ps1</code>
+              </Fragment>
+            ) : (
+              <Fragment>The measurement script is not published yet; the raw output lives in <code>docs/measurements/</code>.</Fragment>
+            )
+          }
+          {
+            REPO_LINKS_ENABLED ? (
+              <Fragment>{' '}Both are in the <a href={REPO_URL}>repository</a>.</Fragment>
+            ) : (
+              <Fragment>{' '}They are in the repository, which is not public yet.</Fragment>
+            )
+          }
+          The result depends on what state you leave Krova in, so write that down with the numbers.
+        </p>
+      </div>
+    </section>
+
+    <section class="block" aria-labelledby="notyet-title">
+      <h2 id="notyet-title">What we have not measured yet</h2>
+      <div class="prose todo">
+        <ul>
+          <li>Drag latency: how long it takes from release to the window landing.</li>
+          <li>CPU and memory while a window is being dragged.</li>
+          <li>Use with the settings window closed or hidden, which is how Krova normally runs.</li>
+          <li>macOS, in any state.</li>
+          <li>More than one run, more than one machine, and any other app.</li>
+        </ul>
+      </div>
+      <p class="muted">
+        These are {VERSION_LABEL} numbers. They will change as the app does, and this page will be regenerated from new
+        measurement files.
+      </p>
+    </section>
+
+    <p class="back"><a href={url('/#performance')}>Back to the overview</a></p>
+  </div>
+</BaseLayout>
+
+<style>
+  .stats {
+    display: grid;
+    gap: var(--space-m);
+  }
+  .card {
+    padding: var(--space-m);
+    border-radius: var(--radius-xl);
+  }
+  .big {
+    font-size: var(--text-2xl);
+    font-weight: 700;
+    letter-spacing: var(--tracking-tight);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .big span {
+    font-size: 0.45em;
+    letter-spacing: 0;
+    color: var(--color-text-soft);
+  }
+  .stats .card p:last-child {
+    margin-top: var(--space-xs);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+
+  .conclusion {
+    max-width: 52rem;
+    margin-top: var(--space-l);
+  }
+
+  .block {
+    margin-top: var(--space-2xl);
+  }
+  .block h2 {
+    font-size: var(--text-xl);
+  }
+  .intro {
+    max-width: var(--measure);
+    margin-top: var(--space-xs);
+  }
+
+  .chart-fig {
+    margin: var(--space-l) 0;
+    padding: var(--space-m) var(--space-m) var(--space-s);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-1);
+  }
+  .chart-fig .only-narrow,
+  .chart-fig .only-wide {
+    max-width: 52rem;
+    margin-inline: auto;
+  }
+  .chart-fig .only-narrow {
+    max-width: 26rem;
+  }
+  figcaption {
+    margin-top: var(--space-s);
+    font-size: var(--text-sm);
+    color: var(--color-text-soft);
+  }
+
+  .method {
+    margin-top: var(--space-m);
+  }
+  .method dl {
+    display: grid;
+    gap: var(--space-s);
+  }
+  .method dl > div {
+    display: grid;
+    gap: 0.15rem;
+  }
+  .method dt {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    letter-spacing: var(--tracking-mono);
+    text-transform: uppercase;
+    color: var(--color-text-soft);
+  }
+  .method dd {
+    font-size: var(--text-sm);
+  }
+  .rerun {
+    margin-top: var(--space-m);
+    padding-top: var(--space-m);
+    border-top: 1px solid var(--color-border);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+  .rerun code.block {
+    display: block;
+    margin-top: var(--space-2xs);
+    white-space: pre-wrap;
+  }
+
+  .todo {
+    margin-top: var(--space-s);
+    margin-bottom: var(--space-s);
+  }
+
+  .back {
+    margin-top: var(--space-2xl);
+    padding-bottom: var(--section-y);
+  }
+
+  @media (min-width: 48rem) {
+    .stats {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .method dl > div {
+      grid-template-columns: 8rem 1fr;
+      gap: var(--space-m);
+    }
+  }
+</style>

@@ -1,0 +1,56 @@
+---
+import Icon from './Icon.astro';
+import { url } from '../lib/url';
+import { DOWNLOADS_ENABLED } from '../site';
+---
+
+<section class="cta section" aria-labelledby="cta-title">
+  <div class="container">
+    <img src={url('/favicon.svg')} width="64" height="64" alt="" />
+    <h2 id="cta-title">Ready to try it? <span class="soft">It costs nothing.</span></h2>
+    <p class="muted">
+      {
+        DOWNLOADS_ENABLED
+          ? 'Windows 10/11 and macOS 13+. Free, MIT license, no account.'
+          : 'The first release is not published yet. The download page says what to expect and how to get past the unsigned-installer warnings.'
+      }
+    </p>
+    <div class="actions">
+      <a class="btn btn-primary" href={url('/download/')}>
+        <Icon name="download" />
+        Download
+      </a>
+      <a class="btn btn-secondary" href="#try">Try the editor first</a>
+    </div>
+  </div>
+</section>
+
+<style>
+  .cta {
+    text-align: center;
+  }
+  .container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  img {
+    border-radius: 16px;
+    box-shadow: var(--shadow-2);
+  }
+  h2 {
+    margin-top: var(--space-l);
+    font-size: var(--text-2xl);
+  }
+  .muted {
+    max-width: 34rem;
+    margin-top: var(--space-s);
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-xs);
+    margin-top: var(--space-l);
+  }
+</style>

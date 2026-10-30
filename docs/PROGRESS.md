@@ -2,7 +2,7 @@
 
 ## Verification status — read this first
 
-Local commits exist (initial import, progress, README/CONTRIBUTING/CI, security hardening, UI accessibility fixes). **Nothing is pushed**: there is no remote, no tag and no release.
+`main` is pushed to the **private** repository `github.com/nAItiklearn/krova`. There is no tag and no published release, and the repository is not public. A GitHub Actions run of the release workflow produced `Krova-windows-x64-setup.exe` (seen as a downloaded artifact on 2026-10-30), so the Windows build job works on GitHub; I cannot read Actions results from here, so the state of the macOS jobs and of CI after the latest pushes is unknown.
 
 What has actually been run, by whom, on Windows (GNU toolchain, WinLibs first on PATH):
 
@@ -10,9 +10,9 @@ What has actually been run, by whom, on Windows (GNU toolchain, WinLibs first on
 |---|---|
 | `krova-core`, `krova-platform` | `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo test`: **core 80 passed, platform 60 passed + 1 ignored** (the `win_overlay` smoke test needs an interactive desktop). |
 | `krova-platform::mac*` (everything macOS-only) | **Never compiled** (no Mac; not built on Windows). Hand-declared FFI, no third-party crates. `mac_math` (not cfg-gated) is compiled and tested on every OS. First real build: the `macos-latest` CI job. |
-| `src-tauri` | fmt, `clippy --all-targets -D warnings` clean, **17 tests pass**, `cargo build` produces `krova-app.exe`. **The app has never been launched**, so the tray, mouse hook, overlay and UI commands are untested at runtime. Separate workspace, so the root commands do not cover it: use `--manifest-path src-tauri/Cargo.toml`. |
+| `src-tauri` | fmt, `clippy --all-targets -D warnings` clean, **17 tests pass**, `cargo build` produces `krova-app.exe`. **The owner installed and ran it on 2026-10-30 and reported that Shift-drag snapping, the tray and the editor work ("working nicely")**; that is a manual smoke test, not an automated one, and drag-latency, multi-monitor and DPI behaviour are not measured. Separate workspace, so the root commands do not cover it: use `--manifest-path src-tauri/Cargo.toml`. |
 | `ui/` | 41 vitest tests, `svelte-check`, `vite build`, and **159 Playwright tests** against the demo mock backend (Edge, Windows only). The tests found three real accessibility bugs (armed "Confirm delete" unreadable on hover, zone accessible names not containing their visible text, dark-theme selected-zone contrast 3.37:1); all three are fixed (contrast re-computed: 6.46, 6.54 and 7.63:1) and kept as regression tests, plus a real `<h1>`. All 159 e2e tests, 41 unit tests and `svelte-check` (196 files, 0 errors) pass on an independent re-run. The real Tauri backend has never run. |
-| `website/` | Built; Lighthouse 100/100/100/100 in Chromium/Edge. Not tested in Firefox/Safari. |
+| `website/` | Redesigned 2026-10-30: 15 pages (home, download, performance, changelog, support, guides, privacy, license) plus the real editor as a live demo at `/demo/`; light/dark/system theme. `npm run build` passes; the designer agent's checks in headless Edge (112 page variants, no overflow, no console errors, no cross-origin request; axe 0 violations; Lighthouse 99-100 on five pages) and my own screenshot review (light/dark, 1280 and 360 px) agree. Not tested in Firefox/Safari or with a screen reader. Download buttons stay hidden until `REPO_PUBLIC` and `RELEASE_PUBLISHED` are flipped in `website/src/site.ts` (runbook in `website/README.md`). |
 | `.github/workflows/*` | **Never run on GitHub** (no repository yet). `ci.yml` and `release.yml` were syntax-checked and their shell steps exercised against fake files only. |
 
 Build order for the app (the Tauri config has no `before*Command` hooks, so nothing depends on a hook's working directory):

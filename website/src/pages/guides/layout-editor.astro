@@ -1,0 +1,94 @@
+---
+import GuideLayout from '../../layouts/GuideLayout.astro';
+import { url } from '../../lib/url';
+---
+
+<GuideLayout
+  slug="layout-editor"
+  description="How to use Krova's layout editor: monitor tabs, templates, splitting zones, dragging dividers, deleting zones, saving, setting the active layout, and the limits."
+  lead="Draw, split and save the zones for each monitor. You can try everything on this page in the live editor on the home page."
+>
+  <p>
+    <a class="btn btn-secondary btn-sm" href={url('/#try')}>Try the editor in your browser</a>
+  </p>
+
+  <h2 id="open">Open the editor</h2>
+  <p>
+    Choose <strong>Edit layouts&hellip;</strong> in Krova&rsquo;s tray menu. Closing the window afterwards only hides it.
+  </p>
+
+  <h2 id="screen">What you see</h2>
+  <ul>
+    <li><strong>Monitor tabs</strong> across the top: one per connected monitor, with its resolution. Switch with the mouse, or with Left, Right, Home and End.</li>
+    <li><strong>The canvas</strong>: the selected layout, drawn at the shape of that monitor&rsquo;s work area (the screen without the taskbar or menu bar). A caption gives the size and the zone count.</li>
+    <li><strong>The toolbar</strong>: Select, Split vertically, Split horizontally, Delete zone, Undo, and Revert and Save on the right.</li>
+    <li><strong>The side panel</strong>: This layout (its name, Set as active, Delete layout), Layouts on this monitor (with New layout), and Templates.</li>
+  </ul>
+
+  <h2 id="build">Build a layout</h2>
+  <h3>Start from a template</h3>
+  <p>
+    Templates are <strong>Halves</strong>, <strong>Thirds</strong>, <strong>Grid 2x2</strong> and <strong>Priority</strong>
+    (a narrow zone, a wide one, a narrow one: 25%, 50%, 25%). Applying one replaces the zones of the layout you are
+    editing. You can undo it, and nothing is kept until you save.
+  </p>
+  <h3>Or start from a new layout</h3>
+  <p>
+    <strong>New layout</strong> adds a layout named &ldquo;Layout 2&rdquo; (or the next free number) with one zone that
+    covers the whole screen, and saves it straight away. Split it or apply a template.
+  </p>
+  <h3>Split a zone</h3>
+  <ol>
+    <li>Choose <strong>Split vertically</strong> (<kbd>V</kbd>) for two zones side by side, or <strong>Split horizontally</strong> (<kbd>H</kbd>) for two stacked.</li>
+    <li>Move over a zone and click where the divider should go. A preview line follows the pointer.</li>
+    <li>With the keyboard: focus a zone, move the guide with the arrow keys (hold <kbd>Shift</kbd> for 5% steps) and press <kbd>Enter</kbd>.</li>
+    <li>Press <kbd>Esc</kbd> to go back to the Select tool.</li>
+  </ol>
+  <h3>Move a divider</h3>
+  <p>
+    With the Select tool, drag a divider. It moves every zone edge that lies on that line, so zones that touch stay
+    touching. With a divider focused, the arrow keys move it by 1%, and <kbd>Shift</kbd> with an arrow by 5%. The outer
+    edges of the screen are not dividers and cannot be moved.
+  </p>
+  <h3>Delete a zone</h3>
+  <p>
+    Select a zone and press <kbd>Delete</kbd> (or choose Delete zone). A neighbour that shares a <em>full</em> edge with
+    it grows to take its space. If no neighbour shares a full edge, the zone cannot be deleted and the editor says so. A
+    layout always keeps at least one zone.
+  </p>
+  <h3>Sizes</h3>
+  <p>
+    No zone can be made smaller than 5% of the screen in either direction. An edit that would do that is refused and the
+    layout stays as it was.
+  </p>
+
+  <h2 id="save">Save and activate</h2>
+  <ul>
+    <li><strong>Save</strong> (<kbd>Ctrl</kbd>+<kbd>S</kbd>) stores the layout. Until then it is a draft: the layout shows an <em>Unsaved</em> badge, and drafts survive switching monitors or layouts. <strong>Revert</strong> throws the draft away.</li>
+    <li><strong>Undo</strong> (<kbd>Ctrl</kbd>+<kbd>Z</kbd>) steps back through your edits to the draft.</li>
+    <li>
+      <strong>Set as active</strong> makes this the layout Krova uses when you drag on this monitor. It saves your unsaved
+      edits to that layout first. Each monitor has one active layout; switch between layouts any time.
+    </li>
+    <li>Rename a layout in the Name box (up to 60 characters).</li>
+  </ul>
+
+  <h2 id="delete-layout">Delete a layout</h2>
+  <p>
+    Choose <strong>Delete layout</strong>, then press it again within 5 seconds (the button reads <em>Confirm delete</em>).
+    A monitor always keeps at least one layout, so the last one cannot be deleted. Deleting the active layout activates the
+    first one that remains.
+  </p>
+
+  <h2 id="limits">Limits</h2>
+  <ul>
+    <li>At most <strong>64 zones</strong> in a layout.</li>
+    <li>At most <strong>64 layouts</strong> per monitor.</li>
+    <li>Krova remembers up to 64 monitors, including ones that are not plugged in.</li>
+  </ul>
+  <p>
+    Layouts live in <code>config.json</code>; see <a href={url('/guides/install/#uninstall')}>where it is</a> and
+    <a href={url('/guides/multiple-displays/')}>how monitors are matched</a>. The editor&rsquo;s keyboard shortcuts are on
+    <a href={url('/guides/keyboard-shortcuts/')}>their own page</a>.
+  </p>
+</GuideLayout>

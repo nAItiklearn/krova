@@ -1,0 +1,72 @@
+---
+import GuideLayout from '../../layouts/GuideLayout.astro';
+import { url } from '../../lib/url';
+---
+
+<GuideLayout
+  slug="keyboard-shortcuts"
+  description="Krova's keyboard shortcuts: the layout editor's keys (Esc, V, H, Delete, Ctrl+Z, Ctrl+S, arrow keys). Krova has no global shortcuts for snapping windows yet."
+  lead="The shortcuts below work inside Krova's layout editor. Krova has no global keyboard shortcuts for snapping windows yet."
+>
+  <div class="note note--warn">
+    <p>
+      <strong>No global shortcuts.</strong> You cannot snap a window with a key press in this version. You snap by
+      dragging a window while holding the activation key. Global shortcuts are an idea for v0.2, not a promise and not a
+      date.
+    </p>
+  </div>
+
+  <h2 id="editor">In the layout editor</h2>
+  <p>
+    These work while the editor window has focus. On a Mac, <kbd>Cmd</kbd> takes the place of <kbd>Ctrl</kbd>. The
+    single-letter keys are ignored while a text box has focus, so you can still type a layout name.
+  </p>
+  <div class="table-scroll" tabindex="0" role="region" aria-label="Editor keyboard shortcuts">
+    <table class="data-table">
+      <thead><tr><th scope="col">Key</th><th scope="col">What it does</th></tr></thead>
+      <tbody>
+        <tr><th scope="row"><kbd>Esc</kbd></th><td>Back to the Select tool; if you are already there, clear the selected zone</td></tr>
+        <tr><th scope="row"><kbd>V</kbd></th><td>Split vertically tool: the divider is a vertical line, so zones end up side by side</td></tr>
+        <tr><th scope="row"><kbd>H</kbd></th><td>Split horizontally tool: zones end up stacked</td></tr>
+        <tr><th scope="row"><kbd>Delete</kbd></th><td>Delete the selected zone; a neighbour that shares a full edge takes its space</td></tr>
+        <tr><th scope="row"><kbd>Ctrl</kbd>+<kbd>Z</kbd></th><td>Undo the last edit to the current layout</td></tr>
+        <tr><th scope="row"><kbd>Ctrl</kbd>+<kbd>S</kbd></th><td>Save the layout</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>On a focused divider</h3>
+  <div class="table-scroll" tabindex="0" role="region" aria-label="Divider keyboard shortcuts">
+    <table class="data-table">
+      <thead><tr><th scope="col">Key</th><th scope="col">What it does</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Arrow keys</th><td>Move the divider by 1%</td></tr>
+        <tr><th scope="row"><kbd>Shift</kbd> + arrow keys</th><td>Move the divider by 5%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>On a zone</h3>
+  <div class="table-scroll" tabindex="0" role="region" aria-label="Zone keyboard shortcuts">
+    <table class="data-table">
+      <thead><tr><th scope="col">Key</th><th scope="col">What it does</th></tr></thead>
+      <tbody>
+        <tr><th scope="row"><kbd>Enter</kbd> or <kbd>Space</kbd></th><td>Select the zone (Select tool)</td></tr>
+        <tr><th scope="row">Arrow keys</th><td>Move the split guide (Split tool); hold <kbd>Shift</kbd> for 5% steps</td></tr>
+        <tr><th scope="row"><kbd>Enter</kbd></th><td>Split the zone at the guide (Split tool)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Tabs</h3>
+  <p>
+    On the monitor tabs, <kbd>Left</kbd>, <kbd>Right</kbd>, <kbd>Home</kbd> and <kbd>End</kbd> move between monitors. On
+    the Editor / Settings switch, <kbd>Left</kbd> and <kbd>Right</kbd> move between the two views.
+  </p>
+
+  <h2 id="activation">The activation key is not a shortcut</h2>
+  <p>
+    The key you hold while dragging (Shift by default) is a modifier, not a shortcut. Change it in Settings: Shift,
+    Ctrl, Alt, or the Windows key (Command on a Mac). See <a href={url('/guides/first-snap/')}>Your first snap</a>.
+  </p>
+</GuideLayout>
