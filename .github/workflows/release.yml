@@ -5,18 +5,20 @@ name: release
 #
 # Adapted from the Windy workflow. Differences: Krova's Tauri app lives in src-tauri/ (its own
 # Cargo workspace) and its UI in ui/, which must be built before Tauri bundles it; Krova ships
-# for Windows and macOS only. The asset names below are linked from website/src/site.ts
-# (DOWNLOADS) and must stay in sync with it and must not contain a version number.
+# for Windows and macOS only.
+#
+# Asset names are version-free on purpose, so that releases/latest/download/<name> stays stable:
+#   Krova-windows-x64-setup.exe   NSIS installer (Windows)
+#   Krova-macos-universal.dmg     universal (Apple silicon + Intel)
+# website/src/site.ts (DOWNLOADS) must list exactly these names.
 on:
   workflow_dispatch:
   push:
     tags: ["v*"]
 
+# Build jobs only read the repository. The publish job raises this for itself.
 permissions:
-  contents: write
-
-env:
-  NO_STRIP: "true"
+  contents: read
 
 jobs:
   build:
@@ -27,41 +29,73 @@ jobs:
         include:
           - name: windows
             os: windows-latest
+            bundle_dir: src-tauri/target/release/bundle
             args: "--bundles nsis"
           - name: macos
             os: macos-latest
+            rust_target: aarch64-apple-darwin,x86_64-apple-darwin
+            bundle_dir: src-tauri/target/universal-apple-darwin/release/bundle
             args: "--target universal-apple-darwin --bundles dmg"
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.name == 'macos' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.rust_target }}
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Tag must match the app version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          if [ "$TAG" != "v$version" ]; then
+            echo "Tag $TAG does not match the version $version in src-tauri/tauri.conf.json" >&2
+            exit 1
+          fi
+      # tauri.conf.json has no beforeBuildCommand, so ui/dist must exist before Tauri runs.
       - name: Build the UI
         shell: bash
         run: |
-          npm install --prefix ui
+          npm ci --prefix ui
           npm run build --prefix ui
+      # Run from the repo root: the Tauri CLI finds src-tauri/tauri.conf.json below the working directory.
       - name: Build installers
         shell: bash
         run: npx --yes @tauri-apps/cli@2 build ${{ matrix.args }}
-      - name: Give files version-free names
+      - name: Give files version-free names (Windows)
+        if: matrix.name == 'windows'
         shell: bash
+        env:
+          BUNDLE_DIR: ${{ matrix.bundle_dir }}
         run: |
+          set -euo pipefail
           mkdir -p dist-release
-          b=src-tauri/target
-          [ "${{ matrix.name }}" = macos ] && b=src-tauri/target/universal-apple-darwin
-          pick() { find "$b/release/bundle" -type f -name "$1" | head -n 1; }
-          case "${{ matrix.name }}" in
-            windows) cp "$(pick '*-setup.exe')" dist-release/Krova-windows-x64-setup.exe ;;
-            macos)   cp "$(pick '*.dmg')"       dist-release/Krova-macos-universal.dmg ;;
-          esac
+          installer=$(find "$BUNDLE_DIR/nsis" -type f -name '*-setup.exe' | head -n 1)
+          test -n "$installer" || { echo "no NSIS installer found under $BUNDLE_DIR/nsis" >&2; exit 1; }
+          cp "$installer" dist-release/Krova-windows-x64-setup.exe
+          ls -la dist-release
+      - name: Give files version-free names (macOS)
+        if: matrix.name == 'macos'
+        shell: bash
+        env:
+          BUNDLE_DIR: ${{ matrix.bundle_dir }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist-release
+          dmg=$(find "$BUNDLE_DIR/dmg" -type f -name '*.dmg' ! -name 'rw.*' | head -n 1)
+          test -n "$dmg" || { echo "no .dmg found under $BUNDLE_DIR/dmg" >&2; exit 1; }
+          cp "$dmg" dist-release/Krova-macos-universal.dmg
           ls -la dist-release
       - uses: actions/upload-artifact@v4
         with:
@@ -74,6 +108,8 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -84,8 +120,10 @@ jobs:
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
         run: |
-          gh release create "${{ github.ref_name }}" assets/* \
-            --repo "${{ github.repository }}" \
-            --title "Krova ${{ github.ref_name }}" \
+          gh release create "$TAG" assets/* \
+            --repo "$REPO" \
+            --title "Krova $TAG" \
             --generate-notes

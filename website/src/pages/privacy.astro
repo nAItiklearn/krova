@@ -76,8 +76,11 @@ const description =
       <h2>Permissions</h2>
       <p>
         On macOS, Krova asks for <strong>Accessibility</strong> permission (System Settings, Privacy &amp; Security,
-        Accessibility). macOS requires it before any app can move and resize other apps’ windows. On Windows no special
-        permission is requested; windows of apps running as administrator are skipped.
+        Accessibility). macOS requires it before any app can move and resize other apps’ windows. Depending on your
+        macOS version it may also ask for <strong>Input Monitoring</strong> so that it can notice a window being
+        dragged. Krova only watches the left mouse button and checks whether your activation key and Escape are held;
+        it does not read or record what you type. On Windows no special permission is requested; windows of apps
+        running as administrator are skipped.
       </p>
 
       <h2>Removing your data</h2>

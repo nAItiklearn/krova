@@ -30,6 +30,9 @@
     "active": true,
     "targets": "all",
     "category": "Utility",
+    "macOS": {
+      "minimumSystemVersion": "13.0"
+    },
     "shortDescription": "Free, offline window zone manager",
     "icon": [
       "icons/32x32.png",

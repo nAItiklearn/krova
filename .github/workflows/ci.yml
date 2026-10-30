@@ -8,7 +8,14 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same pull request supersedes the older run; runs on main always finish.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  # The two core crates (krova-core, krova-platform) need no webview toolchain. Linux uses the
+  # NullPlatform: Krova does not support Linux, the job only keeps krova-core honest and portable.
   core:
     strategy:
       fail-fast: false
@@ -31,12 +38,17 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-      - run: npm install --prefix ui
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: npm ci --prefix ui
       - run: npm run check --prefix ui
       - run: npm test --prefix ui
       - run: npm run build --prefix ui
 
+  # src-tauri is its own Cargo workspace (the root workspace excludes it), hence --manifest-path.
+  # Tauri needs ui/dist at compile time, so the UI is built first. No Linux job: it would need
+  # webkit2gtk and Krova does not support Linux.
   app:
     needs: ui
     strategy:
@@ -48,14 +60,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-      - run: npm install --prefix ui
+      - run: npm ci --prefix ui
       - run: npm run build --prefix ui
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
