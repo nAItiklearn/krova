@@ -48,8 +48,8 @@ const description =
       <h2>What is stored on your computer</h2>
       <p>
         Krova keeps your settings and layouts in one file, <code>config.json</code>, in your user account’s
-        application-data folder (typically <code>%APPDATA%\dev.krova.app</code> on Windows and
-        <code>~/Library/Application Support/dev.krova.app</code> on macOS). It contains:
+        application-data folder (typically <code>%APPDATA%\dev.krova.desktop</code> on Windows and
+        <code>~/Library/Application Support/dev.krova.desktop</code> on macOS). It contains:
       </p>
       <ul>
         <li>
@@ -79,12 +79,12 @@ const description =
       <ul>
         <li>
           On Windows, the web view that draws Krova’s window keeps its own cache and browser profile in a folder under
-          <code>%LOCALAPPDATA%\dev.krova.app</code>.
+          <code>%LOCALAPPDATA%\dev.krova.desktop</code>.
         </li>
         <li>
           If you turn on “Launch at login”, Krova adds a start-up entry: a value named “Krova” under
           <code>HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run</code> on Windows, or a
-          <code>dev.krova.app.plist</code> file in <code>~/Library/LaunchAgents</code> on macOS when it is not run from
+          <code>dev.krova.desktop.plist</code> file in <code>~/Library/LaunchAgents</code> on macOS when it is not run from
           an app bundle (otherwise a regular macOS login item).
         </li>
       </ul>
@@ -113,7 +113,7 @@ const description =
       <p>
         Delete <code>config.json</code> (and <code>config.json.bak</code>, if present) to erase the settings and
         layouts Krova has stored. To remove everything else, turn off “Launch at login” before uninstalling and delete
-        the <code>dev.krova.app</code> folder under <code>%LOCALAPPDATA%</code> on Windows. Krova keeps no copy of your
+        the <code>dev.krova.desktop</code> folder under <code>%LOCALAPPDATA%</code> on Windows. Krova keeps no copy of your
         data anywhere else, because it never sends anything anywhere.
       </p>
 

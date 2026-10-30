@@ -7,6 +7,8 @@
 | Reviewer | Claude (AI-assisted source review). This is **not** an independent third-party audit. |
 | Method | Read the code and configuration; ran dependency and history scans; read the Tauri, `tauri-utils` and single-instance plugin sources in the local cargo registry. **The app was never launched**, so nothing below is a runtime observation. |
 
+> **Update after the review:** the bundle identifier was renamed from `dev.krova.app` to `dev.krova.desktop` (Tauri warns that an identifier ending in `.app` conflicts with the macOS bundle extension). Wherever this review says `dev.krova.app`, read `dev.krova.desktop`: the app-data and WebView2 folders, the LaunchAgent plist name and the macOS single-instance socket (`/tmp/dev_krova_desktop_si.sock`) follow the identifier. Several findings were fixed after this review; see the status list in `docs/PROGRESS.md`.
+
 Path conventions: `config.rs`, `zone.rs`, `edit.rs`, `geometry.rs`, `monitor.rs`, `snap.rs`, `edge.rs`, `window.rs` are in `crates/krova-core/src`; `win*.rs`, `mac*.rs`, `overlay.rs`, `ids.rs` are in `crates/krova-platform/src`; `commands.rs`, `engine.rs`, `model.rs`, `tray.rs`, `main.rs` are in `src-tauri/src`, as is `lib.rs` unless written as `krova-platform lib.rs`; `build.rs`, `tauri.conf.json` and `capabilities/default.json` are in `src-tauri`.
 
 ## 1. Summary

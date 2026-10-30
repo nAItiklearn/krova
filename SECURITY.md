@@ -73,11 +73,11 @@ Known limits of these statements:
   ```
 
   Permissions are minimal: `src-tauri/capabilities/default.json` grants only event listening to the main window, and `src-tauri/Cargo.toml` lists no filesystem, shell, HTTP or updater plugin. The content security policy is in `src-tauri/tauri.conf.json`.
-- **What `config.json` holds.** It is plain JSON you can read. Location: `%APPDATA%\dev.krova.app\config.json` on Windows, `~/Library/Application Support/dev.krova.app/config.json` on macOS. Fields are defined in `crates/krova-core/src/config.rs`: settings, and per monitor an id, label, hardware id, device path, last size and position, layouts and the active layout. There is no field for windows, programs or titles.
+- **What `config.json` holds.** It is plain JSON you can read. Location: `%APPDATA%\dev.krova.desktop\config.json` on Windows, `~/Library/Application Support/dev.krova.desktop/config.json` on macOS. Fields are defined in `crates/krova-core/src/config.rs`: settings, and per monitor an id, label, hardware id, device path, last size and position, layouts and the active layout. There is no field for windows, programs or titles.
 
 ### What else is on disk
 
-Besides `config.json` (and a transient `config.json.tmp` or a `config.json.bak` after a recovery): the embedded browser's profile (Windows: under `%LOCALAPPDATA%\dev.krova.app`), and, if you enable "Launch at login", a registry value `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Krova` on Windows or a login item / `~/Library/LaunchAgents/dev.krova.app.plist` on macOS. On macOS the single-instance guard also uses `/tmp/dev_krova_app_si.sock`.
+Besides `config.json` (and a transient `config.json.tmp` or a `config.json.bak` after a recovery): the embedded browser's profile (Windows: under `%LOCALAPPDATA%\dev.krova.desktop`), and, if you enable "Launch at login", a registry value `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Krova` on Windows or a login item / `~/Library/LaunchAgents/dev.krova.desktop.plist` on macOS. On macOS the single-instance guard also uses `/tmp/dev_krova_desktop_si.sock`.
 
 ## Security review
 

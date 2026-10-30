@@ -51,7 +51,7 @@ pub const SIZE_TOLERANCE: i32 = 1;
 pub const FRAME_MATCH_TOLERANCE: i32 = 2;
 
 /// Label of the LaunchAgent fallback; also the app's bundle identifier.
-pub const LAUNCH_AGENT_LABEL: &str = "dev.krova.app";
+pub const LAUNCH_AGENT_LABEL: &str = "dev.krova.desktop";
 
 // ------------------------------------------------------------- geometry
 
@@ -639,8 +639,8 @@ mod tests {
 
     #[test]
     fn plist_escapes_the_executable_path() {
-        let xml = launch_agent_plist("dev.krova.app", "/Apps/R&D <x>/krova");
-        assert!(xml.contains("<string>dev.krova.app</string>"));
+        let xml = launch_agent_plist("dev.krova.desktop", "/Apps/R&D <x>/krova");
+        assert!(xml.contains("<string>dev.krova.desktop</string>"));
         assert!(xml.contains("<string>/Apps/R&amp;D &lt;x&gt;/krova</string>"));
         assert!(xml.contains("<key>RunAtLoad</key>"));
         assert!(xml.starts_with("<?xml"));

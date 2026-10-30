@@ -10,7 +10,7 @@
 //!   to check it against, so no binding crate is used. Every selector is guarded
 //!   with `respondsToSelector:`.
 //! - Otherwise (a bare binary from `cargo run`, or macOS 12 and older): a
-//!   LaunchAgent property list, `~/Library/LaunchAgents/dev.krova.app.plist`,
+//!   LaunchAgent property list, `~/Library/LaunchAgents/dev.krova.desktop.plist`,
 //!   with `RunAtLoad`. It is written but not loaded with `launchctl`, so it takes
 //!   effect at the next login and never starts a second instance now.
 //!
