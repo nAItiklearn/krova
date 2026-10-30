@@ -1,0 +1,38 @@
+# Krova idle resource sample, 2026-10-30. Raw output of measure-idle.ps1 (run for 60 s, one sample / 2 s).
+# State: Krova 0.1.0 release build (local NSIS install), running, Settings/Editor window OPEN, no window being dragged.
+# "7 processes" = krova-app.exe + 6 msedgewebview2.exe processes whose command line names dev.krova.desktop.
+# Columns of S rows: S | seconds | krova-app working set MB | all 7 processes working set MB (double-counts shared pages) | all 7 processes private MB | CPU % of ONE core (all 7 processes)
+# Not measured: the window closed/hidden, a drag in progress, macOS.
+HOST|AMD Ryzen 5 5625U with Radeon Graphics|12 logical cores|13.8 GB RAM|Microsoft Windows 11 Home Single Language
+COUNT|app+webview2 processes: 7
+S|2|42.7|473.2|230.5|0.00
+S|4|42.7|473.3|230.6|0.00
+S|6|42.7|473.3|230.6|0.00
+S|8|42.7|473.3|230.6|1.39
+S|10|42.7|473.3|230.6|0.00
+S|12|42.7|473.3|230.6|0.00
+S|14|42.7|473.2|230.6|0.00
+S|16|42.7|473.2|230.6|0.00
+S|18|42.7|473.2|230.6|0.00
+S|20|42.7|473.2|230.6|0.00
+S|22|42.7|473.2|230.6|0.00
+S|24|42.7|473.2|230.6|0.00
+S|26|42.7|473.2|230.6|0.00
+S|28|42.7|473.2|230.6|0.00
+S|30|42.7|473.2|230.6|0.00
+S|32|42.7|473.2|230.6|0.00
+S|34|42.7|473.2|230.6|0.00
+S|36|42.7|473.2|230.6|0.00
+S|38|42.7|473.2|230.6|0.00
+S|40|42.7|473.3|230.6|0.00
+S|42|42.7|473.3|230.6|0.00
+S|44|42.7|473.3|230.6|0.00
+S|46|42.7|473.3|230.6|0.69
+S|48|42.7|469.2|230.6|0.00
+S|50|42.7|469.2|230.6|0.00
+S|52|42.7|469.2|230.6|0.00
+S|54|42.7|469.2|230.6|0.00
+S|56|42.7|469.2|230.6|0.00
+S|58|42.7|469.2|230.6|0.00
+S|60|42.7|469.2|230.6|0.00
+DONE

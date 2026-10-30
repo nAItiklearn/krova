@@ -1,7 +1,10 @@
 name: release
 
 # Builds installers on every manual run (artifacts only). A GitHub Release is created only when a
-# version tag (v*) is pushed. Nothing here deploys the website.
+# version tag (v*) is pushed, and it is created as a DRAFT: nothing is public until a person reviews
+# the assets and presses "Publish release" on GitHub. Nothing here deploys the website.
+# Actions are pinned to commit SHAs (Dependabot keeps them current); the Rust toolchain and the
+# Tauri CLI are pinned to exact versions.
 #
 # Adapted from the Windy workflow. Differences: Krova's Tauri app lives in src-tauri/ (its own
 # Cargo workspace) and its UI in ui/, which must be built before Tauri bundles it; Krova ships
@@ -39,14 +42,15 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master; the toolchain is the input below
         with:
+          toolchain: 1.99.1
           targets: ${{ matrix.rust_target }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: src-tauri
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
           cache: npm
@@ -72,7 +76,7 @@ jobs:
       # Run from the repo root: the Tauri CLI finds src-tauri/tauri.conf.json below the working directory.
       - name: Build installers
         shell: bash
-        run: npx --yes @tauri-apps/cli@2 build ${{ matrix.args }}
+        run: npx --yes @tauri-apps/cli@2.12.3 build ${{ matrix.args }}
       - name: Give files version-free names (Windows)
         if: matrix.name == 'windows'
         shell: bash
@@ -97,7 +101,7 @@ jobs:
           test -n "$dmg" || { echo "no .dmg found under $BUNDLE_DIR/dmg" >&2; exit 1; }
           cp "$dmg" dist-release/Krova-macos-universal.dmg
           ls -la dist-release
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: krova-${{ matrix.name }}
           path: dist-release/*
@@ -111,7 +115,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: assets
           merge-multiple: true
@@ -126,4 +130,5 @@ jobs:
           gh release create "$TAG" assets/* \
             --repo "$REPO" \
             --title "Krova $TAG" \
+            --draft \
             --generate-notes
