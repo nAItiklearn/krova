@@ -47,6 +47,22 @@ jobs:
       - run: npm test --prefix ui
       - run: npm run build --prefix ui
 
+  # Playwright against the demo mock backend. windows-latest ships Microsoft Edge, which is the
+  # config's default channel, so no browser download is needed.
+  ui-e2e:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: npm ci --prefix ui
+      - run: npm run e2e --prefix ui
+        env:
+          CI: 'true'
+
   # src-tauri is its own Cargo workspace (the root workspace excludes it), hence --manifest-path.
   # Tauri needs ui/dist at compile time, so the UI is built first. No Linux job: it would need
   # webkit2gtk and Krova does not support Linux.
