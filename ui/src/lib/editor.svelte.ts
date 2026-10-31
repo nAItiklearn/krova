@@ -333,6 +333,53 @@ class EditorStore {
     });
   }
 
+  // ---- export / import -----------------------------------------------------
+
+  /**
+   * Text of the layout on screen (unsaved edits included) for the clipboard, or
+   * null if the backend refused it (the reason is then in the status line).
+   */
+  exportLayout(): Promise<string | null> {
+    let text: string | null = null;
+    return this.enqueue(async () => {
+      const key = this.key;
+      const layout = key ? this.currentFor(key) : null;
+      if (!layout) return;
+      const name = layout.name.trim() || 'Untitled layout';
+      text = await api.exportLayout(clone({ ...layout, name }));
+    }).then(() => text);
+  }
+
+  /**
+   * Add the layout in `json` to the selected monitor and select it. Resolves to
+   * whether it worked; on failure the backend's message is in the status line.
+   */
+  importLayout(json: string): Promise<boolean> {
+    let done = false;
+    return this.enqueue(async () => {
+      const monitor = this.monitor;
+      if (!monitor) return;
+      const known = new Set(this.layouts.map((l) => l.id));
+      const state = await api.importLayout(monitor.profile_id, json);
+      app.setState(state);
+      const added =
+        state.config.monitors
+          .find((p) => p.id === monitor.profile_id)
+          ?.layouts.filter((l) => !known.has(l.id)) ?? [];
+      const imported: Layout | undefined = added[added.length - 1];
+      if (imported) this.requestedLayout = imported.id;
+      this.selectedZone = null;
+      this.tool = 'select';
+      this.say(
+        'success',
+        imported
+          ? `Imported "${imported.name}" as a new layout on ${monitor.label}. It is selected now.`
+          : `Imported the layout on ${monitor.label}.`,
+      );
+      done = true;
+    }).then(() => done);
+  }
+
   deleteLayout(layoutId: string): Promise<void> {
     return this.enqueue(async () => {
       const monitor = this.monitor;

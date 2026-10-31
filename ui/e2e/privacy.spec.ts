@@ -12,7 +12,10 @@ test.describe('network traffic', () => {
   test('a full tour of the app only ever talks to the local dev server', async ({
     page,
     guard,
+    baseURL,
   }) => {
+    // The port is 1420 unless PW_PORT says otherwise (playwright.config.ts).
+    const base = baseURL ?? BASE;
     await openApp(page, '?nopersist&permission=denied');
     const ui = editorUi(page);
 
@@ -50,7 +53,7 @@ test.describe('network traffic', () => {
 
     // The listener really works: the page document itself was seen.
     expect(guard.urls.length).toBeGreaterThan(0);
-    expect(guard.urls).toContain(`${BASE}/?nopersist&permission=denied`);
+    expect(guard.urls).toContain(`${base}/?nopersist&permission=denied`);
 
     // Exactly one host was contacted, and nothing foreign.
     const hosts = new Set(
@@ -59,19 +62,20 @@ test.describe('network traffic', () => {
         .filter((u) => !['data:', 'blob:', 'about:'].includes(u.protocol))
         .map((u) => u.host),
     );
-    expect([...hosts]).toEqual(['localhost:1420']);
+    expect([...hosts]).toEqual([new URL(base).host]);
     expect(guard.foreign()).toEqual([]);
   });
 
   test('the page makes no request of its own to another origin on load', async ({
     page,
     guard,
+    baseURL,
   }) => {
     await openApp(page);
     await page.waitForLoadState('networkidle');
     expect(guard.foreign()).toEqual([]);
     for (const url of guard.urls) {
-      expect(isAllowedUrl(url, BASE), url).toBe(true);
+      expect(isAllowedUrl(url, baseURL ?? BASE), url).toBe(true);
     }
   });
 

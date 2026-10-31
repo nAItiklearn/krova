@@ -24,6 +24,18 @@ export interface Backend {
   setActiveLayout(monitorId: string, layoutId: string): Promise<AppState>;
   listTemplates(): Promise<Layout[]>;
 
+  /**
+   * Pretty JSON text of the envelope `{"krova_layout":1,"layout":{...}}`, for the
+   * clipboard. Rejects with a string if the layout is not valid.
+   */
+  exportLayout(layout: Layout): Promise<string>;
+  /**
+   * Add the layout in `json` (an exported envelope, at most 64 KiB) to a monitor.
+   * The layout is validated like `saveLayout`; its id gets a suffix if the monitor
+   * already has that id. Rejects with a string that is shown to the user as is.
+   */
+  importLayout(monitorId: string, json: string): Promise<AppState>;
+
   /** The original zone keeps the left/top part; the new zone gets id max+1. */
   editSplitZone(layout: Layout, zoneId: number, axis: Axis, at: number): Promise<Layout>;
   /** Gives the space to a neighbour sharing a FULL edge. */
@@ -62,6 +74,9 @@ export const tauriBackend: Backend = {
   setActiveLayout: (monitorId, layoutId) =>
     invoke<AppState>('set_active_layout', { monitorId, layoutId }),
   listTemplates: () => invoke<Layout[]>('list_templates'),
+
+  exportLayout: (layout) => invoke<string>('export_layout', { layout }),
+  importLayout: (monitorId, json) => invoke<AppState>('import_layout', { monitorId, json }),
 
   editSplitZone: (layout, zoneId, axis, at) =>
     invoke<Layout>('edit_split_zone', { layout, zoneId, axis, at }),

@@ -7,21 +7,38 @@
 import type { Backend, Unlisten } from '../backend';
 import type {
   AppState,
+  Capabilities,
   Config,
   Layout,
   MonitorProfile,
   MonitorSnapshot,
   Permission,
   Settings,
+  ShortcutStatus,
   View,
 } from '../bindings';
 import { editMoveDivider, editRemoveZone, editSplitZone, validateLayout } from './edit';
+import {
+  MAX_LAYOUTS_PER_MONITOR,
+  exportEnvelope,
+  messages as exchangeMessages,
+  parseEnvelope,
+  uniqueLayoutId,
+} from './exchange';
 import { templates } from './templates';
 
 /** localStorage key used for the optional persistence of demo edits. */
 export const STORAGE_KEY = 'krova-demo';
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+
+/** Fake outcome of registering the global shortcuts (`?shortcuts=failed|off`). */
+export type ShortcutsMode = 'ok' | 'failed' | 'off';
+/** Fake platform support (`?capabilities=none` is the macOS case today). */
+export type CapabilitiesMode = 'all' | 'none';
+
+/** What `?shortcuts=failed` reports as the shortcuts that could not be registered. */
+export const DEMO_FAILED_SHORTCUTS = ['Win+Alt+3 is already used by another app'];
 
 export interface MockOptions {
   /** Persist config edits to localStorage (default true when it is available). */
@@ -32,6 +49,10 @@ export interface MockOptions {
   permission?: Permission;
   /** Ignore and clear whatever was persisted earlier. */
   reset?: boolean;
+  /** Fake shortcut registration result (default `ok`). */
+  shortcuts?: ShortcutsMode;
+  /** Fake platform support (default `all`). */
+  capabilities?: CapabilitiesMode;
 }
 
 /** Hooks for design review / e2e tests, exposed as `window.__krovaDemo`. */
@@ -42,6 +63,10 @@ export interface DemoControls {
   setPermission(permission: Permission): void;
   /** Behaves like the tray "Enable/Disable" item. */
   toggleEnabled(): void;
+  /** Change the fake shortcut registration result and emit "state-changed". */
+  setShortcuts(mode: ShortcutsMode): void;
+  /** Change the fake platform support and emit "state-changed". */
+  setCapabilities(mode: CapabilitiesMode): void;
   /** Back to the initial demo state (also clears localStorage). */
   reset(): void;
 }
@@ -59,6 +84,11 @@ export function defaultSettings(): Settings {
     edge_size_px: 8,
     launch_at_login: false,
     theme: 'system',
+    keyboard_shortcuts: true,
+    shortcut_modifier: 'win_alt',
+    restore_on_reconnect: true,
+    linked_dividers: true,
+    zone_gap_px: 0,
   };
 }
 
@@ -99,17 +129,27 @@ const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 const MODIFIERS = ['shift', 'ctrl', 'alt', 'super'];
 const MOVE_MODES = ['animate', 'instant'];
 const THEMES = ['system', 'light', 'dark'];
+const SHORTCUT_MODIFIERS = ['ctrl_alt', 'win_alt', 'ctrl_alt_shift', 'win_ctrl'];
+
+/** Settings fields added later are optional on the wire (`#[serde(default)]`). */
+const flag = (v: unknown, fallback: boolean): boolean => (typeof v === 'boolean' ? v : fallback);
 
 /** Validate like serde would (bad enums/colors are errors) and clamp numbers. */
 function sanitizeSettings(s: Settings): Settings {
+  const defaults = defaultSettings();
   if (!MODIFIERS.includes(s.modifier)) throw `invalid modifier "${String(s.modifier)}"`;
   if (!MOVE_MODES.includes(s.move_mode)) throw `invalid move_mode "${String(s.move_mode)}"`;
   if (!THEMES.includes(s.theme)) throw `invalid theme "${String(s.theme)}"`;
+  const shortcutModifier = s.shortcut_modifier ?? defaults.shortcut_modifier;
+  if (!SHORTCUT_MODIFIERS.includes(shortcutModifier)) {
+    throw `invalid shortcut_modifier "${String(shortcutModifier)}"`;
+  }
   if (!/^#[0-9a-fA-F]{6}$/.test(s.highlight_color)) {
     throw `invalid highlight_color "${String(s.highlight_color)}"`;
   }
   const opacity = Number.isFinite(s.highlight_opacity) ? s.highlight_opacity : 0.35;
   const edge = Number.isFinite(s.edge_size_px) ? Math.round(s.edge_size_px) : 8;
+  const gap = Number.isFinite(s.zone_gap_px) ? Math.round(s.zone_gap_px) : defaults.zone_gap_px;
   return {
     enabled: !!s.enabled,
     modifier: s.modifier,
@@ -120,6 +160,11 @@ function sanitizeSettings(s: Settings): Settings {
     edge_size_px: Math.min(64, Math.max(2, edge)),
     launch_at_login: !!s.launch_at_login,
     theme: s.theme,
+    keyboard_shortcuts: flag(s.keyboard_shortcuts, defaults.keyboard_shortcuts),
+    shortcut_modifier: shortcutModifier,
+    restore_on_reconnect: flag(s.restore_on_reconnect, defaults.restore_on_reconnect),
+    linked_dividers: flag(s.linked_dividers, defaults.linked_dividers),
+    zone_gap_px: Math.min(32, Math.max(0, gap)),
   };
 }
 
@@ -131,6 +176,9 @@ function optionsFromLocation(): MockOptions {
   if (p === 'denied' || p === 'granted' || p === 'not_required') out.permission = p;
   if (q.has('reset')) out.reset = true;
   if (q.has('nopersist')) out.persist = false;
+  const sc = q.get('shortcuts');
+  if (sc === 'failed' || sc === 'off') out.shortcuts = sc;
+  if (q.get('capabilities') === 'none') out.capabilities = 'none';
   return out;
 }
 
@@ -170,6 +218,8 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
   let config = initialConfig();
   let autostart = false;
   let permission: Permission = opts.permission ?? 'not_required';
+  let shortcutsMode: ShortcutsMode = opts.shortcuts ?? 'ok';
+  let capabilitiesMode: CapabilitiesMode = opts.capabilities ?? 'all';
 
   const navigateListeners = new Set<(v: View) => void>();
   const stateListeners = new Set<(s: AppState) => void>();
@@ -183,6 +233,25 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
     }
   }
 
+  function capabilities(): Capabilities {
+    const on = capabilitiesMode === 'all';
+    return { shortcuts: on, window_memory: on };
+  }
+
+  /**
+   * The shortcuts are only registered when the platform supports them, the
+   * setting is on and the demo flag does not say otherwise; conflicts are only
+   * reported while registering.
+   */
+  function shortcutStatus(): ShortcutStatus {
+    const registering =
+      capabilities().shortcuts && config.settings.keyboard_shortcuts && shortcutsMode !== 'off';
+    return {
+      active: registering,
+      failed: registering && shortcutsMode === 'failed' ? [...DEMO_FAILED_SHORTCUTS] : [],
+    };
+  }
+
   function snapshot(): AppState {
     return clone({
       config,
@@ -190,6 +259,8 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
       autostart,
       permission,
       version: '0.1.0',
+      shortcuts: shortcutStatus(),
+      capabilities: capabilities(),
     });
   }
 
@@ -201,6 +272,8 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
   function reset(clearStorage: boolean): void {
     config = initialConfig();
     autostart = false;
+    shortcutsMode = opts.shortcuts ?? 'ok';
+    capabilitiesMode = opts.capabilities ?? 'all';
     if (clearStorage && storage) {
       try {
         storage.removeItem(STORAGE_KEY);
@@ -249,6 +322,14 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
       persist();
       emitState();
     },
+    setShortcuts(mode) {
+      shortcutsMode = mode;
+      emitState();
+    },
+    setCapabilities(mode) {
+      capabilitiesMode = mode;
+      emitState();
+    },
     reset() {
       reset(true);
       emitState();
@@ -280,6 +361,7 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
       const stored = clone(layout);
       const i = p.layouts.findIndex((l) => l.id === stored.id);
       if (i >= 0) p.layouts[i] = stored;
+      else if (p.layouts.length >= MAX_LAYOUTS_PER_MONITOR) throw exchangeMessages.tooManyLayouts;
       else p.layouts.push(stored);
       persist();
       return snapshot();
@@ -306,6 +388,32 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
 
     async listTemplates() {
       return templates();
+    },
+
+    async exportLayout(layout) {
+      try {
+        return exportEnvelope(layout);
+      } catch (e) {
+        throw e instanceof Error ? e.message : String(e);
+      }
+    },
+
+    async importLayout(monitorId, json) {
+      let layout: Layout;
+      try {
+        layout = parseEnvelope(json);
+      } catch (e) {
+        throw e instanceof Error ? e.message : String(e);
+      }
+      const p = profile(monitorId);
+      if (p.layouts.length >= MAX_LAYOUTS_PER_MONITOR) throw exchangeMessages.tooManyLayouts;
+      layout.id = uniqueLayoutId(
+        p.layouts.map((l) => l.id),
+        layout.id,
+      );
+      p.layouts.push(layout);
+      persist();
+      return snapshot();
     },
 
     async editSplitZone(layout, zoneId, axis, at) {

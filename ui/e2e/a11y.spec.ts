@@ -134,6 +134,77 @@ const scenarios: Scenario[] = [
       );
     },
   },
+  {
+    name: 'editor, export panel open',
+    arrange: async (page) => {
+      await page.getByTestId('export-layout').click();
+      await expect(page.getByTestId('export-text')).toHaveValue(/"krova_layout": 1/);
+    },
+  },
+  {
+    name: 'editor, import panel open and empty',
+    arrange: async (page) => {
+      await page.getByTestId('import-layout').click();
+      await expect(page.getByTestId('import-text')).toBeFocused();
+    },
+  },
+  {
+    name: 'editor, import panel after a refused file (error status, invalid text area)',
+    arrange: async (page) => {
+      await page.getByTestId('import-layout').click();
+      await page.getByTestId('import-text').fill('{"foo":1}');
+      await page.getByTestId('import-submit').click();
+      await expect(editorUi(page).status).toHaveAttribute('data-kind', 'error');
+      await expect(editorUi(page).status).toHaveText('not a Krova layout file');
+      await expect(page.getByTestId('import-text')).toHaveAttribute('aria-invalid', 'true');
+    },
+  },
+  {
+    name: 'settings, keyboard shortcuts and windows groups after changing them',
+    arrange: async (page) => {
+      await page.getByTestId('nav-settings').click();
+      await page.getByTestId('setting-shortcut_modifier').selectOption('ctrl_alt_shift');
+      await page.getByTestId('setting-zone_gap_px').fill('12');
+      await page.getByRole('switch', { name: 'Linked dividers' }).uncheck();
+      await expect(page.getByTestId('save-indicator')).toContainText('Saved');
+      await expect(page.getByTestId('keymap-left')).toHaveText('Ctrl + Alt + Shift + Left');
+    },
+  },
+  {
+    name: 'settings, shortcuts switched off (modifier disabled)',
+    arrange: async (page) => {
+      await page.getByTestId('nav-settings').click();
+      await page.getByRole('switch', { name: 'Use keyboard shortcuts' }).uncheck();
+      await expect(page.getByTestId('setting-shortcut_modifier')).toBeDisabled();
+      await expect(page.getByTestId('save-indicator')).toContainText('Saved');
+    },
+  },
+  {
+    name: 'settings, shortcut conflict warning',
+    query: '?nopersist&shortcuts=failed',
+    arrange: async (page) => {
+      await page.getByTestId('nav-settings').click();
+      await expect(page.getByTestId('shortcuts-failed')).toBeVisible();
+    },
+  },
+  {
+    name: 'settings, shortcuts not active note',
+    query: '?nopersist&shortcuts=off',
+    arrange: async (page) => {
+      await page.getByTestId('nav-settings').click();
+      await expect(page.getByTestId('shortcuts-inactive')).toBeVisible();
+    },
+  },
+  {
+    name: 'settings, no platform support (disabled controls and notes)',
+    query: '?nopersist&capabilities=none',
+    arrange: async (page) => {
+      await page.getByTestId('nav-settings').click();
+      await expect(page.getByTestId('shortcuts-unavailable')).toBeVisible();
+      await expect(page.getByTestId('window-memory-unavailable')).toBeVisible();
+      await expect(page.getByTestId('setting-keyboard_shortcuts')).toBeDisabled();
+    },
+  },
 ];
 
 for (const scheme of ['light', 'dark'] as const) {

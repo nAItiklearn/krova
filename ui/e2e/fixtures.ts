@@ -17,6 +17,8 @@ declare global {
       navigate(view: string): void;
       setPermission(permission: string): void;
       toggleEnabled(): void;
+      setShortcuts(mode: string): void;
+      setCapabilities(mode: string): void;
       reset(): void;
     };
   }

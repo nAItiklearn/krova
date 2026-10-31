@@ -50,14 +50,43 @@ export function isValidRect(r: Rect): boolean {
   );
 }
 
-/** Layout::validate with the LayoutError display strings. */
+/** zone.rs MAX_ZONES: most zones a layout may have. */
+export const MAX_ZONES = 64;
+/** zone.rs MAX_NAME_LEN: longest layout id or name, in characters (code points). */
+export const MAX_NAME_LEN = 64;
+/** zone.rs MIN_ZONE_SIDE: smallest side a stored zone may have (the editor's MIN_ZONE is larger). */
+export const MIN_ZONE_SIDE = 0.01;
+
+/** Length in Unicode scalar values (Rust `chars().count()`), stopping once it is above `limit`. */
+function charCountAbove(s: string, limit: number): boolean {
+  let n = 0;
+  for (const _ of s) {
+    n += 1;
+    if (n > limit) return true;
+  }
+  return false;
+}
+
+/**
+ * Layout::validate with the LayoutError display strings, in the same order as
+ * zone.rs: empty, too many zones, id/name too long, then per zone a duplicate id
+ * or an invalid rectangle (not finite, outside the unit square, or a side < 0.01).
+ */
 export function validateLayout(layout: Layout): void {
   if (layout.zones.length === 0) throw new EditError('layout has no zones');
+  if (layout.zones.length > MAX_ZONES) {
+    throw new EditError(`layout has too many zones (at most ${MAX_ZONES})`);
+  }
+  if (charCountAbove(layout.id, MAX_NAME_LEN) || charCountAbove(layout.name, MAX_NAME_LEN)) {
+    throw new EditError(`layout id or name is too long (at most ${MAX_NAME_LEN} characters)`);
+  }
   const seen = new Set<number>();
   for (const z of layout.zones) {
     if (seen.has(z.id)) throw new EditError(`duplicate zone id ${z.id}`);
     seen.add(z.id);
-    if (!isValidRect(z.rect)) throw new EditError(`zone ${z.id} has an invalid rectangle`);
+    if (!isValidRect(z.rect) || z.rect.w < MIN_ZONE_SIDE || z.rect.h < MIN_ZONE_SIDE) {
+      throw new EditError(`zone ${z.id} has an invalid rectangle`);
+    }
   }
 }
 

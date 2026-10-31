@@ -8,7 +8,10 @@ import { defineConfig } from '@playwright/test';
 //   PW_CHANNEL=chrome      installed Google Chrome
 //   PW_CHANNEL=chromium    Playwright's bundled Chromium (needs `npx playwright install chromium`)
 
-const PORT = 1420; // vite.config.ts: server.port with strictPort
+// vite.config.ts: server.port 1420 with strictPort. PW_PORT starts the demo server on
+// another port instead (passed to vite as --port); use it when 1420 is taken, because
+// with `reuseExistingServer` a stale server on 1420 would be tested instead of this code.
+const PORT = Number(process.env.PW_PORT ?? 1420);
 const BASE_URL = `http://localhost:${PORT}`;
 
 const requested = process.env.PW_CHANNEL ?? 'msedge';
@@ -47,8 +50,8 @@ export default defineConfig({
   },
 
   webServer: {
-    // `vite --mode demo`: strictPort 1420, always the mock backend.
-    command: 'npm run demo',
+    // `vite --mode demo`: strictPort, always the mock backend.
+    command: `npm run demo -- --port ${PORT}`,
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
