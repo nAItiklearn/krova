@@ -52,7 +52,7 @@ export const rows: readonly Row[] = [
   {
     label: 'Platforms',
     cells: {
-      krova: { kind: 'text', text: 'Windows 10/11 and macOS 13+ (macOS build untested)' },
+      krova: { kind: 'text', text: 'Windows 10/11 (released); macOS 13+ written but untested, not released' },
       snap: { kind: 'text', text: 'Windows 11 and 10' },
       fz: { kind: 'text', text: 'Windows 11, and Windows 10 2004 or newer' },
       rect: { kind: 'text', text: 'macOS 14+' },
