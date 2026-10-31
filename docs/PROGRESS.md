@@ -2,7 +2,7 @@
 
 ## Verification status — read this first
 
-State on 2026-10-31. `main` is on the **public** repository `github.com/nAItiklearn/krova`. There is no tag and no published release (`RELEASE_PUBLISHED = false` in `website/src/site.ts`). The owner downloaded and ran the Windows installer built by `release.yml` (started by hand with `workflow_dispatch`), so the Windows build and bundle jobs work on GitHub.
+State on 2026-10-31. `main` is on the **public** repository `github.com/nAItiklearn/krova`. **v0.1.0 is published (2026-10-31), Windows only**: assets `Krova-windows-x64-setup.exe` and `SHA256SUMS.txt`, notes from `docs/release-notes/v0.1.0.md`. `RELEASE_PUBLISHED = true`, `MAC_RELEASED = false` in `website/src/site.ts`; the README says it is an early preview, not ready for everyday use. The owner downloaded and ran the Windows installer built by `release.yml` (started by hand with `workflow_dispatch`), so the Windows build and bundle jobs work on GitHub.
 
 What has actually been run, by whom, and where:
 

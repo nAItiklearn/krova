@@ -56,7 +56,7 @@ export const ISSUES_URL = `${repoBase}/issues`;
  * DOWNLOADS, plus SHA256SUMS.txt) are attached. Until then no download button
  * is rendered, so no link can point at a release that does not exist yet.
  */
-export const RELEASE_PUBLISHED = false;
+export const RELEASE_PUBLISHED = true;
 
 /**
  * False while the macOS build has never run on a real Mac. Releases then attach only the Windows

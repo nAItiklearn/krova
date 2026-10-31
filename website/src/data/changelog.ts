@@ -26,9 +26,10 @@ export interface Release {
 export const releases: readonly Release[] = [
   {
     version: '0.1.0',
-    status: 'unreleased',
+    status: 'released',
+    date: '2026-10-31',
     summary:
-      'The first release. It has not been published yet; this is what it will contain. Expect rough edges: the app is new and has had very little testing outside its automated tests and a few runs on one Windows PC.',
+      'The first release, for Windows only. Expect rough edges: the app is new and has had very little testing outside its automated tests and a few runs on one Windows PC.',
     sections: [
       {
         title: 'What the first release contains',

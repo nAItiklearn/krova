@@ -17,9 +17,18 @@ You define zones on each monitor. While you drag a window, hold Shift (the defau
 
 The full behaviour is in [docs/SPEC.md](docs/SPEC.md). That is the design; the [Status](#status) section says what has actually been built and run.
 
+> [!WARNING]
+> **Krova is not ready for everyday use yet.** v0.1.0 is an early preview for people who want to try it and report problems. It has passed its automated tests and a few hands-on runs on one Windows PC, and little else: mixed-DPI setups, unplugging and replugging monitors, the shortcuts on a physical keyboard and linked dividers with a real mouse are barely tested. Expect bugs, and do not rely on it for important work. **macOS is not ready at all**: it has never run on a Mac.
+
+## Website and download
+
+- **Website:** <https://naitiklearn.github.io/krova/>: guides, changelog, performance numbers, privacy, and the real layout editor running in your browser at [/demo/](https://naitiklearn.github.io/krova/demo/) (demo mode, nothing is saved).
+- **Download (Windows 10/11, 64-bit):** [Krova-windows-x64-setup.exe](https://github.com/nAItiklearn/krova/releases/latest/download/Krova-windows-x64-setup.exe) from the [latest release](https://github.com/nAItiklearn/krova/releases/latest), with `SHA256SUMS.txt` to check it. The installer is **unsigned**: SmartScreen shows "Windows protected your PC"; choose **More info**, then **Run anyway**.
+- **macOS:** no download yet. macOS support is coming once it has been tested on real hardware.
+
 ## Status
 
-**Version 0.1, in development. There is no published release yet.** Test builds exist only as artifacts of the GitHub Actions workflows. This section is deliberately blunt. [docs/PROGRESS.md](docs/PROGRESS.md) is the detailed ledger of what has been compiled and run versus only written; read it before relying on anything here.
+**Version 0.1.0, an early preview released for Windows on 2026-10-31. Not ready for everyday use.** The macOS build is not released. This section is deliberately blunt. [docs/PROGRESS.md](docs/PROGRESS.md) is the detailed ledger of what has been compiled and run versus only written; read it before relying on anything here.
 
 - **Windows:** the app has been built by CI and run on Windows 11. The tray, Shift-drag snapping, the zone editor and settings work there. The newer features (keyboard shortcuts, window memory on reconnect, linked dividers, layout files, zone gap) pass automated unit and desktop tests, but several have not been tried by hand yet: unplugging and replugging a real monitor, linked dividers with a real mouse, and mixed-DPI setups with monitors at different scaling.
 - **macOS:** the code has **never run on a Mac**; nobody has opened the app there. What has been checked: the macOS layer, the core crates and the app compile and pass `clippy -D warnings` on GitHub's `macos-latest` runner, and the same lints pass locally for both macOS targets (`aarch64-apple-darwin`, `x86_64-apple-darwin`). Treat every macOS runtime behaviour as unverified. Keyboard shortcuts, window memory and linked dividers are Windows-only for now.
