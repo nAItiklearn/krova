@@ -40,7 +40,7 @@ Astro's own CLI sends anonymous usage telemetry by default. To turn it off for y
 The site is built to be safe to deploy at any stage: nothing links to a repository or a release that is not public.
 Everything is controlled by two flags in **`src/site.ts`**.
 
-1. **Make the repository public** (GitHub: Settings, Danger Zone, Change visibility).
+1. **The repository is public** and `REPO_PUBLIC = true`, so source, issue and releases links render. (To hide every repository link again, set it back to `false`.)
 2. In the repository, run **Actions, release (manual)** (`workflow_dispatch`). It builds the Windows installer and the macOS
    disk image as workflow *artifacts* only and publishes nothing. Download them and try them.
 3. Push a tag **only when you are ready to publish**: `git tag v0.1.0 && git push origin v0.1.0`. The tag must equal
@@ -48,7 +48,7 @@ Everything is controlled by two flags in **`src/site.ts`**.
    Release with `Krova-windows-x64-setup.exe`, `Krova-macos-universal.dmg` and `SHA256SUMS.txt`.
    Before the first tag, read the open items in `docs/PROGRESS.md` and `docs/SECURITY-REVIEW.md` (signing, pinning the release
    toolchain, the untested macOS build).
-4. In `src/site.ts` set `REPO_PUBLIC = true` and, once the release exists, `RELEASE_PUBLISHED = true`.
+4. In `src/site.ts`, once the release exists, set `RELEASE_PUBLISHED = true` (`REPO_PUBLIC` is already `true`).
    Also update `src/data/changelog.ts` (give 0.1.0 `status: 'released'` and its real `date`) and the "not released yet" wording
    (search the site for "not released"; the home hero, the download page and the FAQ switch on the flags by themselves).
 5. Rebuild (`npm run build`) and deploy `dist/` to the host you chose. The site is static: any static host works
@@ -60,7 +60,7 @@ Everything is controlled by two flags in **`src/site.ts`**.
 | Constant | What it does |
 | --- | --- |
 | `REPO_URL` | The repository, `https://github.com/nAItiklearn/krova`. While it contains `TODO` it counts as not configured. |
-| `REPO_PUBLIC` | `false` until the repository is public. **Every** link to the repository, source, releases or issues renders only when `REPO_CONFIGURED && REPO_PUBLIC` (`REPO_LINKS_ENABLED`); otherwise the page says "Krova's repository is not public yet." |
+| `REPO_PUBLIC` | `true` now that the repository is public. **Every** link to the repository, source, releases or issues renders only when `REPO_CONFIGURED && REPO_PUBLIC` (`REPO_LINKS_ENABLED`); when it is `false` the page says "Krova's repository is not public yet." |
 | `RELEASE_PUBLISHED` | `false` until a release exists. Direct download buttons render only when `REPO_PUBLIC && RELEASE_PUBLISHED` (`DOWNLOADS_ENABLED`). Until then the Download page explains what to expect and shows "Not available yet" instead of a dead button. |
 | `DOWNLOADS` | The asset names behind `releases/latest/download/<name>`. They must match `.github/workflows/release.yml` and must not contain a version number. |
 | `SITE_URL`, `BASE_PATH` | Optional origin and sub-path. |
@@ -75,7 +75,7 @@ Everything is controlled by two flags in **`src/site.ts`**.
 | `src/data/compare.ts` | The Compare table on the home page. Cells come from `docs/compare-research.md`; only verified `[V]` cells are claims, `[U]` cells are `unknown` (an em dash). Update `CHECKED_ISO` / `CHECKED_LABEL` when you re-verify. |
 | `src/data/faq.ts` | The FAQ (answers use the tiny inline markup in `src/lib/inline.ts`). |
 | `src/data/nav.ts` | Header and footer links, and the guide list. |
-| `docs/measurements/idle-YYYY-MM-DD.txt` | The Performance page. The newest file is parsed at build time (`src/lib/measurements.ts`); no number on that page is typed by hand. Drop in a newer measurement file and rebuild. |
+| `docs/measurements/idle-*.txt` | The Performance page and the home-page teaser. **Every** matching file is one run in one state of the app (tray only, editor window open, ...) and is parsed at build time (`src/lib/measurements.ts`): one memory bar, table row and CPU chart per file, with private memory as the headline number. A file may carry a `LABEL\|...` line (the `-Label` of `docs/measurements/measure-idle.ps1`) and a `# State:` header; without a label the page works one out from the State line, and with a single file it reads as a one-run report. Runs are listed newest date first (the date comes from the file name `idle-YYYY-MM-DD...txt`), a run on the same date with fewer processes first. A run dated on or before `EARLIER_BUILD_UNTIL` in `measurements.ts` is marked "earlier build". No number on those pages is typed by hand: drop a new file in and rebuild. The build fails on a truncated file. To try the rendering without touching `docs/measurements/`, point `KROVA_MEASUREMENTS_DIR` at a copy of the folder. |
 
 ## Layout
 

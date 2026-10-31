@@ -10,9 +10,11 @@ interface Props {
   width: number;
   samples: Sample[];
   intervalS: number;
+  /** Distinguishes the ids of several charts on one page. */
+  uid: string;
 }
 
-const { width: W, samples, intervalS } = Astro.props;
+const { width: W, samples, intervalS, uid } = Astro.props;
 
 const narrow = W < 560;
 const H = 240;
@@ -26,7 +28,10 @@ const x = (t: number) => m.l + (t / duration) * plotW;
 const y = (v: number) => m.t + plotH - (v / yMax) * plotH;
 
 const yTicks = Array.from({ length: yMax * 2 + 1 }, (_, i) => i / 2);
-const xStep = narrow ? 20 : 10;
+// Roughly five to seven ticks along the time axis, whatever the length of the run.
+const niceSteps = [1, 2, 5, 10, 20, 30, 60, 120, 300];
+const wanted = narrow ? 4 : 7;
+const xStep = niceSteps.find((s) => duration / s <= wanted) ?? 300;
 const xTicks = Array.from({ length: Math.floor(duration / xStep) + 1 }, (_, i) => i * xStep);
 
 // Step outline: for each sample, a flat segment across the interval it covers.
@@ -38,14 +43,19 @@ const line = d;
 const area = `${d} L ${x(duration).toFixed(1)} ${y(0).toFixed(1)} Z`;
 
 const blips = samples.filter((s) => s.cpu > 0);
-const id = `cpu-t-${W}`;
+const id = `cpu-t-${uid}-${W}`;
 const two = (n: number) => n.toFixed(2);
+const described =
+  blips.length === 0
+    ? 'It is 0.00 in every sample.'
+    : `It is 0.00 in ${samples.length - blips.length} of ${samples.length} samples; the others are ${blips
+        .map((b) => `${two(b.cpu)} percent at ${b.t} seconds`)
+        .join(' and ')}.`;
 ---
 
 <svg class="chart" viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-labelledby={id}>
   <title id={id}>
-    CPU use over {duration} seconds, as a percentage of one core, one sample every {intervalS} seconds. It is 0.00 in{' '}
-    {samples.length - blips.length} of {samples.length} samples; the others are {blips.map((b) => `${two(b.cpu)} percent at ${b.t} seconds`).join(' and ')}.
+    CPU use over {duration} seconds, as a percentage of one core, one sample every {intervalS} seconds. {described}
   </title>
 
   {

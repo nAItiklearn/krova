@@ -24,3 +24,6 @@ Thumbs.db
 /Screenshot *.png
 /screencapture-*
 /screenshot-*
+
+# Locally downloaded release artifacts
+krova-windows/

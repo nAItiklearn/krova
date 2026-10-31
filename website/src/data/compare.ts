@@ -6,9 +6,11 @@
  * are written as claims. Everything tagged [U] is `unknown`, rendered as an
  * em dash with a footnote. Do not add a claim here that is not in that file.
  *
- * The Krova column describes v0.1 as designed. The macOS build has never been
- * run on a Mac, and "no network calls" is a design rule plus a source review,
- * not a proof.
+ * The Krova column describes v0.1 as built. The keyboard shortcuts, window memory
+ * and linked dividers exist on Windows only; the macOS build has never been run on
+ * a Mac, and "no network calls" is a design rule plus a source review, not a proof.
+ * Do not add a row whose competitor cells are all unverified, and never write
+ * "only" or "first" about Krova (docs/feature-gap-research.md, B.2).
  *
  * To update: edit the rows below, change CHECKED_ISO / CHECKED_LABEL, and keep
  * SOURCES in step. An empty `rows` array renders a clearly marked empty state.
@@ -116,12 +118,34 @@ export const rows: readonly Row[] = [
   {
     label: 'Keyboard-shortcut snapping',
     cells: {
-      krova: { kind: 'no', text: 'Not yet; an idea for v0.2' },
+      krova: { kind: 'part', text: 'Yes on Windows (not yet on macOS)' },
       snap: { kind: 'yes', text: 'Win+Arrow keys' },
       fz: { kind: 'yes', text: 'Opt-in Win+Arrow, and layout hotkeys' },
       rect: { kind: 'yes', text: 'Configurable shortcuts' },
       magnet: { kind: 'yes', text: 'Optional shortcuts' },
       mac: { kind: 'yes', text: 'Built-in shortcuts' },
+    },
+  },
+  {
+    label: 'Space between zones or windows',
+    cells: {
+      krova: { kind: 'yes', text: '0 to 32 px, one setting' },
+      snap: unknown,
+      fz: { kind: 'yes', text: 'Setting for space around zones' },
+      rect: unknown,
+      magnet: unknown,
+      mac: { kind: 'yes', text: 'Setting: tiled windows have margins' },
+    },
+  },
+  {
+    label: 'Resize one snapped window and its neighbours follow',
+    cells: {
+      krova: { kind: 'part', text: 'Windows only, early: tested with synthetic events, not yet with a real mouse drag' },
+      snap: { kind: 'yes', text: 'Documented for its own layouts' },
+      fz: { kind: 'text', text: 'Not documented; an open request on the PowerToys issue tracker' },
+      rect: unknown,
+      magnet: unknown,
+      mac: unknown,
     },
   },
   {
@@ -180,6 +204,7 @@ export const sources: readonly Source[] = [
   { name: 'PowerToys install and requirements: Microsoft Learn', url: 'https://learn.microsoft.com/en-us/windows/powertoys/install' },
   { name: 'PowerToys data and privacy', url: 'https://raw.githubusercontent.com/microsoft/PowerToys/main/DATA_AND_PRIVACY.md' },
   { name: 'PowerToys repository and latest release', url: 'https://github.com/microsoft/PowerToys' },
+  { name: 'PowerToys issue tracker: request to resize neighbouring FancyZones windows together (#254)', url: 'https://github.com/microsoft/PowerToys/issues/254' },
   { name: 'Rectangle README and LICENSE', url: 'https://github.com/rxhanson/Rectangle' },
   { name: 'Rectangle site and Pro page', url: 'https://rectangleapp.com' },
   { name: 'Rectangle privacy policy', url: 'https://rectangleapp.com/terms' },

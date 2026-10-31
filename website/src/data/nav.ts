@@ -27,19 +27,19 @@ export const guides: readonly Guide[] = [
     slug: 'first-snap',
     title: 'Your first snap',
     short: 'Your first snap',
-    summary: 'Shift-drag a window into a zone, and how to cancel.',
+    summary: 'Shift-drag a window into a zone, how to cancel, and the keyboard alternative on Windows.',
   },
   {
     slug: 'layout-editor',
     title: 'The layout editor',
     short: 'Layout editor',
-    summary: 'Templates, splitting, dividers, deleting zones, saving and switching layouts, and the limits.',
+    summary: 'Templates, splitting, dividers, deleting zones, saving and switching layouts, exporting and importing them, and the limits.',
   },
   {
     slug: 'multiple-displays',
     title: 'Multiple displays',
     short: 'Multiple displays',
-    summary: 'One layout set per monitor, how Krova recognises a monitor, and what happens on reconnect.',
+    summary: 'One layout set per monitor, how Krova recognises a monitor, and what comes back on reconnect: layouts, and on Windows the windows too.',
   },
   {
     slug: 'edge-snapping',
@@ -51,7 +51,7 @@ export const guides: readonly Guide[] = [
     slug: 'keyboard-shortcuts',
     title: 'Keyboard shortcuts',
     short: 'Keyboard shortcuts',
-    summary: 'The editor shortcuts that exist, and what does not exist yet.',
+    summary: 'Move the focused window between zones from the keyboard (Windows), choose the modifier keys, and the layout editor keys.',
   },
 ];
 

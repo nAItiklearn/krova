@@ -73,7 +73,8 @@ const state = DOWNLOADS_ENABLED ? 'released' : RELEASE_PUBLISHED ? 'private' : '
           <li>An installer for one user. It does not ask for administrator rights.</li>
           <li>Krova goes into <code>%LOCALAPPDATA%\Krova</code>, with a Start menu shortcut. A desktop shortcut and &ldquo;Run Krova&rdquo; are offered on the last page.</li>
           <li>If Microsoft&rsquo;s WebView2 runtime is not on your PC, the installer downloads it. That download is the installer&rsquo;s, not Krova&rsquo;s.</li>
-          <li>Krova starts in the notification area. No window opens by itself.</li>
+          <li>Krova starts in the notification area. No window opens by itself, and closing its window later closes the embedded browser too.</li>
+          <li>Keyboard shortcuts (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd> with Left, Right, Up or 1 to 9) are on by default. Settings says so if another program holds one of them.</li>
         </ul>
 
         <h3>The SmartScreen warning</h3>
@@ -116,6 +117,7 @@ const state = DOWNLOADS_ENABLED ? 'released' : RELEASE_PUBLISHED ? 'private' : '
         <ul>
           <li>A disk image. Open it and drag Krova to Applications.</li>
           <li>A menu bar icon, with no Dock icon.</li>
+          <li>Snapping by dragging and edge snapping. No keyboard shortcuts and no window memory yet; those are Windows only for now.</li>
         </ul>
 
         <h3>Gatekeeper</h3>

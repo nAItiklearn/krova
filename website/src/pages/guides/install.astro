@@ -44,6 +44,12 @@ const mac = DOWNLOADS.find((d) => d.id === 'macos')!;
     </li>
   </ol>
 
+  <p>
+    On Windows, Krova&rsquo;s keyboard shortcuts are on from the start (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd> with
+    Left, Right, Up or 1 to 9). If another program already uses one of those combinations, Settings lists the ones Krova could
+    not register. See <a href={url('/guides/keyboard-shortcuts/')}>Keyboard shortcuts</a>.
+  </p>
+
   <h2 id="tray">Find Krova</h2>
   <p>
     Krova starts hidden: no window opens, and it has no taskbar button. Look for its icon in the notification area at the
@@ -52,15 +58,19 @@ const mac = DOWNLOADS.find((d) => d.id === 'macos')!;
   </p>
   <p>Right-click the icon (on a Mac, click it) to open the menu:</p>
   <ul>
-    <li><strong>Enabled</strong>: tick to turn Krova on. When off, dragging windows never shows zones.</li>
+    <li><strong>Enabled</strong>: tick to turn Krova on. When off, dragging windows never shows zones and the keyboard shortcuts are released.</li>
     <li><strong>Edit layouts&hellip;</strong>: opens the layout editor.</li>
     <li><strong>Settings&hellip;</strong>: opens the settings.</li>
     <li><strong>Launch at login</strong>: start Krova when you sign in.</li>
     <li><strong>Quit Krova</strong>: stops it.</li>
   </ul>
   <p>
-    Closing Krova&rsquo;s window only hides it; the app keeps running in the tray. Starting Krova a second time does not
-    open a second copy: it brings the first one&rsquo;s window forward.
+    Krova&rsquo;s window (the layout editor and Settings) is made when you ask for it. Closing it closes it for good, together
+    with the embedded browser that draws it, and Krova keeps running in the tray. That is why a tray-only Krova is small: in
+    one measurement during development the whole app was about 6 MB of private memory in one process, against about 200 MB across
+    seven processes with the editor open (one run on one PC; see <a href={url('/performance/')}>Performance</a>). To get the window
+    back, choose <strong>Edit layouts&hellip;</strong> or <strong>Settings&hellip;</strong> in the tray menu, or start Krova again.
+    Starting Krova a second time does not open a second copy: it opens the first one&rsquo;s editor window.
   </p>
 
   <h2 id="macos">macOS 13 and later</h2>
@@ -85,7 +95,10 @@ const mac = DOWNLOADS.find((d) => d.id === 'macos')!;
       only watches the left mouse button and whether your activation key and Escape are held; it does not read what you type.
     </li>
   </ol>
-  <p>Krova lives in the menu bar and has no Dock icon. The menu is the same as on Windows.</p>
+  <p>
+    Krova lives in the menu bar and has no Dock icon. The menu is the same as on Windows. The macOS build has no keyboard
+    shortcuts and no window memory yet; you snap by dragging.
+  </p>
 
   <h2 id="uninstall">Uninstall and remove all your data</h2>
   <h3>Windows</h3>

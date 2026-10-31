@@ -18,12 +18,12 @@ const steps = [
   {
     n: '03',
     title: 'Release over a zone',
-    text: 'Let go of the mouse and the window moves to fill the zone, in about 120 ms or instantly if you prefer. Release Shift first, or press Esc, and nothing moves.',
+    text: 'Let go of the mouse and the window moves to fill the zone, in about 120 ms or instantly if you prefer. Release Shift first, or press Esc, and nothing moves. On Windows you can also skip the mouse: Ctrl+Alt+Shift with Left, Right or 1 to 9 moves the focused window to a zone.',
   },
   {
     n: '04',
-    title: 'Layouts come back',
-    text: 'Unplug a monitor and plug it in again. Krova recognises it and restores the layouts you made for it.',
+    title: 'Layouts and windows come back',
+    text: 'Unplug a monitor and plug it in again. Krova recognises it and brings back the layouts you made for it. On Windows, the windows you snapped there go back into their zones too. That is kept in memory only, and macOS does not do it yet.',
   },
 ];
 ---
@@ -83,27 +83,27 @@ const steps = [
           <div class="frames">
             <div class="frame">
               <div class="pair">
-                <MiniMonitor layout="priority" label="Display 1" />
-                <MiniMonitor layout="grid" label="Display 2" />
+                <MiniMonitor layout="priority" label="Display 1" win={[0, 1]} />
+                <MiniMonitor layout="grid" label="Display 2" win={[0, 3]} />
               </div>
-              <p><b>1</b> Each monitor has its own layout.</p>
+              <p><b>1</b> Each monitor has its own layout, with windows snapped into its zones.</p>
             </div>
             <div class="frame">
               <div class="pair">
-                <MiniMonitor layout="priority" label="Display 1" />
+                <MiniMonitor layout="priority" label="Display 1" win={[0, 1]} />
                 <MiniMonitor layout="grid" off label="Unplugged" />
               </div>
-              <p><b>2</b> Display 2 is unplugged. Krova keeps its layouts.</p>
+              <p><b>2</b> Display 2 is unplugged. Krova keeps its layouts, and remembers which window was in which zone.</p>
             </div>
             <div class="frame">
               <div class="pair">
-                <MiniMonitor layout="priority" label="Display 1" />
-                <MiniMonitor layout="grid" label="Display 2" />
+                <MiniMonitor layout="priority" label="Display 1" win={[0, 1]} />
+                <MiniMonitor layout="grid" label="Display 2" win={[0, 3]} />
               </div>
-              <p><b>3</b> Plugged back in: its layouts return.</p>
+              <p><b>3</b> Plugged back in: its layouts return, and on Windows so do its windows.</p>
             </div>
           </div>
-          <figcaption>Illustration. Monitors are recognised by hardware identity, then device path, then last size and position.</figcaption>
+          <figcaption>Illustration. Monitors are recognised by hardware identity, then device path, then last size and position. Window memory is Windows only for now; on macOS only the layouts come back.</figcaption>
         </figure>
       </div>
     </fieldset>

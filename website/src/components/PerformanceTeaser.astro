@@ -1,41 +1,78 @@
 ---
-import { loadLatestIdle, idleStats } from '../lib/measurements';
+import { idleStats, isEarlierBuild, loadMeasurements } from '../lib/measurements';
 import { url } from '../lib/url';
 import Icon from './Icon.astro';
 
-const m = loadLatestIdle();
-const s = idleStats(m);
-const one = (n: number) => n.toFixed(1);
-const two = (n: number) => n.toFixed(2);
+/**
+ * Headline numbers for the home page, derived from docs/measurements/idle-*.txt at build time
+ * (same loader as the Performance page). One card per measured state; with a single run the cards
+ * are: private memory, Krova's own process, CPU.
+ */
+const runs = loadMeasurements().map((m) => ({ m, s: idleStats(m) }));
+const n = runs.length;
+const head = runs[0];
+const one = (x: number) => x.toFixed(1);
+const two = (x: number) => x.toFixed(2);
+const plural = (k: number, a: string, b: string) => `${k} ${k === 1 ? a : b}`;
+const shortDate = (iso: string) =>
+  iso
+    ? new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+    : '';
+// Sentences are built here, not in the markup: whitespace between adjacent {expressions} would put a space before a comma.
+const measured = (iso: string) =>
+  shortDate(iso) ? ` Measured ${shortDate(iso)}${isEarlierBuild(iso) ? ', earlier build' : ''}.` : '';
+const privateText = `private memory of everything Krova started (${plural(head.m.processCount, 'process', 'processes')}${
+  head.m.processCount > 1 ? ', including the web view' : ''
+}), ${head.m.label.toLowerCase()}`;
+const afterText =
+  (n === 1
+    ? `One run on one Windows PC (${head.m.label.toLowerCase()}${isEarlierBuild(head.m.date) ? `, an earlier build, ${shortDate(head.m.date)}` : ''}), with nothing being dragged. `
+    : 'One run for each state, on Windows, with nothing being dragged. ') +
+  'Drag latency, use while dragging, and macOS are not measured yet. These numbers will change.';
 ---
 
 <section id="performance" class="section" aria-labelledby="perf-title">
   <div class="container">
     <header class="sec-head">
       <p class="eyebrow">Performance</p>
-      <h2 id="perf-title">Measured, not claimed. <span class="soft">One idle run so far.</span></h2>
+      <h2 id="perf-title">
+        Measured, not claimed. <span class="soft">{n === 1 ? 'One idle run so far.' : `${n} idle runs so far, one per state.`}</span>
+      </h2>
     </header>
 
-    <ul class="stats">
-      <li class="card">
-        <p class="big">{one(s.appWs)} <span>MB</span></p>
-        <p>memory used by Krova&rsquo;s own process, idle</p>
-      </li>
-      <li class="card">
-        <p class="big">{one(s.privateMedian)} <span>MB</span></p>
-        <p>Krova plus the web view that draws its window ({m.processCount} processes in all)</p>
-      </li>
-      <li class="card">
-        <p class="big">{two(s.cpuMean)} <span>%</span></p>
-        <p>average CPU over {s.durationS} seconds, as a share of one core</p>
-      </li>
-    </ul>
+    {
+      n === 1 ? (
+        <ul class="stats">
+          <li class="card">
+            <p class="big">{one(head.s.privateMedian)} <span>MB</span></p>
+            <p>{privateText}</p>
+          </li>
+          <li class="card">
+            <p class="big">{one(head.s.appWs)} <span>MB</span></p>
+            <p>memory used by Krova&rsquo;s own process alone (working set)</p>
+          </li>
+          <li class="card">
+            <p class="big">{two(head.s.cpuMean)} <span>%</span></p>
+            <p>average CPU over {head.s.durationS} seconds, as a share of one core</p>
+          </li>
+        </ul>
+      ) : (
+        <ul class="stats stats--runs">
+          {runs.map(({ m, s }) => (
+            <li class="card">
+              <p class="big">{one(s.privateMedian)} <span>MB</span></p>
+              <p>
+                <strong>{m.label}.</strong> Private memory, {plural(m.processCount, 'process', 'processes')}. Average CPU {two(s.cpuMean)} % of one
+                core.{measured(m.date)}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )
+    }
 
     <div class="after">
-      <p>
-        One run on one Windows PC, with the settings window open and nothing being dragged. Drag latency, use while
-        dragging, use with the window hidden, and macOS are not measured yet. These numbers will change.
-      </p>
+      <p>{afterText}</p>
       <a class="btn btn-secondary" href={url('/performance/')}>
         See the charts and the method
         <Icon name="arrow" />
@@ -70,6 +107,9 @@ const two = (n: number) => n.toFixed(2);
     font-size: var(--text-sm);
     color: var(--color-text-muted);
   }
+  .card p:last-child strong {
+    color: var(--color-text);
+  }
   .after {
     display: grid;
     justify-items: center;
@@ -83,6 +123,9 @@ const two = (n: number) => n.toFixed(2);
   @media (min-width: 48rem) {
     .stats {
       grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .stats--runs {
+      grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
     }
   }
 </style>

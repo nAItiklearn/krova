@@ -6,8 +6,8 @@ import { url } from '../../lib/url';
 
 <GuideLayout
   slug="multiple-displays"
-  description="How Krova handles more than one monitor: a layout set per monitor, how it recognises a monitor, what happens on reconnect, identical monitors, and why edge snapping ignores the border between screens."
-  lead="Every monitor has its own layouts. Krova recognises a monitor when you plug it back in and brings its layouts back."
+  description="How Krova handles more than one monitor: a layout set per monitor, how it recognises a monitor, what happens on reconnect (layouts come back; on Windows, windows return to their zones), the shortcut that sends a window to the next monitor, identical monitors, and why edge snapping ignores the border between screens."
+  lead="Every monitor has its own layouts. Krova recognises a monitor when you plug it back in and brings its layouts back. On Windows, the windows you snapped there go back into their zones too."
 >
   <figure class="pair" aria-hidden="true">
     <MiniMonitor layout="priority" label="Display 1" />
@@ -22,6 +22,11 @@ import { url } from '../../lib/url';
       <a href={url('/guides/layout-editor/')}>the layout editor</a>.
     </li>
     <li>While you drag, only the monitor under your cursor shows its zones, using its own active layout.</li>
+    <li>
+      On Windows, the keyboard shortcut <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Up</kbd> sends the focused
+      window to the next monitor (to the right, wrapping round) in the zone with the same number. See
+      <a href={url('/guides/keyboard-shortcuts/')}>Keyboard shortcuts</a>.
+    </li>
     <li>
       Zones are stored as fractions of a monitor, so monitors with different resolutions, shapes or scaling settings can
       share the same idea of a layout. Krova converts per monitor.
@@ -52,6 +57,37 @@ import { url } from '../../lib/url';
     seen gets a fresh profile with the four templates.
   </p>
 
+  <h3 id="windows-return">Windows return to their zones (Windows only)</h3>
+  <p>
+    Krova also remembers which window it put into which zone. When a monitor comes back (after docking, undocking or
+    waking the PC), the windows Krova snapped to that monitor go back into their zones, about a second and a half after
+    the display settles. The setting is <strong>Restore windows on reconnect</strong> under Settings, Windows. It is on by
+    default.
+  </p>
+  <ul>
+    <li>
+      <strong>Memory only.</strong> The list is kept in memory, as window handles, zone ids and rectangles. No window titles
+      or program names, and nothing is written to disk. Quit Krova or restart the PC and it is gone.
+    </li>
+    <li>
+      <strong>Only windows Krova snapped,</strong> by dragging or by a shortcut, since Krova started. A window you drag,
+      move or maximize yourself is forgotten and left where you put it.
+    </li>
+    <li>
+      <strong>Windows 11 does something similar.</strong> It has its own setting that restores window positions when you
+      re-dock. If a window is already in its zone, Krova leaves it; if it is not, Krova puts it there.
+    </li>
+    <li>
+      <strong>A window with a minimum size</strong> may end up larger than its zone. Krova remembers the size it really got and
+      does not push it again.
+    </li>
+    <li>
+      <strong>How well it is tested.</strong> It worked end to end with a simulated monitor change and a real Notepad window
+      on a one-monitor PC. A real unplug and replug has not been tested yet, so tell us if it misbehaves for you.
+    </li>
+    <li><strong>macOS</strong> has no window memory yet. Only the layouts come back there.</li>
+  </ul>
+
   <h2 id="identical">Two identical monitors</h2>
   <p>
     Two monitors of the same model have the same hardware identity on Windows, so Krova tells them apart by device path
@@ -71,8 +107,9 @@ import { url } from '../../lib/url';
   <h2 id="dpi">Mixed scaling</h2>
   <p>
     On Windows, Krova is designed to work in each monitor&rsquo;s real pixels, so a 100% monitor next to a 150% one is
-    handled separately, and the size of a zone is never taken from one monitor and applied to another. Mixed-scale setups
-    have had little testing so far.
+    handled separately, and the size of a zone is never taken from one monitor and applied to another. The app declares
+    per-monitor DPI awareness for this (and so its own window should stay sharp on scaled displays). It has not been
+    verified on a mixed-scale setup yet.
   </p>
 </GuideLayout>
 

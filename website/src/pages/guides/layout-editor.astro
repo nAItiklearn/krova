@@ -1,12 +1,26 @@
 ---
 import GuideLayout from '../../layouts/GuideLayout.astro';
 import { url } from '../../lib/url';
+
+// The shape of a layout text, as the app writes it (docs/features-contract.md). Held here as a string
+// because curly braces are markup in an .astro template.
+const example = `{
+  "krova_layout": 1,
+  "layout": {
+    "id": "mine",
+    "name": "Mine",
+    "zones": [
+      { "id": 1, "rect": { "x": 0, "y": 0, "w": 0.3, "h": 1 } },
+      { "id": 2, "rect": { "x": 0.3, "y": 0, "w": 0.7, "h": 1 } }
+    ]
+  }
+}`;
 ---
 
 <GuideLayout
   slug="layout-editor"
-  description="How to use Krova's layout editor: monitor tabs, templates, splitting zones, dragging dividers, deleting zones, saving, setting the active layout, and the limits."
-  lead="Draw, split and save the zones for each monitor. You can try everything on this page in the live editor on the home page."
+  description="How to use Krova's layout editor: monitor tabs, templates, splitting zones, dragging dividers, deleting zones, saving, setting the active layout, exporting and importing a layout as text, the space between zones, and the limits."
+  lead="Draw, split and save the zones for each monitor, and copy a layout to another monitor or computer as text. You can try the editor on this page in the live editor on the home page."
 >
   <p>
     <a class="btn btn-secondary btn-sm" href={url('/#try')}>Try the editor in your browser</a>
@@ -14,7 +28,9 @@ import { url } from '../../lib/url';
 
   <h2 id="open">Open the editor</h2>
   <p>
-    Choose <strong>Edit layouts&hellip;</strong> in Krova&rsquo;s tray menu. Closing the window afterwards only hides it.
+    Choose <strong>Edit layouts&hellip;</strong> in Krova&rsquo;s tray menu, or start Krova a second time. The window is made
+    when you ask for it. Closing it closes it for good, together with the embedded browser, and Krova keeps running in the
+    tray. Unsaved edits are lost when you close it, so save first. Open it again from the tray menu any time.
   </p>
 
   <h2 id="screen">What you see</h2>
@@ -22,7 +38,7 @@ import { url } from '../../lib/url';
     <li><strong>Monitor tabs</strong> across the top: one per connected monitor, with its resolution. Switch with the mouse, or with Left, Right, Home and End.</li>
     <li><strong>The canvas</strong>: the selected layout, drawn at the shape of that monitor&rsquo;s work area (the screen without the taskbar or menu bar). A caption gives the size and the zone count.</li>
     <li><strong>The toolbar</strong>: Select, Split vertically, Split horizontally, Delete zone, Undo, and Revert and Save on the right.</li>
-    <li><strong>The side panel</strong>: This layout (its name, Set as active, Delete layout), Layouts on this monitor (with New layout), and Templates.</li>
+    <li><strong>The side panel</strong>: This layout (its name, Set as active, Delete layout), Layouts on this monitor (with New layout), Templates, and Export and import.</li>
   </ul>
 
   <h2 id="build">Build a layout</h2>
@@ -80,15 +96,61 @@ import { url } from '../../lib/url';
     first one that remains.
   </p>
 
+  <h2 id="share">Share a layout: export and import</h2>
+  <p>
+    The side panel has an <strong>Export and import</strong> box. A layout travels as plain text, so you copy and paste it
+    yourself. No file dialog opens and nothing leaves your computer.
+  </p>
+  <ol>
+    <li>
+      <strong>Export layout</strong> shows the layout you are looking at as text, including edits you have not saved. Press
+      <strong>Copy</strong>. If copying is refused, the text is selected: press <kbd>Ctrl</kbd>+<kbd>C</kbd> (<kbd>Cmd</kbd>+<kbd>C</kbd> on a Mac).
+    </li>
+    <li>
+      On any monitor, or on another computer, choose <strong>Import layout</strong>, paste the text and press
+      <strong>Import</strong>. The layout is added to the monitor you have selected as a new layout, and the editor selects it.
+    </li>
+    <li>
+      An imported layout is <em>not</em> made active. Choose <strong>Set as active</strong> when you want to snap into it. If the
+      monitor already has a layout with the same id, the new one gets a number (<code>halves</code> becomes <code>halves-2</code>).
+    </li>
+  </ol>
+  <p>The text looks like this:</p>
+  <pre tabindex="0"><code>{example}</code></pre>
+  <ul>
+    <li>
+      Zones are <strong>proportions</strong> of the screen&rsquo;s work area, from 0 to 1. That is why one text fits any monitor and
+      any resolution, and why it should work on both Windows and macOS. Nobody has imported one on a Mac yet, because the macOS
+      build has not been run.
+    </li>
+    <li>
+      The format is strict. The text must have exactly the two keys <code>krova_layout</code> (the number 1) and
+      <code>layout</code>, be at most <strong>64 KiB</strong>, have at most 64 zones, give ids and names of at most 64 characters
+      with no control characters, and leave no zone side smaller than 1% of the screen. Anything else is refused, with the
+      reason in the line under the canvas, and the text you pasted stays in the box.
+    </li>
+    <li>A monitor still holds at most 64 layouts, imported ones included.</li>
+  </ul>
+
+  <h2 id="gap">Space between zones</h2>
+  <p>
+    By default snapped windows touch. To leave a gap, open <strong>Settings</strong>, then <strong>Windows</strong>, and move
+    <strong>Space between zones (px)</strong>, from 0 to 32 pixels. The gap is left between neighbouring zones and between a
+    zone and the edge of the work area. It applies to snaps by dragging, to the keyboard shortcuts, to windows restored after a
+    reconnect and to the preview shown while you drag. It does not change your layouts, and
+    <a href={url('/guides/edge-snapping/')}>edge snapping</a> ignores it.
+  </p>
+
   <h2 id="limits">Limits</h2>
   <ul>
     <li>At most <strong>64 zones</strong> in a layout.</li>
     <li>At most <strong>64 layouts</strong> per monitor.</li>
     <li>Krova remembers up to 64 monitors, including ones that are not plugged in.</li>
+    <li>Layout text: at most <strong>64 KiB</strong>.</li>
   </ul>
   <p>
     Layouts live in <code>config.json</code>; see <a href={url('/guides/install/#uninstall')}>where it is</a> and
-    <a href={url('/guides/multiple-displays/')}>how monitors are matched</a>. The editor&rsquo;s keyboard shortcuts are on
-    <a href={url('/guides/keyboard-shortcuts/')}>their own page</a>.
+    <a href={url('/guides/multiple-displays/')}>how monitors are matched</a>. The editor&rsquo;s keyboard shortcuts, and
+    the global ones that move windows between zones, are on <a href={url('/guides/keyboard-shortcuts/')}>their own page</a>.
   </p>
 </GuideLayout>

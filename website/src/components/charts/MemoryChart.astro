@@ -1,43 +1,59 @@
 ---
 /**
- * Memory: two horizontal bars, drawn at build time as inline SVG from the
- * parsed measurement. No chart library, no script. The numbers are repeated in
- * a table on the page, so the chart is never the only source.
+ * Memory: horizontal bars, one per row, drawn at build time as inline SVG from the parsed
+ * measurements. No chart library, no script. The numbers are repeated in a table on the page,
+ * so the chart is never the only source.
+ *
+ * Rows are plain data: a label, a second line, a value in MB and a colour class ('a' or 'b').
+ * Long labels are shortened to fit the drawing; the full text stays in the table and in the title.
  */
-interface Props {
-  width: number;
-  own: number;
-  all: number;
-  processCount: number;
+interface MemoryRow {
+  label: string;
+  sub: string;
+  value: number;
+  cls: 'a' | 'b';
 }
 
-const { width: W, own, all, processCount } = Astro.props;
+interface Props {
+  width: number;
+  rows: MemoryRow[];
+  /** Spoken description of the whole chart. */
+  summary: string;
+  /** Distinguishes the ids of several charts on one page. */
+  uid: string;
+}
+
+const { width: W, rows, summary, uid } = Astro.props;
 
 const narrow = W < 560;
 const left = 2;
 const right = narrow ? 82 : 96;
 const plotW = W - left - right;
-const max = Math.ceil((Math.max(own, all) * 1.08) / 50) * 50;
-const x = (v: number) => left + (v / max) * plotW;
-const ticks = Array.from({ length: max / 50 + 1 }, (_, i) => i * 50).filter((t) => !narrow || t % 100 === 0);
-
-const rowH = 80;
 const top = 4;
+const rowH = 80;
 const barH = 28;
-const rows = [
-  { label: 'Krova’s own process', sub: 'working set', v: own, cls: 'a' },
-  { label: `All ${processCount} processes, with the web view`, sub: 'private memory', v: all, cls: 'b' },
-];
+
+const maxValue = Math.max(...rows.map((r) => r.value));
+// A readable step for the axis: 10 MB for a tiny app, 50 or 100 for a few hundred MB.
+const raw = maxValue * 1.08;
+const step = raw <= 60 ? 10 : raw <= 150 ? 25 : raw <= 400 ? 50 : 100;
+const max = Math.ceil(raw / step) * step;
+const x = (v: number) => left + (v / max) * plotW;
+const tickEvery = narrow && max / step > 6 ? step * 2 : step;
+const ticks = Array.from({ length: Math.floor(max / tickEvery) + 1 }, (_, i) => i * tickEvery);
+
 const H = top + rows.length * rowH + 28;
 const axisY = top + rows.length * rowH;
 const f = (n: number) => n.toFixed(1);
-const id = `mem-t-${W}`;
+// Widths are for 15 px bold labels and 13 px sub lines; text beyond them is cut with an ellipsis.
+const labelLimit = narrow ? 36 : 88;
+const subLimit = narrow ? 50 : 120;
+const clip = (s: string, limit: number) => (s.length > limit ? `${s.slice(0, limit - 1).trimEnd()}…` : s);
+const id = `mem-t-${uid}-${W}`;
 ---
 
 <svg class="chart" viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-labelledby={id}>
-  <title id={id}>
-    Memory while idle: Krova&rsquo;s own process {f(own)} MB working set; all {processCount} processes including the web view {f(all)} MB private memory.
-  </title>
+  <title id={id}>{summary}</title>
 
   {
     ticks.map((t) => (
@@ -54,10 +70,10 @@ const id = `mem-t-${W}`;
       const y = top + i * rowH;
       return (
         <g>
-          <text class="lab" x={left} y={y + 16}>{r.label}</text>
-          <text class="sub" x={left} y={y + 33}>{r.sub}</text>
-          <rect class={`bar ${r.cls}`} x={x(0)} y={y + 42} width={(x(r.v) - x(0)).toFixed(1)} height={barH} rx="5"></rect>
-          <text class="val" x={x(r.v) + 8} y={y + 42 + barH / 2 + 5}>{f(r.v)} MB</text>
+          <text class="lab" x={left} y={y + 16}>{clip(r.label, labelLimit)}</text>
+          <text class="sub" x={left} y={y + 33}>{clip(r.sub, subLimit)}</text>
+          <rect class={`bar ${r.cls}`} x={x(0)} y={y + 42} width={Math.max(2, x(r.value) - x(0)).toFixed(1)} height={barH} rx="5"></rect>
+          <text class="val" x={x(r.value) + 8} y={y + 42 + barH / 2 + 5}>{f(r.value)} MB</text>
         </g>
       );
     })

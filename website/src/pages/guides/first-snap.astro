@@ -6,7 +6,7 @@ import { url } from '../../lib/url';
 
 <GuideLayout
   slug="first-snap"
-  description="Your first snap with Krova: drag a window, hold Shift, release over a zone. How to cancel, which windows are skipped, and how to change the key."
+  description="Your first snap with Krova: drag a window, hold Shift, release over a zone. How to cancel, which windows are skipped, how to change the key, and the keyboard alternative on Windows."
   lead="Drag a window, hold Shift, release over a zone. That is the whole gesture."
 >
   <h2 id="before">Before you start</h2>
@@ -66,7 +66,12 @@ import { url } from '../../lib/url';
       See <a href={url('/guides/edge-snapping/')}>Edge snapping</a>.
     </li>
     <li>
-      <strong>No keyboard snapping.</strong> There are no global shortcuts to snap the focused window yet.
+      <strong>Prefer the keyboard? (Windows)</strong> Focus a window and press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>1</kbd>
+      to move it to zone 1, or <kbd>Left</kbd> and <kbd>Right</kbd> to walk through the zones. See
+      <a href={url('/guides/keyboard-shortcuts/')}>Keyboard shortcuts</a>. macOS has no keyboard shortcuts yet.
+    </li>
+    <li>
+      <strong>Want space between windows?</strong> Settings has a <em>Space between zones</em> slider, from 0 to 32 px.
     </li>
   </ul>
 </GuideLayout>

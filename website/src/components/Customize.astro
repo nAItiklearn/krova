@@ -6,10 +6,20 @@ import { url } from '../lib/url';
  * A drawing of Krova's Settings window with its default values. Labels and
  * options are taken from ui/src/components/SettingsView.svelte and
  * crates/krova-core/src/config.rs (defaults: Shift, animate, edge snapping off,
- * 8 px, #3b82f6 at 35%, theme System, launch at login off, enabled on).
+ * 8 px, #3b82f6 at 35%, theme System, launch at login off, enabled on, keyboard
+ * shortcuts on with Ctrl+Alt+Shift, restore windows on reconnect on, linked
+ * dividers on, space between zones 0 px).
  */
 const modifiers = ['Shift', 'Ctrl', 'Alt', 'Windows key / Command'];
 const swatches = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#22c55e', '#6b7280'];
+// The default modifier keys of the keyboard shortcuts, and what each shortcut does (Settings, "What the keys do").
+const shortcutMods = ['Ctrl', 'Alt', 'Shift'];
+const keymap: { tail: string[]; to?: string; what: string }[] = [
+  { tail: ['Left'], what: 'Move the focused window to the previous zone' },
+  { tail: ['Right'], what: 'Move the focused window to the next zone' },
+  { tail: ['1'], to: '9', what: 'Move the focused window to that zone number' },
+  { tail: ['Up'], what: 'Send the focused window to the next monitor, keeping its zone number' },
+];
 ---
 
 <section id="customize" class="section" aria-labelledby="customize-title">
@@ -102,6 +112,78 @@ const swatches = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#22c55e', '#6b728
             </div>
           </section>
 
+          <section class="group">
+            <h3>Keyboard shortcuts</h3>
+
+            <div class="row">
+              <div>
+                <p class="label">Use keyboard shortcuts</p>
+                <p class="desc">Move the focused window to another zone or monitor without the mouse.</p>
+              </div>
+              <span class="switch on" aria-hidden="true"><i></i></span>
+              <span class="visually-hidden">On by default</span>
+            </div>
+
+            <div class="field">
+              <p class="label">Modifier keys</p>
+              <p class="desc">Hold these keys together with the keys in the list below.</p>
+              <p class="select" role="presentation">
+                Ctrl + Alt + Shift<span class="caret" aria-hidden="true">&#9662;</span>
+                <span class="visually-hidden"> (selected, the default)</span>
+              </p>
+              <p class="desc">
+                Some combinations can be taken by Windows or by other apps. Krova lists the shortcuts it could not register.
+              </p>
+            </div>
+
+            <div class="field">
+              <p class="label">What the keys do</p>
+              <dl class="keymap">
+                {
+                  keymap.map((k) => (
+                    <div class="km">
+                      <dt>
+                        {[...shortcutMods, ...k.tail].map((key, i) => (
+                          <Fragment>{i > 0 && ' + '}<kbd>{key}</kbd></Fragment>
+                        ))}
+                        {k.to && <Fragment>{' to '}<kbd>{k.to}</kbd></Fragment>}
+                      </dt>
+                      <dd>{k.what}</dd>
+                    </div>
+                  ))
+                }
+              </dl>
+            </div>
+          </section>
+
+          <section class="group">
+            <h3>Windows</h3>
+
+            <div class="row">
+              <div>
+                <p class="label">Restore windows on reconnect</p>
+                <p class="desc">When a monitor comes back, windows you snapped to it return to their zones. Kept in memory only.</p>
+              </div>
+              <span class="switch on" aria-hidden="true"><i></i></span>
+              <span class="visually-hidden">On by default</span>
+            </div>
+
+            <div class="row">
+              <div>
+                <p class="label">Linked dividers</p>
+                <p class="desc">Drag the edge between two snapped windows and both resize.</p>
+              </div>
+              <span class="switch on" aria-hidden="true"><i></i></span>
+              <span class="visually-hidden">On by default</span>
+            </div>
+
+            <div class="field">
+              <p class="label">Space between zones (px) <span class="mono val">0 px</span></p>
+              <span class="range" aria-hidden="true"><i style="--p:0%"></i></span>
+              <p class="desc">Leaves a gap between neighbouring snapped windows, from 0 to 32 pixels.</p>
+            </div>
+          </section>
+
           <section class="group general">
             <h3>General</h3>
             <p class="gen"><span class="switch on" aria-hidden="true"><i></i></span> Enable Krova <span class="muted">(on by default)</span></p>
@@ -109,8 +191,9 @@ const swatches = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#22c55e', '#6b728
           </section>
         </div>
         <figcaption>
-          Illustration of the Settings window with default values. Changes there save automatically. The live editor
-          below has the real Settings tab.
+          Illustration of the Settings window with default values. Changes there save automatically. Keyboard shortcuts,
+          window memory and linked dividers work on Windows only for now (linked dividers are early); on macOS Settings shows them
+          as not available. The live editor below has the real Settings tab, with sample monitors.
           <a href="#try">Try it</a>.
         </figcaption>
       </figure>
@@ -137,6 +220,15 @@ const swatches = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#22c55e', '#6b728
     margin-top: var(--space-s);
     font-size: var(--text-sm);
     color: var(--color-text-soft);
+  }
+
+  /* The settings drawing is tall, so on wide screens the preview stays in view next to it. */
+  @media (min-width: 56rem) {
+    .preview {
+      position: sticky;
+      top: 6rem;
+      align-self: start;
+    }
   }
 
   .panel {
@@ -298,6 +390,43 @@ const swatches = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#22c55e', '#6b728
   .hex {
     margin-left: 0.35rem;
     font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+
+  .select {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    align-self: start;
+    justify-self: start;
+    min-width: 12rem;
+    padding: 0.4rem 0.8rem;
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-s);
+    background: var(--color-surface);
+    font-size: var(--text-sm);
+    font-weight: 500;
+  }
+  .caret {
+    color: var(--color-text-soft);
+  }
+
+  .keymap {
+    display: grid;
+    gap: var(--space-xs);
+  }
+  .km {
+    display: grid;
+    gap: 0.15rem;
+  }
+  .km dt {
+    font-size: var(--text-sm);
+    line-height: 1.9;
+  }
+  .km dd {
+    font-size: var(--text-xs);
+    line-height: 1.5;
     color: var(--color-text-muted);
   }
 

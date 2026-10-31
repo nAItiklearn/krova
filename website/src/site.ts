@@ -24,12 +24,14 @@ export const COPYRIGHT_HOLDER = 'Krova contributors';
  * Repository
  * ------------------------------------------------------------------ */
 
-/** No trailing slash. The repository exists but is currently PRIVATE. */
+/** No trailing slash. The repository is public. */
 export const REPO_URL = 'https://github.com/nAItiklearn/krova';
 
 /**
- * Flip to true only after the repository has been made public. Until then no
- * link to github.com/nAItiklearn/krova is rendered anywhere on the site.
+ * True now that the repository is public, so source, issue and releases links
+ * render. Set it to false to hide every link to github.com/nAItiklearn/krova
+ * again (scripts/check-links.mjs then fails if one is left in a built page).
+ * Download buttons stay hidden until RELEASE_PUBLISHED is true as well.
  */
 export const REPO_PUBLIC = true;
 

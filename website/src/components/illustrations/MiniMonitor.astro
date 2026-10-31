@@ -1,17 +1,21 @@
 ---
+import MockWin from './MockWin.astro';
+
 /**
  * A small monitor showing one layout, for the reconnect story and the feature
- * cards. `off` draws it as a dashed outline (unplugged). Decorative: the text
- * around it carries the meaning.
+ * cards. `off` draws it as a dashed outline (unplugged). `win` lists the zones
+ * (by position in the layout, starting at 0) that hold a plain mock window.
+ * Decorative: the text around it carries the meaning.
  */
 interface Props {
   layout: 'priority' | 'grid' | 'halves' | 'thirds';
   off?: boolean;
   soft?: boolean;
   label?: string;
+  win?: number[];
 }
 
-const { layout, off = false, soft = false, label } = Astro.props;
+const { layout, off = false, soft = false, label, win = [] } = Astro.props;
 
 type Z = { x: number; y: number; w: number; h: number };
 const full = { y: 1.36, h: 97.28 };
@@ -38,6 +42,11 @@ const layouts: Record<Props['layout'], Z[]> = {
   ],
 };
 const zones = layouts[layout];
+const kinds = ['doc', 'page', 'term'] as const;
+const windows = win.flatMap((i, n) => {
+  const z = zones[i];
+  return z ? [{ z, kind: kinds[n % kinds.length] }] : [];
+});
 ---
 
 <div class="mini ill-wrap" aria-hidden="true">
@@ -50,6 +59,18 @@ const zones = layouts[layout];
               <span
                 class:list={['ill-zone', soft ? 'ill-zone--soft' : 'ill-zone--solid']}
                 style={`--x:${z.x}%;--y:${z.y}%;--w:${z.w}%;--h:${z.h}%`}
+              />
+            ))
+        }
+        {
+          !off &&
+            windows.map(({ z, kind }) => (
+              <MockWin
+                kind={kind}
+                x={`${(z.x + 1.4).toFixed(2)}%`}
+                y={`${(z.y + 2.6).toFixed(2)}%`}
+                w={`${(z.w - 2.8).toFixed(2)}%`}
+                h={`${(z.h - 5.2).toFixed(2)}%`}
               />
             ))
         }

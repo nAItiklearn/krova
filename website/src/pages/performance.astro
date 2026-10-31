@@ -2,128 +2,293 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import MemoryChart from '../components/charts/MemoryChart.astro';
 import CpuChart from '../components/charts/CpuChart.astro';
-import { idleStats, loadLatestIdle } from '../lib/measurements';
+import { idleStats, isEarlierBuild, loadMeasurements, measureScriptPresent, prettyDate } from '../lib/measurements';
 import { REPO_LINKS_ENABLED, REPO_URL, VERSION_LABEL } from '../site';
 import { url } from '../lib/url';
 
+/**
+ * Everything on this page is derived from docs/measurements/idle-*.txt at build time
+ * (src/lib/measurements.ts). One file is one run in one state of the app; each state gets its
+ * own memory bar, table row and CPU chart. With a single file the page reads as a one-run report.
+ */
+const runs = loadMeasurements().map((m) => ({ m, s: idleStats(m) }));
+const n = runs.length;
+const single = n === 1;
+const headline = runs[0];
+
+const mb = (x: number) => x.toFixed(1);
+const pct = (x: number) => x.toFixed(2);
+const plural = (k: number, one: string, many: string) => `${k} ${k === 1 ? one : many}`;
+const shortDate = (iso: string) =>
+  iso
+    ? new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+    : 'undated';
+
+const isEarlier = isEarlierBuild;
+const when = (iso: string) => `${shortDate(iso)}${isEarlier(iso) ? ', earlier build' : ''}`;
+
+const hosts = [...new Map(runs.map(({ m }) => [`${m.host.cpu}|${m.host.cores}|${m.host.ram}|${m.host.os}`, m.host])).values()];
+const oneMachine = hosts.length === 1;
+const dates = [...new Set(runs.map(({ m }) => m.date).filter(Boolean))].sort();
+const dateText =
+  dates.length === 0
+    ? ''
+    : dates.length === 1
+      ? prettyDate(dates[0])
+      : `${prettyDate(dates[0])} to ${prettyDate(dates[dates.length - 1])}`;
+
+// The two states the story is about. "Tray only" is any run with a single process: no web view.
+const trayRun = runs.find((r) => r.m.processCount === 1);
+const windowRun = runs.find((r) => r.m.processCount > 1);
+const hasTray = trayRun !== undefined;
+
+// Sentences are built here, not in the markup: whitespace between adjacent {expressions} would put a space before a comma.
+const machines = oneMachine ? 'one Windows PC' : `${hosts.length} Windows PCs`;
+const leadText = single
+  ? `One ${headline.s.durationS}-second idle run on one Windows PC${dateText ? `, ${dateText}` : ''}. State: ${headline.m.label.toLowerCase()}${
+      isEarlier(headline.m.date) ? ', measured on an earlier build than the current app (see Method and limits)' : ''
+    }.`
+  : `${n} idle runs, one for each state below, on ${machines}${dateText ? `, ${dateText}` : ''}.`;
+const privateCardText = `private memory, all ${plural(headline.m.processCount, 'process', 'processes')}${
+  headline.m.processCount > 1 ? ', including the web view' : ''
+} (${headline.m.label.toLowerCase()})`;
+
 const title = 'Performance: Krova’s measured memory and CPU use';
-const description =
-  'One idle run of Krova on a Windows PC: its own process uses about 43 MB, the settings window’s web view adds most of the rest, and CPU is near zero. Method, limits, and what is not measured yet.';
+const description = single
+  ? `One idle run of Krova on a Windows PC (${headline.m.label.toLowerCase()}): ${mb(headline.s.privateMedian)} MB of private memory across ${plural(headline.m.processCount, 'process', 'processes')}, with an average CPU of ${pct(headline.s.cpuMean)} % of one core. Method, limits, and what is not measured yet.`
+  : `${n} idle runs of Krova on ${oneMachine ? 'one Windows PC' : `${hosts.length} Windows PCs`}, one per state: ${runs
+      .map((r) => `${r.m.label.toLowerCase()} ${mb(r.s.privateMedian)} MB`)
+      .join(', ')} of private memory. Method, limits, and what is not measured yet.`;
 
-const m = loadLatestIdle();
-const s = idleStats(m);
+const memoryRows = single
+  ? [
+      {
+        label: `All ${plural(headline.m.processCount, 'process', 'processes')}${headline.m.processCount > 1 ? ', with the web view' : ''}`,
+        sub: `private memory · ${headline.m.label}`,
+        value: headline.s.privateMedian,
+        cls: 'a' as const,
+      },
+      {
+        label: 'Krova’s own process',
+        sub: 'working set',
+        value: headline.s.appWs,
+        cls: 'b' as const,
+      },
+    ]
+  : runs.map(({ m, s }) => ({
+      label: m.label,
+      sub: `${plural(m.processCount, 'process', 'processes')} · ${when(m.date)}`,
+      value: s.privateMedian,
+      cls: 'a' as const,
+    }));
+const memorySummary = single
+  ? `Memory while idle, ${headline.m.label.toLowerCase()}: all ${plural(headline.m.processCount, 'process', 'processes')} ${mb(headline.s.privateMedian)} MB private memory; Krova’s own process ${mb(headline.s.appWs)} MB working set.`
+  : `Private memory of all Krova processes while idle, in MB: ${runs
+      .map(({ m, s }) => `${m.label}, ${when(m.date)}: ${mb(s.privateMedian)} MB in ${plural(m.processCount, 'process', 'processes')}`)
+      .join('; ')}.`;
 
-const mb = (n: number) => n.toFixed(1);
-const pct = (n: number) => n.toFixed(2);
-const prettyDate = new Date(`${m.date}T00:00:00Z`).toLocaleDateString('en-GB', {
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-  timeZone: 'UTC',
-});
-const zeroCount = m.samples.length - s.cpuNonZero.length;
 const scriptPath = 'docs/measurements/measure-idle.ps1';
-const dataPath = `docs/measurements/${m.file}`;
+const scriptPresent = measureScriptPresent();
 ---
 
 <BaseLayout title={title} description={description}>
   <div class="container">
     <header class="page-head">
       <p class="eyebrow">Performance</p>
-      <h1>What Krova uses, <span class="soft">measured once.</span></h1>
+      <h1>
+        What Krova uses, {single ? <span class="soft">measured once.</span> : <span class="soft">one run per state.</span>}
+      </h1>
       <p class="lead">
-        One {s.durationS}-second idle run on one Windows PC, {prettyDate}. This is {VERSION_LABEL}: a single run, with a known
-        gap list below, and the numbers will change. No other app was measured, so there is no comparison here.
+        {leadText} This is {VERSION_LABEL}: a single run each, with a known gap list below, and the numbers will change. No other
+        app was measured, so there is no comparison here.
       </p>
     </header>
 
-    <ul class="stats">
-      <li class="card">
-        <p class="big">{mb(s.appWs)} <span>MB</span></p>
-        <p>Krova&rsquo;s own process (working set)</p>
-      </li>
-      <li class="card">
-        <p class="big">{mb(s.privateMedian)} <span>MB</span></p>
-        <p>all {m.processCount} processes, including the web view (private memory)</p>
-      </li>
-      <li class="card">
-        <p class="big">{pct(s.cpuMean)} <span>%</span></p>
-        <p>average CPU, as a share of one core (peak {pct(s.cpuMax)} %)</p>
-      </li>
-    </ul>
+    {
+      single ? (
+        <ul class="stats">
+          <li class="card">
+            <p class="big">{mb(headline.s.privateMedian)} <span>MB</span></p>
+            <p>{privateCardText}</p>
+          </li>
+          <li class="card">
+            <p class="big">{mb(headline.s.appWs)} <span>MB</span></p>
+            <p>Krova&rsquo;s own process (working set)</p>
+          </li>
+          <li class="card">
+            <p class="big">{pct(headline.s.cpuMean)} <span>%</span></p>
+            <p>average CPU, as a share of one core (peak {pct(headline.s.cpuMax)} %)</p>
+          </li>
+        </ul>
+      ) : (
+        <ul class="stats stats--runs">
+          {runs.map(({ m, s }) => (
+            <li class="card">
+              <p class="big">{mb(s.privateMedian)} <span>MB</span></p>
+              <p class="state"><strong>{m.label}</strong></p>
+              <p>
+                private memory, {plural(m.processCount, 'process', 'processes')}. Average CPU {pct(s.cpuMean)} % of one core.
+                Measured {when(m.date)}.
+              </p>
+            </li>
+          ))}
+        </ul>
+      )
+    }
 
     <div class="conclusion note">
       <p>
-        <strong>In plain words.</strong> The part that does the snapping is a native process of about {Math.round(s.appWs)} MB
-        that uses close to no CPU while idle. In this build, most of the memory is the embedded web view (Microsoft
-        WebView2 on Windows) that draws the settings and editor window: roughly {Math.round(s.outsideApprox / 10) * 10} MB of the {mb(s.privateMedian)} MB sits outside
-        Krova&rsquo;s own process. That figure subtracts two different memory measures, so read it as approximate.
+        <strong>In plain words.</strong>
+        {
+          trayRun && windowRun ? (
+            <Fragment>
+              With no window open, the whole app was {mb(trayRun.s.privateMedian)} MB of private memory in a single process (average CPU
+              {' '}{pct(trayRun.s.cpuMean)} % of one core). With a window open it was {mb(windowRun.s.privateMedian)} MB across
+              {' '}{windowRun.m.processCount} processes (average CPU {pct(windowRun.s.cpuMean)} %). The extra {windowRun.m.processCount - 1}
+              {' '}processes are the embedded web view (Microsoft WebView2 on Windows) that draws the editor and settings. In the current
+              app, closing the window ends that web view. These are separate runs, possibly of different builds (see the date and
+              state of each run below), so read the gap as a rough size, not an exact cost.
+            </Fragment>
+          ) : trayRun ? (
+            <Fragment>
+              With no window open, the whole app was {mb(trayRun.s.privateMedian)} MB of private memory in a single process, with an
+              average CPU of {pct(trayRun.s.cpuMean)} % of one core. A run with the editor or settings window open has not been published
+              yet.
+            </Fragment>
+          ) : (
+            <Fragment>
+              The part that does the snapping is a native process of about {Math.round(headline.s.appWs)} MB, and the run&rsquo;s average CPU
+              was {pct(headline.s.cpuMean)} % of one core. In this run the window was open, and most of the memory was the embedded web
+              view (Microsoft WebView2 on Windows) that draws the settings and editor window: roughly
+              {' '}{Math.round(headline.s.outsideApprox / 10) * 10} MB of the {mb(headline.s.privateMedian)} MB sat outside Krova&rsquo;s own
+              process. That figure subtracts two different memory measures, so read it as approximate.
+              {isEarlier(headline.m.date) ? ' This run is of an earlier build, before closing the window ended the web view.' : ''}
+              {' '}The current app ends the web view when you close the window, and a run of that tray-only state has not been published
+              yet.
+            </Fragment>
+          )
+        }
       </p>
     </div>
 
     <section class="block" aria-labelledby="mem-title">
       <h2 id="mem-title">Memory</h2>
       <p class="muted intro">
-        Two bars, two different questions. The first is Krova&rsquo;s own process. The second adds the {m.processCount - 1} web view processes
-        that draw its window.
+        {
+          single ? (
+            <Fragment>
+              Two bars, two different questions. The first is everything Krova started, counted as private memory, which is the
+              headline number. The second is Krova&rsquo;s own process alone, as working set.
+            </Fragment>
+          ) : (
+            <Fragment>
+              One bar for each measured state, in private memory: the memory that belongs only to Krova&rsquo;s own process and the web view processes it
+              started. This is the headline number. The table adds the working-set figures.
+            </Fragment>
+          )
+        }
       </p>
       <figure class="chart-fig">
-        <div class="only-narrow"><MemoryChart width={400} own={s.appWs} all={s.privateMedian} processCount={m.processCount} /></div>
-        <div class="only-wide"><MemoryChart width={720} own={s.appWs} all={s.privateMedian} processCount={m.processCount} /></div>
+        <div class="only-narrow"><MemoryChart uid="mem" width={320} rows={memoryRows} summary={memorySummary} /></div>
+        <div class="only-wide"><MemoryChart uid="mem" width={720} rows={memoryRows} summary={memorySummary} /></div>
         <figcaption>
-          Memory while idle, in MB. Krova&rsquo;s own process is shown as working set. The total is private memory,
-          which counts memory that belongs only to those processes.
+          Memory while idle, in MB.
+          {single ? ' The first bar is private memory, the second is working set.' : ' Every bar is private memory, summed over all of that run’s processes.'}
         </figcaption>
       </figure>
 
       <div class="table-scroll" tabindex="0" role="region" aria-label="Memory figures">
         <table class="data-table">
-          <caption>The numbers behind the memory chart (from {m.file})</caption>
+          <caption>The numbers behind the memory chart</caption>
           <thead>
-            <tr><th scope="col">Measure</th><th scope="col" class="num">MB</th><th scope="col">Meaning</th></tr>
+            <tr>
+              <th scope="col">State</th>
+              <th scope="col" class="num">Processes</th>
+              <th scope="col" class="num">Private, all (MB)</th>
+              <th scope="col" class="num">Krova process, working set (MB)</th>
+              <th scope="col" class="num">Working sets added (MB)</th>
+            </tr>
           </thead>
           <tbody>
-            <tr><th scope="row">Krova process, working set</th><td class="num">{mb(s.appWs)}</td><td>Memory of <code>krova-app.exe</code> in RAM.</td></tr>
-            <tr>
-              <th scope="row">All {m.processCount} processes, private</th>
-              <td class="num">{mb(s.privateMedian)}</td>
-              <td>Median of {m.samples.length} samples (range {mb(s.privateMin)} to {mb(s.privateMax)}). Memory only these processes own.</td>
-            </tr>
-            <tr>
-              <th scope="row">All {m.processCount} processes, working sets added</th>
-              <td class="num">{mb(s.wsSumMin)}&ndash;{mb(s.wsSumMax)}</td>
-              <td>Not used as a headline: it counts pages shared between processes more than once.</td>
-            </tr>
+            {
+              runs.map(({ m, s }) => (
+                <tr>
+                  <th scope="row">
+                    {m.label}
+                    <span class="rowsub">{when(m.date)}, <code>{m.file}</code></span>
+                  </th>
+                  <td class="num">
+                    {m.processCount}
+                    {s.procsRange && s.procsRange[0] !== s.procsRange[1] ? ` (${s.procsRange[0]}–${s.procsRange[1]} during the run)` : ''}
+                  </td>
+                  <td class="num">
+                    <strong>{mb(s.privateMedian)}</strong>
+                    <span class="rowsub">range {mb(s.privateMin)} to {mb(s.privateMax)}</span>
+                  </td>
+                  <td class="num">{mb(s.appWs)}</td>
+                  <td class="num">{mb(s.wsSumMin)}{s.wsSumMin.toFixed(1) === s.wsSumMax.toFixed(1) ? '' : `–${mb(s.wsSumMax)}`}</td>
+                </tr>
+              ))
+            }
           </tbody>
         </table>
       </div>
+      <ul class="legend">
+        <li><strong>Private, all:</strong> the median of the run&rsquo;s samples, summed over every process of that run. It counts only memory those processes own, and it is the headline number.</li>
+        <li><strong>Krova process, working set:</strong> the RAM <code>krova-app.exe</code> itself has in use, including pages it shares with other programs.</li>
+        <li><strong>Working sets added:</strong> not used as a headline. It counts pages shared between processes more than once.</li>
+      </ul>
     </section>
 
     <section class="block" aria-labelledby="cpu-title">
       <h2 id="cpu-title">CPU</h2>
       <p class="muted intro">
-        Share of one CPU core used by all {m.processCount} processes together, sampled every {s.intervalS} seconds for {s.durationS} seconds.
-        It sits at 0.00 almost the whole time, with two small blips.
+        Share of one CPU core used by all of a run&rsquo;s processes together, sampled at a fixed interval. Each run has its own
+        step chart, one step per sample, nothing smoothed.
       </p>
-      <figure class="chart-fig">
-        <div class="only-narrow"><CpuChart width={400} samples={m.samples} intervalS={s.intervalS} /></div>
-        <div class="only-wide"><CpuChart width={720} samples={m.samples} intervalS={s.intervalS} /></div>
-        <figcaption>
-          CPU use, % of one core, one step per {s.intervalS}-second sample. The machine has {m.host.cores}, so {pct(s.cpuMax)} % of one core
-          is about {(s.cpuMax / parseInt(m.host.cores, 10)).toFixed(2)} % of the whole CPU.
-        </figcaption>
-      </figure>
+
+      {
+        runs.map(({ m, s }, i) => (
+          <figure class="chart-fig">
+            <p class="fig-title">{m.label}<span>{when(m.date)}</span></p>
+            <div class="only-narrow"><CpuChart uid={`cpu${i}`} width={320} samples={m.samples} intervalS={s.intervalS} /></div>
+            <div class="only-wide"><CpuChart uid={`cpu${i}`} width={720} samples={m.samples} intervalS={s.intervalS} /></div>
+            <figcaption>
+              CPU use, % of one core, one step per {s.intervalS}-second sample over {s.durationS} seconds. The machine has {m.host.cores}, so
+              {' '}{pct(s.cpuMax)} % of one core is about {(s.cpuMax / (parseInt(m.host.cores, 10) || 1)).toFixed(2)} % of the whole CPU.
+            </figcaption>
+          </figure>
+        ))
+      }
 
       <div class="table-scroll" tabindex="0" role="region" aria-label="CPU figures">
         <table class="data-table">
-          <caption>The numbers behind the CPU chart</caption>
+          <caption>The numbers behind the CPU charts</caption>
           <thead>
-            <tr><th scope="col">Sample</th><th scope="col" class="num">% of one core</th></tr>
+            <tr>
+              <th scope="col">State</th>
+              <th scope="col" class="num">Samples</th>
+              <th scope="col" class="num">Average (% of one core)</th>
+              <th scope="col" class="num">Peak</th>
+              <th scope="col">Samples above zero</th>
+            </tr>
           </thead>
           <tbody>
-            {s.cpuNonZero.map((b) => <tr><th scope="row">At {b.t} s</th><td class="num">{pct(b.cpu)}</td></tr>)}
-            <tr><th scope="row">The other {zeroCount} of {m.samples.length} samples</th><td class="num">0.00</td></tr>
-            <tr><th scope="row">Average over {s.durationS} s</th><td class="num">{pct(s.cpuMean)}</td></tr>
+            {
+              runs.map(({ m, s }) => (
+                <tr>
+                  <th scope="row">{m.label}<span class="rowsub">{when(m.date)}</span></th>
+                  <td class="num">{m.samples.length} over {s.durationS} s</td>
+                  <td class="num">{pct(s.cpuMean)}</td>
+                  <td class="num">{pct(s.cpuMax)}</td>
+                  <td>
+                    {s.cpuNonZero.length === 0
+                      ? `None: all ${m.samples.length} samples were 0.00.`
+                      : `${s.cpuNonZero.map((b) => `${pct(b.cpu)} at ${b.t} s`).join(', ')}. The other ${m.samples.length - s.cpuNonZero.length} of ${m.samples.length} were 0.00.`}
+                  </td>
+                </tr>
+              ))
+            }
           </tbody>
         </table>
       </div>
@@ -133,19 +298,52 @@ const dataPath = `docs/measurements/${m.file}`;
       <h2 id="method-title">Method and limits</h2>
       <div class="card method">
         <dl>
-          <div><dt>Machine</dt><dd>{m.host.cpu}, {m.host.cores}, {m.host.ram}, {m.host.os}</dd></div>
-          <div><dt>Build</dt><dd>Krova 0.1.0, release build.</dd></div>
-          <div><dt>State</dt><dd>{m.state || 'See the data file.'}</dd></div>
-          <div><dt>Run</dt><dd>One run, {s.durationS} seconds, one sample every {s.intervalS} seconds, {m.processCount} processes counted (<code>krova-app.exe</code> plus the {m.processCount - 1} web view processes started for Krova).</dd></div>
-          <div><dt>Data</dt><dd>Raw output: <code>{dataPath}</code>. Every number on this page is read from that file when the site is built.</dd></div>
+          <div>
+            <dt>{oneMachine ? 'Machine' : 'Machines'}</dt>
+            <dd>
+              {hosts.map((h, i) => <Fragment>{i > 0 ? '; ' : ''}{h.cpu}, {h.cores}, {h.ram}, {h.os}</Fragment>)}
+            </dd>
+          </div>
+          {
+            runs.map(({ m, s }) => (
+              <div>
+                <dt>{m.label}</dt>
+                <dd>
+                  <span class="line">{m.state || 'No state line in the data file, so the build and what the app was doing are not recorded.'}</span>
+                  <span class="line">
+                    One run, {s.durationS} seconds, one sample every {s.intervalS} seconds, {plural(m.processCount, 'process', 'processes')} counted
+                    {m.processCount > 1
+                      ? ` (krova-app.exe plus ${plural(m.processCount - 1, 'web view process', 'web view processes')} started for Krova)`
+                      : ' (krova-app.exe alone; no web view process)'}.
+                    Raw output: <code>docs/measurements/{m.file}</code>.
+                  </span>
+                  {isEarlier(m.date) && (
+                    <span class="line">
+                      Earlier build: taken before closing the window ended the web view, and before the keyboard shortcuts and window memory were added.
+                    </span>
+                  )}
+                  {m.notMeasured && <span class="line">Not covered by this run: {m.notMeasured}</span>}
+                </dd>
+              </div>
+            ))
+          }
+          <div>
+            <dt>Limits</dt>
+            <dd>
+              A single run for each state, on {oneMachine ? 'one machine' : 'the machines above'}, so there is no spread to speak of. No window drag was
+              measured. Nothing was measured on macOS. The runs may be of different builds; each run names its build and state above, and its date.
+              Every number on this page is read from the raw files when the site is built.
+            </dd>
+          </div>
         </dl>
         <p class="rerun">
           <strong>Re-run it yourself.</strong>
           {
-            m.scriptPresent ? (
+            scriptPresent ? (
               <Fragment>
-                The script is <code>{scriptPath}</code>: start Krova, then run
-                <code class="block">powershell -NoProfile -ExecutionPolicy Bypass -File measure-idle.ps1</code>
+                The script is <code>{scriptPath}</code>: start Krova, put it in the state you want to measure, then run
+                <code class="block">powershell -NoProfile -ExecutionPolicy Bypass -File measure-idle.ps1 -Label "Tray only, no window"</code>
+                <code class="block">powershell -NoProfile -ExecutionPolicy Bypass -File measure-idle.ps1 -Label "Editor window open"</code>
               </Fragment>
             ) : (
               <Fragment>The measurement script is not published yet; the raw output lives in <code>docs/measurements/</code>.</Fragment>
@@ -158,7 +356,7 @@ const dataPath = `docs/measurements/${m.file}`;
               <Fragment>{' '}They are in the repository, which is not public yet.</Fragment>
             )
           }
-          The result depends on what state you leave Krova in, so write that down with the numbers.
+          The result depends on what state you leave Krova in, so give each run a label and write down the build.
         </p>
       </div>
     </section>
@@ -168,15 +366,15 @@ const dataPath = `docs/measurements/${m.file}`;
       <div class="prose todo">
         <ul>
           <li>Drag latency: how long it takes from release to the window landing.</li>
-          <li>CPU and memory while a window is being dragged.</li>
-          <li>Use with the settings window closed or hidden, which is how Krova normally runs.</li>
+          <li>CPU and memory while a window is being dragged, or while a keyboard shortcut or a monitor change is being handled.</li>
+          {hasTray ? null : <li>A published run with no window open, which is how Krova normally sits in the tray. The current app ends its web view when you close the window.</li>}
           <li>macOS, in any state.</li>
-          <li>More than one run, more than one machine, and any other app.</li>
+          <li>More than one run per state, more than one machine, and any other app.</li>
         </ul>
       </div>
       <p class="muted">
-        These are {VERSION_LABEL} numbers. They will change as the app does, and this page will be regenerated from new
-        measurement files.
+        These are {VERSION_LABEL} numbers. They will change as the app does, and this page is regenerated from the measurement
+        files whenever a new one is added.
       </p>
     </section>
 
@@ -205,10 +403,15 @@ const dataPath = `docs/measurements/${m.file}`;
     letter-spacing: 0;
     color: var(--color-text-soft);
   }
-  .stats .card p:last-child {
+  .stats .card p:not(.big) {
     margin-top: var(--space-xs);
     font-size: var(--text-sm);
     color: var(--color-text-muted);
+  }
+  .stats .card p.state {
+    margin-top: var(--space-s);
+    font-size: var(--text-base);
+    color: var(--color-text);
   }
 
   .conclusion {
@@ -243,10 +446,39 @@ const dataPath = `docs/measurements/${m.file}`;
   .chart-fig .only-narrow {
     max-width: 26rem;
   }
+  .fig-title {
+    margin-bottom: var(--space-xs);
+    font-weight: 650;
+  }
+  .fig-title span {
+    margin-left: 0.6rem;
+    font-weight: 400;
+    font-size: var(--text-sm);
+    color: var(--color-text-soft);
+  }
   figcaption {
     margin-top: var(--space-s);
     font-size: var(--text-sm);
     color: var(--color-text-soft);
+  }
+
+  .rowsub {
+    display: block;
+    margin-top: 0.15rem;
+    font-weight: 400;
+    font-size: var(--text-xs);
+    color: var(--color-text-soft);
+    overflow-wrap: anywhere;
+  }
+  .legend {
+    display: grid;
+    gap: var(--space-2xs);
+    margin-top: var(--space-m);
+    padding-left: 1.25em;
+    list-style: disc;
+    max-width: var(--measure);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
   }
 
   .method {
@@ -270,6 +502,12 @@ const dataPath = `docs/measurements/${m.file}`;
   .method dd {
     font-size: var(--text-sm);
   }
+  .method dd .line {
+    display: block;
+  }
+  .method dd .line + .line {
+    margin-top: 0.25rem;
+  }
   .rerun {
     margin-top: var(--space-m);
     padding-top: var(--space-m);
@@ -281,6 +519,7 @@ const dataPath = `docs/measurements/${m.file}`;
     display: block;
     margin-top: var(--space-2xs);
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
   }
 
   .todo {
@@ -296,6 +535,9 @@ const dataPath = `docs/measurements/${m.file}`;
   @media (min-width: 48rem) {
     .stats {
       grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .stats--runs {
+      grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
     }
     .method dl > div {
       grid-template-columns: 8rem 1fr;

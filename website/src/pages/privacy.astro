@@ -4,11 +4,13 @@ import { ISSUES_URL, REPO_LINKS_ENABLED, REPO_URL } from '../site';
 import { url } from '../lib/url';
 
 // The app facts on this page were corrected by the security review (docs/SECURITY-REVIEW.md, F-14)
-// and checked against src-tauri/tauri.conf.json (bundle identifier dev.krova.desktop). Only the
-// "This website" section and one sentence about the source code changed when the site was redesigned.
+// and checked against src-tauri/tauri.conf.json (bundle identifier dev.krova.desktop). The keyboard-shortcut
+// and window-watcher paragraphs were checked against crates/krova-platform/src/win_events.rs (RegisterHotKey for
+// twelve chords, a WinEvent hook on move/size start and end only, no keyboard hook), the in-memory registry
+// against crates/krova-core/src/registry/mod.rs, and the settings list against crates/krova-core/src/config.rs.
 const title = 'Privacy: Krova';
 const description =
-  'Krova makes no network calls, has no accounts or telemetry, and never logs window titles. Here is exactly what it stores on your computer, and where.';
+  'Krova makes no network calls, has no accounts or telemetry, never logs window titles and never records what you type. Here is exactly what it listens to, what it keeps in memory, and what it stores on your computer.';
 ---
 
 <BaseLayout title={title} description={description}>
@@ -27,8 +29,9 @@ const description =
       <ul>
         <li>Krova makes <strong>no network calls</strong>.</li>
         <li>There are <strong>no accounts</strong> and <strong>no telemetry</strong>.</li>
-        <li><strong>Window titles are never logged or stored.</strong></li>
+        <li><strong>Window titles are never logged or stored</strong>, and Krova <strong>does not record what you type</strong>.</li>
         <li>Your settings and layouts stay in <strong>one local JSON file</strong> that you can read, copy or delete.</li>
+        <li>Which window is in which zone is kept <strong>in memory only</strong>, and is gone when you quit Krova.</li>
       </ul>
 
       <h2>What Krova does on the network</h2>
@@ -62,7 +65,9 @@ const description =
       <ul>
         <li>
           <strong>Settings:</strong> the activation key, highlight color and opacity, animated or instant moves, edge
-          snapping on or off and its size, launch at login, enabled or disabled, and theme.
+          snapping on or off and its size, launch at login, enabled or disabled, theme, whether the keyboard shortcuts are on
+          and which modifier keys they use, whether windows are restored on reconnect, whether dividers are linked, and the
+          space between zones.
         </li>
         <li>
           <strong>Per-monitor data:</strong> for each monitor, an identifier, a label, its layouts (zones saved as
@@ -83,6 +88,11 @@ const description =
         can exist for a moment. If the file ever turns out to be unreadable, Krova renames it to
         <code>config.json.bak</code> and starts again with defaults instead of discarding it.
       </p>
+      <p>
+        A layout you export is plain text that Krova shows you to copy. Krova does not write a file for it and does not send it
+        anywhere; where you paste it is up to you. It holds the layout&rsquo;s id and name and its zones as proportions, and nothing about your
+        monitors or windows.
+      </p>
       <p>Besides <code>config.json</code>, a few other things exist on your computer while Krova is installed:</p>
       <ul>
         <li>
@@ -97,7 +107,7 @@ const description =
         </li>
       </ul>
 
-      <h2>What Krova does not record</h2>
+      <h2>What Krova listens to, and what it does not record</h2>
       <p>
         To notice that you are dragging a window, Krova listens to mouse movement and clicks across your whole
         computer while it runs. When you press the mouse button on a window it looks at that window&rsquo;s position and size
@@ -106,6 +116,29 @@ const description =
         <strong>Window titles are never read, logged or stored</strong>, and nothing about the windows you move is
         written to <code>config.json</code>.
       </p>
+      <p>On Windows, Krova does two more things, both part of the first release:</p>
+      <ul>
+        <li>
+          <strong>It registers global keyboard shortcuts.</strong> It asks Windows to tell it when one of twelve specific key
+          combinations is pressed: your chosen modifier keys (Ctrl+Alt+Shift by default) with Left, Right, Up or 1 to 9. This is
+          not a keyboard hook: Windows only tells Krova about those combinations, and Krova does not record or log what you type. When you press one of
+          its combinations it asks which window has the focus (just the window&rsquo;s handle), whether that window runs as
+          administrator, and where it is, then moves it. You can switch the shortcuts off in Settings, and they are released
+          when Krova is switched off in the tray menu.
+        </li>
+        <li>
+          <strong>It watches for window and display events.</strong> It asks Windows to report when a window starts or finishes being
+          moved or resized (not Krova&rsquo;s own windows), and when your display setup or work area changes or the PC wakes from sleep.
+          To put windows back in their zones and keep neighbours in step, Krova remembers in memory, for windows it snapped: the window
+          handle (a number Windows assigns), the monitor, layout and zone it went into, and its rectangle. It never reads or keeps a
+          window title or a program name. This list is never written to disk, a window you move yourself is dropped from it, it holds at
+          most 1,024 windows, and it is gone when you quit Krova.
+        </li>
+      </ul>
+      <p>
+        Neither is sent anywhere: Krova still makes no network calls. On macOS Krova has neither feature yet; only the mouse
+        listening described above.
+      </p>
 
       <h2>Permissions</h2>
       <p>
@@ -113,8 +146,8 @@ const description =
         Accessibility). macOS requires it before any app can move and resize other apps&rsquo; windows. Depending on your
         macOS version it may also ask for <strong>Input Monitoring</strong> so that it can notice a window being
         dragged. Krova only watches the left mouse button and checks whether your activation key and Escape are held;
-        it does not read or record what you type. On Windows no special permission is requested; windows of apps
-        running as administrator are skipped.
+        it does not read or record what you type. On Windows no special permission is requested, not for the mouse listening,
+        the keyboard shortcuts or the window watcher; windows of apps running as administrator are skipped.
       </p>
 
       <h2>Removing your data</h2>
@@ -160,7 +193,7 @@ const description =
           )
         }
       </p>
-      <p class="muted">Last updated: 30 October 2026. See also <a href={url('/license/')}>License and terms</a>.</p>
+      <p class="muted">Last updated: 31 October 2026. See also <a href={url('/license/')}>License and terms</a>.</p>
     </article>
   </div>
 </BaseLayout>
