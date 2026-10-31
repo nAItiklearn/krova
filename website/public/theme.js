@@ -1,6 +1,6 @@
 /*
-  Krova site script. The only JavaScript on the site. Same-origin, no network,
-  no cookies.
+  Krova site script. Same-origin, no network, no cookies. (The only other script,
+  /stars.js, fetches the GitHub star count for the header link.)
 
   1. Light / dark choice. Runs in <head>, before first paint, so there is no
      flash. The choice ("light" or "dark") is kept in localStorage under

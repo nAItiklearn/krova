@@ -161,11 +161,19 @@ const description =
 
       <h2>This website</h2>
       <p>
-        This site is a set of static pages. It sets no cookies, runs no analytics, has no forms and loads nothing from
-        other servers: no fonts, images, scripts or embeds. It runs one small script of its own, a file served from this
+        This site is a set of static pages. It sets no cookies, runs no analytics, has no forms and loads no fonts,
+        images, scripts or embeds from other servers. It runs one small script of its own, a file served from this
         site, that remembers your light or dark choice in your browser&rsquo;s local storage (the key
-        <code>krova-theme</code>). Nothing is sent anywhere. Like any web server, whatever hosts these pages may keep
-        ordinary access logs; the site itself does nothing to add to that.
+        <code>krova-theme</code>). Like any web server, whatever hosts these pages may keep ordinary access logs; the
+        site itself does nothing to add to that.
+      </p>
+      <p>
+        <strong>One exception: the star count.</strong> The &ldquo;Star&rdquo; link in the header shows how many people
+        starred Krova on GitHub. To get that number, a second small script of this site asks GitHub&rsquo;s public API
+        (<code>api.github.com</code>) once, then keeps the answer in your browser&rsquo;s local storage for an hour (the
+        key <code>krova-stars</code>). The request carries no cookies and no referrer, but like any request it reaches
+        GitHub with your IP address and browser details, under GitHub&rsquo;s privacy policy. It is the only request this
+        site makes to another server. If it fails, the link just says &ldquo;Star&rdquo;.
       </p>
       <p>
         The live editor on the home page is also part of this site. It runs in your browser against sample monitors and

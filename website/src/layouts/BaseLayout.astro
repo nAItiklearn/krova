@@ -4,7 +4,7 @@ import '../styles/base.css';
 import '../styles/illustrations.css';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
-import { SITE_NAME } from '../site';
+import { REPO_LINKS_ENABLED, SITE_NAME } from '../site';
 import { url } from '../lib/url';
 
 interface Props {
@@ -17,12 +17,14 @@ const { title, description } = Astro.props;
 // Canonical / og:url only exist when src/site.ts provides a real origin.
 const canonical = Astro.site ? new URL(Astro.url.pathname, Astro.site).href : undefined;
 
-// Production-only CSP. It makes "no external requests" enforceable by the
-// browser. Everything is denied except:
+// Production-only CSP. It makes "no external requests, except the star count"
+// enforceable by the browser. Everything is denied except:
 //   script-src 'self'  the one same-origin file, /theme.js
 //   frame-src 'self'   the same-origin live demo at /demo/ (its own document, with its own CSP)
 //   img-src 'self'     favicon and touch icon
 //   connect-src 'self' audit tools fetch /robots.txt through the page
+//     + https://api.github.com: the one cross-origin request, the star count
+//       in the header (/stars.js, cached for an hour)
 //   style-src inline   the stylesheet is inlined into each page
 // Skipped in dev, where Vite needs a websocket for hot reload.
 const csp = [
@@ -30,7 +32,7 @@ const csp = [
   "script-src 'self'",
   "style-src 'unsafe-inline'",
   "img-src 'self'",
-  "connect-src 'self'",
+  `connect-src 'self'${REPO_LINKS_ENABLED ? ' https://api.github.com' : ''}`,
   "frame-src 'self'",
   "base-uri 'none'",
   "form-action 'none'",
@@ -66,6 +68,8 @@ const csp = [
 
     <!-- Applies the saved light/dark choice before first paint. Same-origin file. -->
     <script is:inline src={url('/theme.js')}></script>
+    <!-- GitHub star count for the header link. Deferred: never blocks rendering. -->
+    {REPO_LINKS_ENABLED && <script is:inline defer src={url('/stars.js')}></script>}
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to main content</a>
