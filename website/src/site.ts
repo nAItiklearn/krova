@@ -31,7 +31,7 @@ export const REPO_URL = 'https://github.com/nAItiklearn/krova';
  * Flip to true only after the repository has been made public. Until then no
  * link to github.com/nAItiklearn/krova is rendered anywhere on the site.
  */
-export const REPO_PUBLIC = false;
+export const REPO_PUBLIC = true;
 
 /** True once REPO_URL no longer contains the TODO placeholder. */
 export const REPO_CONFIGURED = !/todo/i.test(REPO_URL);
@@ -108,10 +108,10 @@ export function latestDownloadUrl(file: string): string {
  * for example 'https://krova.example'. When set, canonical and og:url tags
  * are emitted. Leave empty until a real domain exists.
  */
-export const SITE_URL = '';
+export const SITE_URL = 'https://naitiklearn.github.io/krova';
 
 /**
  * Sub-path the site is served from. Use '/' for a domain root, or for
  * example '/krova' when hosting on GitHub project pages.
  */
-export const BASE_PATH = '/';
+export const BASE_PATH = '/krova';

@@ -2,7 +2,8 @@
 //   - every internal link and asset reference resolves to a file in dist/
 //   - every #fragment points at an id that exists in the target page
 //   - no page references a subresource (script, stylesheet, image, frame, ...) on another origin
-//   - no link to the repository / GitHub shows up while REPO_PUBLIC is false
+//   - absolute links carry BASE_PATH (the site is served from a sub-path on GitHub Pages)
+//   - no link to the repository / GitHub shows up while REPO_PUBLIC is false (read from src/site.ts)
 //   - external hyperlinks are listed, not fetched (this script never touches the network)
 //
 // Usage: node scripts/check-links.mjs [dist-dir]
@@ -16,6 +17,12 @@ if (!existsSync(dist)) {
   console.error(`dist not found at ${dist}. Run "npm run build" first.`);
   process.exit(2);
 }
+
+// Deployment settings live in src/site.ts (TypeScript, so read it as text instead of importing it).
+const siteSource = readFileSync(join(here, '..', 'src', 'site.ts'), 'utf8');
+const readConst = (name) => siteSource.match(new RegExp(`export const ${name}\\s*=\\s*([^;]+);`))?.[1].trim();
+const basePath = (readConst('BASE_PATH') ?? "'/'").replace(/^['"]|['"]$/g, '').replace(/\/+$/, ''); // '' or '/krova'
+const repoPublic = readConst('REPO_PUBLIC') === 'true';
 
 const pages = [];
 (function walk(dir) {
@@ -43,8 +50,11 @@ function resolveTarget(fromFile, href) {
   const rel = relative(dist, fromFile).replace(/\\/g, '/');
   let urlPath;
   if (pathPart === '') urlPath = '/' + rel.replace(/index\.html$/, '');
-  else if (pathPart.startsWith('/')) urlPath = pathPart;
-  else urlPath = new URL(pathPart, 'http://x/' + rel.replace(/index\.html$/, '')).pathname;
+  else if (pathPart.startsWith('/')) {
+    // Served under BASE_PATH, so an absolute link has to carry it; the files in dist/ do not.
+    if (basePath && pathPart !== basePath && !pathPart.startsWith(basePath + '/')) return undefined;
+    urlPath = basePath ? pathPart.slice(basePath.length) || '/' : pathPart;
+  } else urlPath = new URL(pathPart, 'http://x/' + rel.replace(/index\.html$/, '')).pathname;
   urlPath = decodeURIComponent(urlPath);
   const base = join(dist, urlPath);
   const candidates = urlPath.endsWith('/') ? [join(base, 'index.html')] : [base, join(base, 'index.html')];
@@ -99,8 +109,8 @@ for (const file of pages) {
     }
   }
 
-  // The repository is private: nothing may link to it yet.
-  if (/github\.com\/nAItiklearn/i.test(html)) {
+  // While the repository is private, nothing may link to it.
+  if (!repoPublic && /github\.com\/nAItiklearn/i.test(html)) {
     problems.push(`${where}: links to the repository (only allowed after REPO_PUBLIC is true)`);
   }
 }
