@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="196" viewBox="0 0 420 196" role="img" aria-labelledby="t d">
+  <title id="t">Krova idle CPU</title>
+  <desc id="d">CPU use as a percentage of one core, average over a 60 second idle run of Krova 0.1.0 on Windows 11. Tray only, no window: 0.34 percent average, 2.1 percent peak. Editor window open: 0.49 percent average, 6.1 percent peak. Data: docs/measurements/idle-2026-10-31-tray.txt and idle-2026-10-31-editor.txt.</desc>
+  <style>
+    .h { font: 600 15px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #1f2328; }
+    .l { font: 13px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #1f2328; }
+    .v { font: 600 13px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #1f2328; }
+    .m { font: 11px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #59636e; }
+    .track { fill: #8c959f; fill-opacity: .18; }
+    .bar { fill: #4f46e5; }
+    @media (prefers-color-scheme: dark) {
+      .h, .l, .v { fill: #e6edf3; }
+      .m { fill: #9198a1; }
+      .bar { fill: #7c75f0; }
+    }
+  </style>
+  <text class="h" x="16" y="28">Idle CPU (% of one core, average)</text>
+  <text class="l" x="16" y="62">Tray only, no window</text>
+  <text class="v" x="404" y="62" text-anchor="end">0.34% · peak 2.1%</text>
+  <rect class="track" x="16" y="70" width="388" height="18" rx="4"/>
+  <rect class="bar" x="16" y="70" width="264" height="18" rx="4"/>
+  <text class="l" x="16" y="118">Editor window open</text>
+  <text class="v" x="404" y="118" text-anchor="end">0.49% · peak 6.1%</text>
+  <rect class="track" x="16" y="126" width="388" height="18" rx="4"/>
+  <rect class="bar" x="16" y="126" width="380" height="18" rx="4"/>
+  <text class="m" x="16" y="176">Scale: 0 to 0.5% of one core · Krova 0.1.0 · Windows 11 · 60 s idle · one run</text>
+</svg>

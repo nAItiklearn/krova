@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="196" viewBox="0 0 420 196" role="img" aria-labelledby="t d">
+  <title id="t">Krova idle memory</title>
+  <desc id="d">Private memory, median of a 60 second idle run of Krova 0.1.0 on Windows 11. Tray only, no window: 2.4 MB in 1 process. Editor window open: 199 MB in 7 processes. Data: docs/measurements/idle-2026-10-31-tray.txt and idle-2026-10-31-editor.txt.</desc>
+  <style>
+    .h { font: 600 15px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #1f2328; }
+    .l { font: 13px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #1f2328; }
+    .v { font: 600 13px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #1f2328; }
+    .m { font: 11px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #59636e; }
+    .track { fill: #8c959f; fill-opacity: .18; }
+    .bar { fill: #4f46e5; }
+    @media (prefers-color-scheme: dark) {
+      .h, .l, .v { fill: #e6edf3; }
+      .m { fill: #9198a1; }
+      .bar { fill: #7c75f0; }
+    }
+  </style>
+  <text class="h" x="16" y="28">Idle memory (private)</text>
+  <text class="l" x="16" y="62">Tray only, no window</text>
+  <text class="v" x="404" y="62" text-anchor="end">2.4 MB · 1 process</text>
+  <rect class="track" x="16" y="70" width="388" height="18" rx="4"/>
+  <rect class="bar" x="16" y="70" width="5" height="18" rx="2"/>
+  <text class="l" x="16" y="118">Editor window open</text>
+  <text class="v" x="404" y="118" text-anchor="end">199 MB · 7 processes</text>
+  <rect class="track" x="16" y="126" width="388" height="18" rx="4"/>
+  <rect class="bar" x="16" y="126" width="387" height="18" rx="4"/>
+  <text class="m" x="16" y="176">Krova 0.1.0 · Windows 11 · Ryzen 5 5625U · median of 60 s idle · one run</text>
+</svg>

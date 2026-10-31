@@ -69,7 +69,7 @@ No Critical or High findings in Krova's own code; privacy promises hold for Krov
 
 ## Not done
 
-- [ ] Measurements: drag latency; the official `measure-idle.ps1` run for the new tray-only state (the agent's own probe measured about 6 MB private with the window closed, about 200 MB with the editor open; those are not on the website until the official script has produced them)
+- [ ] Measurements: drag latency, and resource use during a drag. (Done 2026-10-31 with the published v0.1.0 installer: official `measure-idle.ps1` runs for tray only, 1 process / 2.4 MB private, and editor open, 7 processes / 199 MB; `docs/measurements/idle-2026-10-31-*.txt`, charted in the README. Closing the editor was checked to end all WebView2 processes.)
 - [ ] A hands-on test on a Mac
 - [ ] Code signing and notarisation
 - [ ] Review of the surfaces listed above under "Not covered by the review yet"

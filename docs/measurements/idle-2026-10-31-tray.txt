@@ -1,0 +1,39 @@
+# Krova idle resource sample, 2026-10-31. Raw output of measure-idle.ps1 (run for 60 s, one sample / 2 s), started 25 s after launch.
+# State: Krova 0.1.0 (the published v0.1.0 installer, installed per-user), running in the tray only: no window opened since launch, no window being dragged.
+# Columns of S rows: S | seconds | krova-app working set MB | all processes working set MB | all processes private MB | CPU % of ONE core | process count
+# Not measured: a drag in progress, the editor window open in this build (see idle-2026-10-30.txt for an earlier build with it open), macOS.
+HOST|AMD Ryzen 5 5625U with Radeon Graphics|12 logical cores|13.8 GB RAM|Microsoft Windows 11 Home Single Language
+LABEL|Tray only, no window
+TARGET|pid 16208|C:\Users\Lenovo\AppData\Local\Krova\krova-app.exe|identifier dev.krova.desktop
+COUNT|app+webview2 processes: 1
+S|2|13.0|13.0|2.4|0.00|procs 1
+S|4|13.0|13.0|2.4|0.00|procs 1
+S|6|13.0|13.0|2.4|0.00|procs 1
+S|8|13.0|13.0|2.4|0.00|procs 1
+S|10|13.0|13.0|2.4|0.00|procs 1
+S|12|13.0|13.0|2.4|1.31|procs 1
+S|14|13.0|13.0|2.4|0.00|procs 1
+S|16|13.0|13.0|2.4|0.00|procs 1
+S|18|13.0|13.0|2.4|0.00|procs 1
+S|20|13.0|13.0|2.4|0.00|procs 1
+S|22|13.0|13.0|2.4|0.00|procs 1
+S|24|13.0|13.0|2.4|0.69|procs 1
+S|26|13.0|13.0|2.4|0.69|procs 1
+S|28|13.0|13.0|2.4|0.00|procs 1
+S|30|13.0|13.0|2.4|0.00|procs 1
+S|32|13.0|13.0|2.4|0.00|procs 1
+S|34|13.0|13.0|2.4|0.00|procs 1
+S|36|13.0|13.0|2.4|0.70|procs 1
+S|38|13.0|13.0|2.4|0.00|procs 1
+S|40|13.0|13.0|2.4|0.00|procs 1
+S|42|13.0|13.0|2.4|0.00|procs 1
+S|44|13.0|13.0|2.4|0.00|procs 1
+S|46|13.0|13.0|2.4|0.69|procs 1
+S|48|13.0|13.0|2.4|0.69|procs 1
+S|50|13.0|13.0|2.4|2.08|procs 1
+S|52|13.0|13.0|2.4|0.70|procs 1
+S|54|13.0|13.0|2.4|1.41|procs 1
+S|56|13.0|13.0|2.4|0.70|procs 1
+S|58|13.0|13.0|2.4|0.69|procs 1
+S|60|13.0|13.0|2.4|0.00|procs 1
+DONE
