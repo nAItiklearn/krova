@@ -1,12 +1,5 @@
 # Security policy
 
-> **Owner: confirm before publishing.** This file makes three assumptions that only you can check:
-> 1. The repository is `https://github.com/nAItiklearn/krova`. That URL comes from `REPO_URL` in `website/src/site.ts`, where it is itself marked as an assumption (the owner name is taken from the Windy remote; the repository name is a guess).
-> 2. GitHub **private vulnerability reporting** is switched on for that repository (Settings, Code security, Private vulnerability reporting).
-> 3. The response targets below are ones you can keep.
->
-> No e-mail address is published here on purpose. Delete this note once the points are confirmed.
-
 ## Supported versions
 
 Krova is pre-1.0. Only the **latest 0.x release** receives security fixes; there are no backports to older 0.x versions. Fixes ship in the next 0.x release.
