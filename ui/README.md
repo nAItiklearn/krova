@@ -55,6 +55,7 @@ else defines contract types.
 | `editSplitZone(layout, zoneId, axis, at)` | `edit_split_zone` | `{ layout, zoneId, axis, at }` | `Layout` |
 | `editRemoveZone(layout, zoneId)` | `edit_remove_zone` | `{ layout, zoneId }` | `Layout` |
 | `editMoveDivider(layout, axis, from, to)` | `edit_move_divider` | `{ layout, axis, from, to }` | `Layout` |
+| `takePendingView()` | `take_pending_view` | | `string \| null` (the view a tray click parked while the window was being created; called once, after `onNavigate` is registered, real backend only: `lib/pendingView.ts`. The mock returns `null`) |
 | `onNavigate(cb)` | event `navigate` | payload `"editor" \| "settings"` | |
 | `onStateChanged(cb)` | event `state-changed` | payload `AppState` | |
 
@@ -110,8 +111,10 @@ URL parameters (demo/browser only):
   `not_required` also accepted).
 * `?reset` forgets persisted demo edits at startup.
 * `?nopersist` keeps everything in memory only.
-* `?shortcuts=failed` reports `shortcuts: { active: true, failed: ["Win+Alt+3 is
-  already used by another app"] }`; `?shortcuts=off` reports `active: false`.
+* `?shortcuts=failed` reports `shortcuts: { active: true, failed:
+  ["Ctrl+Alt+Shift+3 is already used by another app"] }`; `?shortcuts=off`
+  reports `active: false`. The default `shortcut_modifier` is `ctrl_alt_shift`
+  (Windows refuses most Win+Alt and Win+Ctrl chords).
   (Either way the mock also turns the shortcuts off when the Settings switch is
   off or the capability is missing.)
 * `?capabilities=none` reports `capabilities: { shortcuts: false, window_memory:
@@ -143,7 +146,8 @@ Added with keyboard shortcuts, window memory and export/import:
 `setting-keyboard_shortcuts`, `setting-shortcut_modifier` (a `select`),
 `setting-restore_on_reconnect`, `setting-linked_dividers`, `setting-zone_gap_px`,
 `settings-shortcuts` / `settings-windows` (the two cards), `shortcuts-keymap`,
-`keymap-left|right|number|up`, `shortcuts-status` (live region),
+`keymap-left|right|number|up`, `shortcuts-win-hint` (shown for the two
+Win-key choices), `shortcuts-status` (live region),
 `shortcuts-failed`, `shortcuts-inactive`, `shortcuts-unavailable`,
 `window-memory-unavailable`, `layout-transfer` (the card), `export-layout`,
 `import-layout` (the two openers, `aria-expanded`), `export-panel`,

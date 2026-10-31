@@ -7,6 +7,7 @@
     modifierLabel,
     shortcutKeys,
     shortcutLabel,
+    usesWinKey,
   } from '../lib/platform';
   import { settings } from '../lib/settings.svelte';
   import Icon from './Icon.svelte';
@@ -25,6 +26,10 @@
   const shortcutsActive = $derived(app.state?.shortcuts?.active ?? false);
   // The keys of the chosen modifier, e.g. ['Win', 'Alt']; Mac words only where they work.
   const modKeys = $derived(s ? shortcutKeys(s.shortcut_modifier, caps.shortcuts) : []);
+  // Windows refuses many Win-key chords: say so next to the choice (features-contract.md).
+  const winKeyHint = $derived(
+    caps.shortcuts && s !== null && s.keyboard_shortcuts && usesWinKey(s.shortcut_modifier),
+  );
 
   const MOVE_MODES: { value: MoveMode; label: string; hint: string }[] = [
     { value: 'animate', label: 'Animate', hint: 'Glide into the zone (about 120 ms)' },
@@ -63,7 +68,7 @@
   const opacityPct = $derived(s ? Math.round(s.highlight_opacity * 100) : 0);
 </script>
 
-<!-- The chosen modifier keys followed by the rest of the combination: Win + Alt + Left. -->
+<!-- The chosen modifier keys followed by the rest of the combination: Ctrl + Alt + Shift + Left. -->
 {#snippet combo(tail: string[], to?: string)}
   {#each [...modKeys, ...tail] as key, i (i)}{#if i > 0}{' + '}{/if}<kbd>{key}</kbd>{/each}{#if to}{' to '}<kbd>{to}</kbd>{/if}
 {/snippet}
@@ -337,7 +342,7 @@
           id="set-shortcut-mod"
           class="mod-select"
           disabled={!caps.shortcuts || !s.keyboard_shortcuts}
-          aria-describedby="set-shortcut-mod-desc"
+          aria-describedby={winKeyHint ? 'set-shortcut-mod-desc set-shortcut-win-hint' : 'set-shortcut-mod-desc'}
           data-testid="setting-shortcut_modifier"
           onchange={(e) =>
             settings.update({ shortcut_modifier: e.currentTarget.value as ShortcutModifier })}
@@ -348,6 +353,12 @@
             </option>
           {/each}
         </select>
+        {#if winKeyHint}
+          <p class="desc" id="set-shortcut-win-hint" data-testid="shortcuts-win-hint">
+            Windows keeps many shortcuts with the Windows key for itself, so some of these may not
+            register. The ones that fail are listed below; Ctrl + Alt + Shift is the safest choice.
+          </p>
+        {/if}
       </div>
 
       <!-- Polite live region: a conflict that shows up after a change is announced. -->
