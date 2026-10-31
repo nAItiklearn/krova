@@ -144,7 +144,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
     color-scheme: dark;
-    --color-bg: #0b0c14;
+    --color-bg: #000000;
     --color-surface: #12131d;
     --color-surface-2: #0e0f18;
     --color-surface-3: #191a27;
@@ -207,7 +207,7 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --color-bg: #0b0c14;
+  --color-bg: #000000;
   --color-surface: #12131d;
   --color-surface-2: #0e0f18;
   --color-surface-3: #191a27;
