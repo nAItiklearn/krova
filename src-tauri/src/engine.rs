@@ -187,7 +187,9 @@ pub fn start(shared: &Arc<Shared>) {
 
 /// Everything except the global mouse hook and the overlay window: what the
 /// desktop integration tests need, without hooking the tester's mouse.
-#[cfg(test)]
+/// Gated like its only callers (the Windows-only desktop tests), so a macOS test build has no
+/// unused function.
+#[cfg(all(test, windows))]
 pub fn start_headless(shared: &Arc<Shared>) {
     start_parts(shared, false);
 }
