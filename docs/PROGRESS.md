@@ -12,8 +12,8 @@ What has actually been run, by whom, and where:
 | `krova-platform::mac*` (everything macOS-only) | Compiles and passes `clippy -D warnings` on `macos-latest` in CI and for both macOS targets locally. **Never run on a Mac**: no permission prompt, event tap, Accessibility call or overlay window has executed. Hand-declared FFI, no third-party crates. `mac_math` (not cfg-gated) is compiled and tested on every OS. |
 | `src-tauri` | fmt and `clippy --all-targets -D warnings` clean on Windows and for both macOS targets (the macOS check needs a stand-in C compiler for one build script; recipe in the README). **43 tests pass** (+3 ignored desktop tests). The owner ran the Windows build on 2026-10-30: Shift-drag snapping, the tray and the editor work ("working nicely"). That is a manual smoke test; drag latency, real monitor unplug and replug, linked dividers with a real mouse and mixed-DPI setups are not tested. Separate workspace, so the root commands do not cover it: use `--manifest-path src-tauri/Cargo.toml`. |
 | `ui/` | **166 vitest tests**, `svelte-check` (0 errors, 0 warnings), `vite build`, the e2e type check, and **240 Playwright tests** against the demo mock backend (Edge, Windows only; the last full run was by the UI agent on the branch that is now on `main`). Earlier e2e runs found three real accessibility bugs, since fixed and kept as regression tests. The UI also runs inside the real Tauri app on Windows. |
-| `website/` | Static Astro site, 15 pages (home, download, performance, changelog, compare, guides, support, privacy, license) plus the real editor as a live demo at `/demo/`; light, dark and system theme. `npm run build` and the link check pass, and the build job is green on GitHub. Not tested in Firefox or Safari or with a screen reader. The deploy job fails until the owner switches on Pages (see below). Download buttons stay hidden until `REPO_PUBLIC` and `RELEASE_PUBLISHED` are flipped in `website/src/site.ts`; `REPO_PUBLIC` is already true. |
-| `.github/workflows/*` | `ci.yml` runs on Windows, macOS and Ubuntu. At commit `746c4b0` (2026-10-31) every CI job was green: core on Windows, macOS and Ubuntu, the UI job, and the app on Windows and macOS. (A dead-code lint that only appears in a macOS test build failed the macOS app job at `e4297aa`; `5b17cf3` fixed it.) `release.yml` ran once by hand and produced the Windows installer. `pages.yml` builds the site; its deploy job fails until Pages is enabled. The e2e suite is **not** part of CI. |
+| `website/` | Static Astro site, 15 pages (home, download, performance, changelog, compare, guides, support, privacy, license) plus the real editor as a live demo at `/demo/`; light, dark and system theme. `npm run build` and the link check pass, and the build job is green on GitHub. Not tested in Firefox or Safari or with a screen reader. Deployed by `pages.yml` to GitHub Pages. Download buttons stay hidden until `REPO_PUBLIC` and `RELEASE_PUBLISHED` are flipped in `website/src/site.ts`; `REPO_PUBLIC` is already true. |
+| `.github/workflows/*` | `ci.yml` runs on Windows, macOS and Ubuntu. At commit `746c4b0` (2026-10-31) every CI job was green: core on Windows, macOS and Ubuntu, the UI job, and the app on Windows and macOS. (A dead-code lint that only appears in a macOS test build failed the macOS app job at `e4297aa`; `5b17cf3` fixed it.) `release.yml` ran once by hand and produced the Windows installer. `pages.yml` builds and deploys the site (run #5 at `36c87cf` succeeded, deploy included). Since `0e62116` the `ui-e2e` job runs the Playwright suite on `windows-latest` (Edge); the first run, at `0e62116`, was green along with every other job. |
 
 Build order for the app (the Tauri config has no `before*Command` hooks, so nothing depends on a hook's working directory):
 
@@ -59,7 +59,7 @@ No Critical or High findings in Krova's own code; privacy promises hold for Krov
 
 ## Owner actions (only the repository owner can do these)
 
-- [ ] Settings → Pages → Build and deployment → Source: **GitHub Actions**. Until then the `website` workflow's deploy job fails (its build job is fine).
+- [x] Settings → Pages → Source: GitHub Actions (the deploy job succeeded on 2026-10-31).
 - [ ] Settings → Code security → enable **private vulnerability reporting** (`SECURITY.md` points people to it).
 - [ ] Add a protection rule for `v*` tags.
 - [ ] Delete the local branch `backup-pre-rewrite` (never pushed; it holds the history from before the rewrite, with the old email address).
@@ -72,7 +72,6 @@ No Critical or High findings in Krova's own code; privacy promises hold for Krov
 - [ ] Measurements: drag latency; the official `measure-idle.ps1` run for the new tray-only state (the agent's own probe measured about 6 MB private with the window closed, about 200 MB with the editor open; those are not on the website until the official script has produced them)
 - [ ] A hands-on test on a Mac
 - [ ] Code signing and notarisation
-- [ ] Add the e2e suite to CI (after `npm ci` in `ui/`: `npm run e2e`; Edge is preinstalled on `windows-latest`)
 - [ ] Review of the surfaces listed above under "Not covered by the review yet"
 
 ## Known gaps / decisions to revisit
