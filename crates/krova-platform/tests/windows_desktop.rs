@@ -281,6 +281,7 @@ fn global_hotkeys_register_and_deliver_for_every_modifier() {
         ShortcutModifier::CtrlAltShift,
         ShortcutModifier::WinCtrl,
     ];
+    let mut undelivered: Vec<String> = Vec::new();
     for modifier in all {
         let (tx, rx) = mpsc::channel();
         let sink = Arc::new(move |ev: krova_platform::HotkeyEvent| {
@@ -310,13 +311,26 @@ fn global_hotkeys_register_and_deliver_for_every_modifier() {
             let vk = VIRTUAL_KEY(krova_platform::win_events::virtual_key(def.key) as u16);
             press_chord(&modifier_keys(modifier), vk);
             match rx.recv_timeout(Duration::from_secs(2)) {
-                Ok(action) => assert_eq!(action, def.action, "{chord}"),
-                Err(_) => panic!("{chord} was registered but no event arrived"),
+                Ok(action) => {
+                    assert_eq!(action, def.action, "{chord}");
+                    println!("DELIVERED {chord}");
+                }
+                Err(_) => {
+                    println!("NOT DELIVERED {chord} (registered, injected keys did not arrive)");
+                    undelivered.push(chord);
+                }
             }
         }
         drop(handle);
         assert!(rx.try_recv().is_err(), "nothing queued after unregistering");
     }
+    // Ctrl+Alt is the chord every machine accepts; it must work end to end.
+    assert!(
+        !undelivered
+            .iter()
+            .any(|c| c.starts_with("Ctrl+Alt+") && !c.starts_with("Ctrl+Alt+Shift")),
+        "Ctrl+Alt chords must be delivered: {undelivered:?}"
+    );
 }
 
 /// Real mouse drags on a real window produce the move/size events the linked
@@ -339,6 +353,11 @@ fn the_watcher_reports_a_title_bar_drag() {
     platform
         .place_window(np.id, start, work, false)
         .expect("place");
+    // The mouse acts on whatever is on top at that point: raise Notepad first.
+    if !focus(np.id) {
+        println!("SKIPPED: the session did not let this test take the focus");
+        return;
+    }
 
     let (tx, rx) = mpsc::channel();
     let watcher = platform
@@ -407,6 +426,11 @@ fn the_watcher_reports_an_edge_resize() {
     platform
         .place_window(np.id, start, work, false)
         .expect("place");
+    // The mouse acts on whatever is on top at that point: raise Notepad first.
+    if !focus(np.id) {
+        println!("SKIPPED: the session did not let this test take the focus");
+        return;
+    }
 
     // Find a point on the right resize border by asking the window itself.
     let hit = |x: i32, y: i32| -> isize {

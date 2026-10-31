@@ -30,7 +30,7 @@ use windows::Win32::UI::HiDpi::{
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT, KEYBD_EVENT_FLAGS,
     KEYEVENTF_KEYUP, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEINPUT, MOUSE_EVENT_FLAGS,
-    VIRTUAL_KEY, VK_LEFT, VK_LWIN, VK_MENU, VK_RIGHT, VK_UP,
+    VIRTUAL_KEY, VK_CONTROL, VK_LEFT, VK_MENU, VK_RIGHT, VK_UP,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GetClassNameW, GetForegroundWindow, IsWindow, IsWindowVisible, PostMessageW,
@@ -152,15 +152,15 @@ fn send(inputs: &[INPUT]) {
     assert_eq!(sent as usize, inputs.len(), "SendInput was blocked");
 }
 
-/// Win+Alt+`vk`.
-fn win_alt(vk: VIRTUAL_KEY) {
+/// Ctrl+Alt+`vk`.
+fn chord(vk: VIRTUAL_KEY) {
     send(&[
-        key(VK_LWIN, false),
+        key(VK_CONTROL, false),
         key(VK_MENU, false),
         key(vk, false),
         key(vk, true),
         key(VK_MENU, true),
-        key(VK_LWIN, true),
+        key(VK_CONTROL, true),
     ]);
 }
 
@@ -237,7 +237,7 @@ fn primary(shared: &Shared) -> (PxRect, krova_core::Layout) {
 #[test]
 #[ignore = "spawns notepad, registers global shortcuts and injects keystrokes"]
 fn desktop_keyboard_shortcuts_move_notepad_to_the_right_zones() {
-    let shared = start_engine(ShortcutModifier::WinAlt);
+    let shared = start_engine(ShortcutModifier::CtrlAlt);
     let status = lock(&shared.features).shortcuts.clone();
     println!(
         "SHORTCUTS active={} refused={:?}",
@@ -248,7 +248,7 @@ fn desktop_keyboard_shortcuts_move_notepad_to_the_right_zones() {
         status
             .failed
             .iter()
-            .any(|m| m.starts_with(&format!("Win+Alt+{chord_suffix} ")))
+            .any(|m| m.starts_with(&format!("Ctrl+Alt+{chord_suffix} ")))
     };
 
     let Some(np) = Notepad::spawn() else {
@@ -271,14 +271,14 @@ fn desktop_keyboard_shortcuts_move_notepad_to_the_right_zones() {
         return;
     }
 
-    // Win+Alt+2: zone number 2.
+    // Ctrl+Alt+2: zone number 2.
     if !refused("2") {
-        win_alt(digit(2));
+        chord(digit(2));
         let want = layout
             .zone_pixels_gapped(zone_number(&layout, 2), work, 0)
             .unwrap();
         let got = wait_for_rect(&*platform, np.id, want);
-        println!("Win+Alt+2 -> want {want:?}, got {got:?}");
+        println!("Ctrl+Alt+2 -> want {want:?}, got {got:?}");
         assert!(got.is_some(), "notepad did not reach zone 2");
         let record = lock(&shared.registry)
             .get(WindowKey(np.id.0))
@@ -288,9 +288,9 @@ fn desktop_keyboard_shortcuts_move_notepad_to_the_right_zones() {
         assert_eq!(record.layout_id, layout.id);
     }
 
-    // Win+Alt+1 then Right: zone 1, then the next zone (2).
+    // Ctrl+Alt+1 then Right: zone 1, then the next zone (2).
     if !refused("1") {
-        win_alt(digit(1));
+        chord(digit(1));
         let want1 = layout
             .zone_pixels_gapped(zone_number(&layout, 1), work, 0)
             .unwrap();
@@ -298,9 +298,9 @@ fn desktop_keyboard_shortcuts_move_notepad_to_the_right_zones() {
         if !status
             .failed
             .iter()
-            .any(|m| m.starts_with("Win+Alt+Right "))
+            .any(|m| m.starts_with("Ctrl+Alt+Right "))
         {
-            win_alt(VK_RIGHT);
+            chord(VK_RIGHT);
             let want2 = layout
                 .zone_pixels_gapped(zone_number(&layout, 2), work, 0)
                 .unwrap();
@@ -309,8 +309,12 @@ fn desktop_keyboard_shortcuts_move_notepad_to_the_right_zones() {
                 "Right -> zone 2"
             );
         }
-        if !status.failed.iter().any(|m| m.starts_with("Win+Alt+Left ")) {
-            win_alt(VK_LEFT);
+        if !status
+            .failed
+            .iter()
+            .any(|m| m.starts_with("Ctrl+Alt+Left "))
+        {
+            chord(VK_LEFT);
             assert!(
                 wait_for_rect(&*platform, np.id, want1).is_some(),
                 "Left -> zone 1"
@@ -320,10 +324,10 @@ fn desktop_keyboard_shortcuts_move_notepad_to_the_right_zones() {
 
     // Up with a single monitor does nothing.
     if platform.monitors().unwrap().len() == 1
-        && !status.failed.iter().any(|m| m.starts_with("Win+Alt+Up "))
+        && !status.failed.iter().any(|m| m.starts_with("Ctrl+Alt+Up "))
     {
         let before = platform.window_rect(np.id).unwrap();
-        win_alt(VK_UP);
+        chord(VK_UP);
         sleep(Duration::from_millis(600));
         assert!(
             near(platform.window_rect(np.id).unwrap(), before),
@@ -359,14 +363,14 @@ fn zone_number(layout: &krova_core::Layout, n: usize) -> u32 {
 #[test]
 #[ignore = "spawns two notepads, injects keystrokes and drags a window edge with the real mouse"]
 fn desktop_linked_dividers_move_the_neighbours_edge() {
-    let shared = start_engine(ShortcutModifier::WinAlt);
+    let shared = start_engine(ShortcutModifier::CtrlAlt);
     let status = lock(&shared.features).shortcuts.clone();
     if status
         .failed
         .iter()
-        .any(|m| m.starts_with("Win+Alt+1 ") || m.starts_with("Win+Alt+2 "))
+        .any(|m| m.starts_with("Ctrl+Alt+1 ") || m.starts_with("Ctrl+Alt+2 "))
     {
-        println!("SKIPPED: Win+Alt+1 or 2 is taken on this machine");
+        println!("SKIPPED: Ctrl+Alt+1 or 2 is taken on this machine");
         return;
     }
     let (Some(left), Some(right)) = (Notepad::spawn(), Notepad::spawn()) else {
@@ -388,7 +392,7 @@ fn desktop_linked_dividers_move_the_neighbours_edge() {
             println!("SKIPPED: the session did not let this test take the focus");
             return;
         }
-        win_alt(digit(n));
+        chord(digit(n));
         let want = layout
             .zone_pixels_gapped(zone_number(&layout, usize::from(n)), work, 0)
             .unwrap();

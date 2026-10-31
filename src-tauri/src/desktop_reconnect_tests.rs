@@ -141,7 +141,9 @@ fn desktop_reconnect_puts_a_displaced_window_back_into_its_zone() {
         .find(|m| m.primary)
         .expect("a primary monitor")
         .work;
-    let half = screen.w / 2;
+    // Monitor B gets 60% of the screen so that half of it is wider than Notepad's
+    // minimum width (about 400 px); otherwise the window refuses the zone size.
+    let half = screen.w * 2 / 5;
     let a = fake_monitor("A", PxRect::new(screen.x, screen.y, half, screen.h));
     let b = fake_monitor(
         "B",

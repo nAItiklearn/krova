@@ -65,14 +65,17 @@ pub enum Theme {
 }
 
 /// Modifier chord for the keyboard zone shortcuts (`<mods>+Left`, `+1` ... `+9`).
-/// Ctrl+Alt+Left/Right is taken by many IDEs (back / forward), so the default is
-/// Windows key + Alt. Serialised as snake_case strings.
+/// Ctrl+Alt+Left/Right is taken by many IDEs (back / forward). Win+Alt looked like
+/// the natural default but was measured on Windows 11 (10.0.26300): `RegisterHotKey`
+/// refuses all twelve Win+Alt chords there (error 1409, Windows keeps them), and
+/// Win+Ctrl for eleven of twelve. Ctrl+Alt+Shift was accepted for all twelve, so it
+/// is the default. Serialised as snake_case strings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ShortcutModifier {
     CtrlAlt,
-    #[default]
     WinAlt,
+    #[default]
     CtrlAltShift,
     WinCtrl,
 }
@@ -155,7 +158,7 @@ impl Default for Settings {
             launch_at_login: false,
             theme: Theme::System,
             keyboard_shortcuts: true,
-            shortcut_modifier: ShortcutModifier::WinAlt,
+            shortcut_modifier: ShortcutModifier::CtrlAltShift,
             restore_on_reconnect: true,
             linked_dividers: true,
             zone_gap_px: 0,
@@ -574,7 +577,7 @@ mod hardening_tests {
     fn new_settings_default_to_the_documented_values() {
         let d = Settings::default();
         assert!(d.keyboard_shortcuts);
-        assert_eq!(d.shortcut_modifier, ShortcutModifier::WinAlt);
+        assert_eq!(d.shortcut_modifier, ShortcutModifier::CtrlAltShift);
         assert!(d.restore_on_reconnect);
         assert!(d.linked_dividers);
         assert_eq!(d.zone_gap_px, 0);
@@ -618,7 +621,7 @@ mod hardening_tests {
         }
         assert!(serde_json::from_str::<ShortcutModifier>("\"super\"").is_err());
         let json = serde_json::to_value(Settings::default()).unwrap();
-        assert_eq!(json["shortcut_modifier"], "win_alt");
+        assert_eq!(json["shortcut_modifier"], "ctrl_alt_shift");
         assert_eq!(json["keyboard_shortcuts"], true);
         assert_eq!(json["zone_gap_px"], 0);
     }

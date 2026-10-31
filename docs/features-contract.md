@@ -9,7 +9,7 @@ Everything is additive. A v0.1 `config.json` loads unchanged: every new setting 
 | Field | Type | Default | Notes |
 |---|---|---|---|
 | `keyboard_shortcuts` | bool | `true` | Global shortcuts that move the focused window between zones. |
-| `shortcut_modifier` | string enum | `"win_alt"` | One of `"ctrl_alt"`, `"win_alt"`, `"ctrl_alt_shift"`, `"win_ctrl"`. Ctrl+Alt+Left/Right collide with IDE back/forward, hence the default. |
+| `shortcut_modifier` | string enum | `"ctrl_alt_shift"` | One of `"ctrl_alt"`, `"win_alt"`, `"ctrl_alt_shift"`, `"win_ctrl"`. **Changed from the brief's `"win_alt"`**: measured with `RegisterHotKey` on Windows 11 10.0.26300, Windows refuses all twelve Win+Alt chords (error 1409) and eleven of twelve Win+Ctrl chords, while Ctrl+Alt and Ctrl+Alt+Shift are accepted for all twelve. Ctrl+Alt+Left/Right collide with IDE back/forward, so Ctrl+Alt+Shift is the default. Offer `win_alt` / `win_ctrl` in the UI only with the hint that Windows may keep them: `shortcuts.failed` says which. |
 | `restore_on_reconnect` | bool | `true` | When a monitor comes back, windows that Krova had snapped there return to their zones. |
 | `linked_dividers` | bool | `true` | Resizing a snapped window by an edge moves the shared edge of its snapped neighbours too (applied when the mouse is released). |
 | `zone_gap_px` | int | `0` | Space between zones and around the work area, in pixels. Clamped to `0..=32` on load and on save. It applies to zone snaps, the keyboard shortcuts, the reconnect restore and the drag overlay. Edge snaps (half / quarter) ignore it. |
@@ -45,7 +45,7 @@ Existing commands are unchanged.
 
 ## Keyboard map (display text)
 
-With the chosen modifier (`<mods>`, for example `Win+Alt`):
+With the chosen modifier (`<mods>`, by default `Ctrl+Alt+Shift`):
 
 - `<mods>+Left` / `<mods>+Right`: move the focused window to the previous / next zone (wraps around).
 - `<mods>+1` ... `<mods>+9`: move it to zone N.

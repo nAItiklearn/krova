@@ -380,7 +380,7 @@ mod tests {
         // The new settings travel with the config under their contract names.
         let settings = &json["config"]["settings"];
         assert_eq!(settings["keyboard_shortcuts"], true);
-        assert_eq!(settings["shortcut_modifier"], "win_alt");
+        assert_eq!(settings["shortcut_modifier"], "ctrl_alt_shift");
         assert_eq!(settings["restore_on_reconnect"], true);
         assert_eq!(settings["linked_dividers"], true);
         assert_eq!(settings["zone_gap_px"], 0);
