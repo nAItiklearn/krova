@@ -42,7 +42,8 @@ jobs:
       - run: npm ci --prefix website
       - run: npm run build --prefix website
       - run: npm run check:links --prefix website
-      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+      # No actions/configure-pages step: it fails until Pages is enabled, and its only job (telling the
+      # build the base path) is already done by BASE_PATH in website/src/site.ts.
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
           path: website/dist
