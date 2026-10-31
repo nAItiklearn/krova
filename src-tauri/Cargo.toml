@@ -26,9 +26,31 @@ krova-platform = { path = "../crates/krova-platform" }
 [dev-dependencies]
 tempfile = "3"
 
+# Only for the #[ignore]d desktop tests (src/desktop_tests.rs): they spawn Notepad,
+# press keys and drag a window edge, which needs a few raw Win32 calls. Same crate
+# version as krova-platform, so the lockfile gains an edge, not a package.
+[target.'cfg(windows)'.dev-dependencies.windows]
+version = "0.58"
+features = [
+    "Win32_Foundation",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+]
+
 # src-tauri is its own workspace (the root workspace excludes it) so that the
 # core crates build and test on machines without a webview toolchain.
 [workspace]
+
+# Unit-test builds of this crate only. Debug builds share generic code between crates
+# (rustc's share-generics, on at opt-level 0 and 1), so a test that merely drops a
+# `Vec<String>` or a `std::process::Child` can resolve to tauri's own copy of that
+# symbol, which pulls the whole webview stack into the test executable. That stack
+# imports comctl32 v6 functions (TaskDialogIndirect), and a test executable has no
+# manifest to activate v6, so Windows refuses to start it (STATUS_ENTRYPOINT_NOT_FOUND).
+# opt-level 2 turns generic sharing off for this crate: tests link only what they use.
+[profile.test.package.krova-app]
+opt-level = 2
 
 [profile.release]
 lto = true

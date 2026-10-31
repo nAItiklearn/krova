@@ -4,10 +4,11 @@ use std::sync::Arc;
 
 use tauri::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Emitter, Manager, Wry};
+use tauri::{AppHandle, Manager, Wry};
 
 use crate::commands::{change_settings, commit};
 use crate::model::{AppState, Shared};
+use crate::ui_window;
 
 /// Handles to the two checkable entries, so they can follow the real state.
 pub struct TrayItems {
@@ -80,8 +81,10 @@ fn handle_menu_event(app: &AppHandle, event: MenuEvent) {
                 eprintln!("krova: {e}");
             }
         }
-        "edit" => show_window(app, Some("editor")),
-        "settings" => show_window(app, Some("settings")),
+        "edit" => ui_window::show(app, Some("editor")),
+        "settings" => ui_window::show(app, Some("settings")),
+        // An explicit exit request: lib.rs lets `Some(code)` through and only
+        // vetoes the implicit "last window closed" exit.
         "quit" => app.exit(0),
         _ => {}
     }
@@ -92,17 +95,5 @@ pub fn sync(app: &AppHandle, state: &AppState) {
     if let Some(items) = app.try_state::<TrayItems>() {
         let _ = items.enabled.set_checked(state.config.settings.enabled);
         let _ = items.autostart.set_checked(state.autostart);
-    }
-}
-
-/// Bring the main window forward, optionally switching its view.
-pub fn show_window(app: &AppHandle, view: Option<&str>) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.show();
-        let _ = window.unminimize();
-        let _ = window.set_focus();
-        if let Some(view) = view {
-            let _ = app.emit("navigate", view);
-        }
     }
 }

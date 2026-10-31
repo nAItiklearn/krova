@@ -6,6 +6,7 @@
 
 use std::sync::Arc;
 
+use krova_core::layout_io;
 use krova_core::{templates, Axis, Layout, Settings};
 use krova_platform::Permission;
 use serde::Deserialize;
@@ -34,7 +35,9 @@ impl From<AxisArg> for Axis {
 pub fn build_state(shared: &Shared) -> AppState {
     let autostart = shared.platform.autostart_enabled().unwrap_or(false);
     let permission = shared.platform.permission();
-    lock(&shared.model).state(autostart, permission)
+    let shortcuts = lock(&shared.features).shortcuts.clone();
+    let capabilities = shared.platform.capabilities();
+    lock(&shared.model).state(autostart, permission, shortcuts, capabilities)
 }
 
 /// Persist the config, refresh the tray, tell every listener, return the state.
@@ -65,6 +68,12 @@ pub fn change_settings(shared: &Shared, edit: impl FnOnce(&mut Settings)) -> Res
             input.set_modifier(new.modifier);
         }
     }
+    // The shortcuts follow the master switch, their own switch and the chord.
+    if (old.enabled, old.keyboard_shortcuts, old.shortcut_modifier)
+        != (new.enabled, new.keyboard_shortcuts, new.shortcut_modifier)
+    {
+        engine::apply_shortcuts(shared);
+    }
     if old.launch_at_login != new.launch_at_login {
         if let Err(e) = shared.platform.set_autostart(new.launch_at_login) {
             lock(&shared.model).config.settings.launch_at_login = old.launch_at_login;
@@ -84,7 +93,7 @@ pub fn get_state(shared: State<'_, Arc<Shared>>) -> Result<AppState, String> {
     // macOS: the input monitor cannot start before Accessibility is granted, so
     // try again now that it is (a restart may still be needed on some systems).
     if lock(&shared.input).is_none() && shared.platform.permission() == Permission::Granted {
-        engine::start(&shared);
+        engine::retry_input(&shared);
     }
     Ok(build_state(&shared))
 }
@@ -146,6 +155,45 @@ pub fn list_templates() -> Vec<Layout> {
     templates()
 }
 
+/// The layout as a portable file (pretty JSON envelope). The layout is validated
+/// first, so an invalid one is never exported. The UI decides where to save it.
+#[tauri::command]
+pub fn export_layout(layout: Layout) -> Result<String, String> {
+    layout_io::export_json(&layout).map_err(|e| e.to_string())
+}
+
+/// Parse, validate and store a layout file on a monitor. A layout id that is
+/// already taken on that monitor gets a numeric suffix; the 64-layouts cap and all
+/// layout limits apply exactly as for `save_layout`.
+pub fn import_into(shared: &Shared, monitor_id: &str, json: &str) -> Result<String, String> {
+    let mut model = lock(&shared.model);
+    let profile = model
+        .config
+        .monitors
+        .iter()
+        .find(|m| m.id == monitor_id)
+        .ok_or_else(|| format!("monitor {monitor_id} not found"))?;
+    let taken: Vec<&str> = profile.layouts.iter().map(|l| l.id.as_str()).collect();
+    let layout = layout_io::import_json(json, &taken).map_err(|e| e.to_string())?;
+    let id = layout.id.clone();
+    model
+        .config
+        .save_layout(monitor_id, layout)
+        .map_err(|e| e.to_string())?;
+    Ok(id)
+}
+
+#[tauri::command]
+pub fn import_layout(
+    app: AppHandle,
+    shared: State<'_, Arc<Shared>>,
+    monitor_id: String,
+    json: String,
+) -> Result<AppState, String> {
+    import_into(&shared, &monitor_id, &json)?;
+    commit(&app, &shared)
+}
+
 #[tauri::command]
 pub fn edit_split_zone(
     mut layout: Layout,
@@ -185,7 +233,10 @@ pub fn edit_move_divider(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use krova_core::Rect;
+    use crate::model::AppModel;
+    use krova_core::{Config, MonitorDescriptor, PxRect, Rect};
+    use krova_platform::NullPlatform;
+    use std::path::PathBuf;
 
     #[test]
     fn axis_arguments_use_the_documented_spelling() {
@@ -221,6 +272,152 @@ mod tests {
         let json = r#"{"id":"x","name":"X","zones":[{"id":1,"rect":{"x":0,"y":0,"w":1,"h":1}}]}"#;
         let layout: Layout = serde_json::from_str(json).unwrap();
         assert!(layout.validate().is_ok());
+    }
+
+    fn shared_with_one_monitor() -> Shared {
+        let mut model = AppModel::new(Config::default(), PathBuf::from("unused.json"), false);
+        model.config.resolve_monitors(&[MonitorDescriptor {
+            hardware_id: Some("A".to_owned()),
+            device_path: None,
+            rect: PxRect::new(0, 0, 1920, 1080),
+        }]);
+        Shared::new(model, Arc::new(NullPlatform))
+    }
+
+    fn layout_ids(shared: &Shared) -> Vec<String> {
+        lock(&shared.model).config.monitors[0]
+            .layouts
+            .iter()
+            .map(|l| l.id.clone())
+            .collect()
+    }
+
+    #[test]
+    fn export_wraps_a_valid_layout_in_the_versioned_envelope() {
+        let text = export_layout(templates().remove(1)).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(v["krova_layout"], 1);
+        assert_eq!(v["layout"]["id"], "thirds");
+        assert!(text.len() < layout_io::MAX_LAYOUT_JSON_BYTES);
+    }
+
+    #[test]
+    fn export_refuses_an_invalid_layout_with_a_readable_message() {
+        let mut bad = templates().remove(0);
+        bad.zones[0].rect = Rect::new(0.9, 0.0, 0.5, 1.0);
+        let err = export_layout(bad).unwrap_err();
+        assert!(err.contains("not valid"), "{err}");
+        let empty = Layout {
+            id: "e".into(),
+            name: "e".into(),
+            zones: vec![],
+        };
+        assert!(export_layout(empty).unwrap_err().contains("no zones"));
+    }
+
+    #[test]
+    fn import_stores_the_layout_on_the_monitor() {
+        let shared = shared_with_one_monitor();
+        let json = export_layout(Layout::new(
+            "mine",
+            "Mine",
+            &[Rect::new(0.0, 0.0, 0.3, 1.0), Rect::new(0.3, 0.0, 0.7, 1.0)],
+        ))
+        .unwrap();
+        let before = layout_ids(&shared).len();
+        let id = import_into(&shared, "monitor-1", &json).unwrap();
+        assert_eq!(id, "mine");
+        let ids = layout_ids(&shared);
+        assert_eq!(ids.len(), before + 1);
+        assert!(ids.contains(&"mine".to_owned()));
+    }
+
+    #[test]
+    fn importing_a_taken_id_adds_a_suffix_instead_of_replacing() {
+        let shared = shared_with_one_monitor();
+        // "halves" is a built-in layout of every new monitor.
+        let json = export_layout(templates().remove(0)).unwrap();
+        let before = layout_ids(&shared).len();
+        let id = import_into(&shared, "monitor-1", &json).unwrap();
+        assert_eq!(id, "halves-2");
+        let id = import_into(&shared, "monitor-1", &json).unwrap();
+        assert_eq!(id, "halves-3");
+        assert_eq!(layout_ids(&shared).len(), before + 2);
+        // The original is untouched.
+        assert_eq!(
+            lock(&shared.model).config.monitors[0]
+                .layouts
+                .iter()
+                .find(|l| l.id == "halves")
+                .unwrap()
+                .name,
+            "Halves"
+        );
+    }
+
+    #[test]
+    fn import_refuses_bad_input_and_changes_nothing() {
+        let shared = shared_with_one_monitor();
+        let before = lock(&shared.model).config.clone();
+        let good = export_layout(templates().remove(1)).unwrap();
+        assert!(import_into(&shared, "monitor-9", &good)
+            .unwrap_err()
+            .contains("not found"));
+        for bad in [
+            "".to_owned(),
+            "not json".to_owned(),
+            r#"{"krova_layout":2,"layout":{}}"#.to_owned(),
+            good.replace("\"krova_layout\": 1", "\"krova_layout\": 7"),
+            " ".repeat(layout_io::MAX_LAYOUT_JSON_BYTES + 1),
+        ] {
+            assert!(
+                import_into(&shared, "monitor-1", &bad).is_err(),
+                "{bad:.40}"
+            );
+        }
+        assert_eq!(lock(&shared.model).config, before);
+    }
+
+    #[test]
+    fn import_respects_the_layouts_per_monitor_cap() {
+        let shared = shared_with_one_monitor();
+        let json = export_layout(Layout::new(
+            "extra",
+            "Extra",
+            &[Rect::new(0.0, 0.0, 1.0, 1.0)],
+        ))
+        .unwrap();
+        let mut accepted = 0;
+        for _ in 0..krova_core::config::MAX_LAYOUTS_PER_MONITOR + 5 {
+            if import_into(&shared, "monitor-1", &json).is_ok() {
+                accepted += 1;
+            }
+        }
+        let total = layout_ids(&shared).len();
+        assert_eq!(total, krova_core::config::MAX_LAYOUTS_PER_MONITOR);
+        assert_eq!(accepted, total - templates().len());
+        let err = import_into(&shared, "monitor-1", &json).unwrap_err();
+        assert!(err.contains("at most 64 layouts"), "{err}");
+    }
+
+    #[test]
+    fn changing_shortcut_settings_is_harmless_without_platform_support() {
+        // The null platform has no shortcuts: the change is stored, nothing registers.
+        let shared = shared_with_one_monitor();
+        change_settings(&shared, |s| {
+            s.shortcut_modifier = krova_core::ShortcutModifier::CtrlAlt;
+            s.keyboard_shortcuts = false;
+            s.zone_gap_px = 999;
+        })
+        .unwrap();
+        let s = lock(&shared.model).config.settings.clone();
+        assert_eq!(s.shortcut_modifier, krova_core::ShortcutModifier::CtrlAlt);
+        assert!(!s.keyboard_shortcuts);
+        assert_eq!(s.zone_gap_px, 32, "sanitised on the way in");
+        assert!(!lock(&shared.features).shortcuts.active);
+        assert!(build_state(&shared).shortcuts.failed.is_empty());
+        let caps = build_state(&shared).capabilities;
+        assert!(!caps.shortcuts && !caps.window_memory);
     }
 
     #[test]
