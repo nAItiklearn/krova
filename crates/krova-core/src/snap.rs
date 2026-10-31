@@ -21,6 +21,8 @@ pub struct SnapSettings {
     pub enabled: bool,
     pub edge_snapping: bool,
     pub edge_px: i32,
+    /// Space between zones and around the work area, in pixels (zone snaps only).
+    pub gap_px: i32,
 }
 
 impl Default for SnapSettings {
@@ -29,6 +31,7 @@ impl Default for SnapSettings {
             enabled: true,
             edge_snapping: false,
             edge_px: 8,
+            gap_px: 0,
         }
     }
 }
@@ -212,8 +215,9 @@ fn refresh(d: &mut Dragging, s: &SnapSettings, monitors: &[MonitorView<'_>]) -> 
     out
 }
 
-/// End of gesture: tear down overlays and, when `commit`, emit the snap.
-fn finish(d: Dragging, monitors: &[MonitorView<'_>], commit: bool) -> Vec<Action> {
+/// End of gesture: tear down overlays and, when `commit`, emit the snap. `gap` is
+/// the zone gap: the snapped rect is the same one the overlay showed.
+fn finish(d: Dragging, monitors: &[MonitorView<'_>], commit: bool, gap: i32) -> Vec<Action> {
     let mut out = Vec::new();
     if d.overlay.is_some() {
         out.push(Action::HideZones);
@@ -228,7 +232,7 @@ fn finish(d: Dragging, monitors: &[MonitorView<'_>], commit: bool) -> Vec<Action
         let zone_action = d.overlay.and_then(|o| {
             let zone = o.zone?;
             let m = monitors.get(o.monitor)?;
-            let rect = m.layout?.zone_pixels(zone, m.work)?;
+            let rect = m.layout?.zone_pixels_gapped(zone, m.work, gap)?;
             Some(Action::Snap {
                 monitor: o.monitor,
                 rect,
@@ -266,9 +270,10 @@ impl Session {
     pub fn handle(&mut self, ev: DragEvent, monitors: &[MonitorView<'_>]) -> Vec<Action> {
         let state = std::mem::replace(&mut self.state, State::Idle);
 
+        let gap = self.settings.gap_px;
         if !self.settings.enabled {
             return match state {
-                State::Dragging(d) => finish(d, monitors, false),
+                State::Dragging(d) => finish(d, monitors, false, gap),
                 _ => Vec::new(),
             };
         }
@@ -277,7 +282,7 @@ impl Session {
         // must not leave an overlay on screen).
         if let DragEvent::Press { cursor, window } = ev {
             let out = match state {
-                State::Dragging(d) => finish(d, monitors, false),
+                State::Dragging(d) => finish(d, monitors, false, gap),
                 _ => Vec::new(),
             };
             self.state = State::Pressed { cursor, window };
@@ -338,8 +343,12 @@ impl Session {
                 let out = refresh(&mut d, &self.settings, monitors);
                 (State::Dragging(d), out)
             }
-            (State::Dragging(d), DragEvent::Release) => (State::Idle, finish(d, monitors, true)),
-            (State::Dragging(d), DragEvent::Cancel) => (State::Idle, finish(d, monitors, false)),
+            (State::Dragging(d), DragEvent::Release) => {
+                (State::Idle, finish(d, monitors, true, gap))
+            }
+            (State::Dragging(d), DragEvent::Cancel) => {
+                (State::Idle, finish(d, monitors, false, gap))
+            }
             (_, DragEvent::Release | DragEvent::Cancel) => (State::Idle, Vec::new()),
             (s, _) => (s, Vec::new()),
         };
@@ -438,6 +447,40 @@ mod tests {
             ]
         );
         assert!(!s.is_dragging());
+    }
+
+    #[test]
+    fn zone_snaps_honour_the_gap_setting() {
+        let layouts = templates();
+        let m = [mon(0, Some(&layouts[0]))];
+        let mut s = Session::new(SnapSettings {
+            gap_px: 10,
+            ..SnapSettings::default()
+        });
+        start_drag(&mut s, &m);
+        mv(&mut s, &m, (100, 30), true);
+        let out = s.handle(DragEvent::Release, &m);
+        assert_eq!(
+            out[1],
+            Action::Snap {
+                monitor: 0,
+                rect: PxRect::new(10, 10, 945, 1020),
+                target: SnapTarget::Zone(1)
+            }
+        );
+        // The hit-test still uses the full zone, so the gap itself is not a dead zone.
+        let mut s = Session::new(SnapSettings {
+            gap_px: 32,
+            ..SnapSettings::default()
+        });
+        start_drag(&mut s, &m);
+        assert_eq!(
+            mv(&mut s, &m, (3, 3), true).last(),
+            Some(&Action::Highlight {
+                monitor: 0,
+                zone: Some(1)
+            })
+        );
     }
 
     #[test]

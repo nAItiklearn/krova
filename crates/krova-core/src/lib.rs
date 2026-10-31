@@ -6,14 +6,17 @@ pub mod config;
 pub mod edge;
 pub mod edit;
 pub mod geometry;
+pub mod layout_io;
+pub mod linked;
 pub mod monitor;
+pub mod registry;
 pub mod snap;
 pub mod window;
 pub mod zone;
 
 pub use config::{
     Config, ConfigError, LoadStatus, Modifier, MonitorProfile, MoveMode, ProfileError, Settings,
-    Theme,
+    ShortcutModifier, Theme,
 };
 pub use edge::{edge_snap, EdgeSnap};
 pub use edit::{Axis, EditError};

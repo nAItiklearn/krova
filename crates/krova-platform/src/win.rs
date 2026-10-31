@@ -41,7 +41,7 @@ use windows::Win32::Graphics::Gdi::{
 use windows::Win32::Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::{
-    GetCurrentProcess, GetCurrentThreadId, OpenProcess, OpenProcessToken,
+    GetCurrentProcess, GetCurrentProcessId, GetCurrentThreadId, OpenProcess, OpenProcessToken,
     PROCESS_QUERY_LIMITED_INFORMATION,
 };
 use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
@@ -49,9 +49,9 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     GetAsyncKeyState, VIRTUAL_KEY, VK_CONTROL, VK_ESCAPE, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CallNextHookEx, DispatchMessageW, GetAncestor, GetClassNameW, GetMessageW, GetWindowLongW,
-    GetWindowRect, GetWindowThreadProcessId, IsIconic, IsWindow, IsWindowVisible, IsZoomed,
-    PostThreadMessageW, SetWindowPos, SetWindowsHookExW, ShowWindow, TranslateMessage,
+    CallNextHookEx, DispatchMessageW, GetAncestor, GetClassNameW, GetForegroundWindow, GetMessageW,
+    GetWindowLongW, GetWindowRect, GetWindowThreadProcessId, IsIconic, IsWindow, IsWindowVisible,
+    IsZoomed, PostThreadMessageW, SetWindowPos, SetWindowsHookExW, ShowWindow, TranslateMessage,
     UnhookWindowsHookEx, WindowFromPoint, GA_ROOT, GWL_STYLE, HHOOK, MSG, MSLLHOOKSTRUCT,
     SWP_NOACTIVATE, SWP_NOZORDER, SW_RESTORE, WH_MOUSE_LL, WM_LBUTTONDOWN, WM_LBUTTONUP,
     WM_MOUSEMOVE, WM_QUIT, WS_CAPTION,
@@ -62,8 +62,9 @@ use winreg::RegKey;
 use crate::ids::monitor_hardware_id;
 use crate::input::{coalesce_moves, ChangeDetector, RawPointer};
 use crate::{
-    autostart_command, modifier_code, modifier_from_code, InputEvent, InputHandle, MonitorInfo,
-    Permission, Platform, PlatformError, WindowId,
+    autostart_command, modifier_code, modifier_from_code, Capabilities, EventSink, HotkeyEvent,
+    HotkeyHandle, HotkeySpec, InputEvent, InputHandle, MonitorInfo, Permission, Platform,
+    PlatformError, WatchEvent, WatchHandle, WindowId,
 };
 
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
@@ -212,6 +213,13 @@ fn target_is_protected(h: HWND) -> bool {
     let elevated = process_elevated(process).unwrap_or(true);
     let _ = unsafe { CloseHandle(process) };
     elevated
+}
+
+/// Is this one of Krova's own windows (the settings window, the overlay)?
+fn is_own_process_window(h: HWND) -> bool {
+    let mut pid = 0u32;
+    unsafe { GetWindowThreadProcessId(h, Some(&mut pid)) };
+    pid != 0 && pid == unsafe { GetCurrentProcessId() }
 }
 
 /// Top-level window under a screen point.
@@ -720,6 +728,65 @@ impl Platform for WindowsPlatform {
 
     fn permission(&self) -> Permission {
         Permission::NotRequired
+    }
+
+    fn capabilities(&self) -> Capabilities {
+        Capabilities {
+            shortcuts: true,
+            window_memory: true,
+        }
+    }
+
+    fn window_exists(&self, window: WindowId) -> bool {
+        unsafe { IsWindow(hwnd(window)) }.as_bool()
+    }
+
+    fn window_rect(&self, window: WindowId) -> Result<PxRect, PlatformError> {
+        let h = hwnd(window);
+        if !unsafe { IsWindow(h) }.as_bool() {
+            return Err(PlatformError::WindowGone);
+        }
+        match visible_rect(h) {
+            Some(v) => Ok(v),
+            None => outer_rect(h),
+        }
+    }
+
+    fn is_minimized(&self, window: WindowId) -> bool {
+        unsafe { IsIconic(hwnd(window)) }.as_bool()
+    }
+
+    fn is_maximized(&self, window: WindowId) -> bool {
+        unsafe { IsZoomed(hwnd(window)) }.as_bool()
+    }
+
+    fn foreground_window(&self) -> Option<WindowId> {
+        let h = unsafe { GetForegroundWindow() };
+        if h.0.is_null() {
+            None
+        } else {
+            Some(window_id(h))
+        }
+    }
+
+    fn is_movable_target(&self, window: WindowId) -> bool {
+        let h = hwnd(window);
+        unsafe { IsWindow(h) }.as_bool()
+            && snappable(h)
+            && !is_own_process_window(h)
+            && !target_is_protected(h)
+    }
+
+    fn start_hotkeys(
+        &self,
+        spec: HotkeySpec,
+        sink: EventSink<HotkeyEvent>,
+    ) -> Result<HotkeyHandle, PlatformError> {
+        crate::win_events::start_hotkeys(spec, sink)
+    }
+
+    fn start_watcher(&self, sink: EventSink<WatchEvent>) -> Result<WatchHandle, PlatformError> {
+        crate::win_events::start_watcher(sink)
     }
 }
 

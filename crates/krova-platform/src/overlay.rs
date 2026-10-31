@@ -57,6 +57,10 @@ pub struct OverlayScene {
     /// Edge-snap preview, drawn like a highlighted zone.
     pub preview: Option<PxRect>,
     pub style: OverlayStyle,
+    /// The zone rects already include the user's zone gap, so each is drawn exactly
+    /// as given (what you see is where the window lands). When false the renderer
+    /// adds its own small gap so touching zones read as separate tiles.
+    pub gapped: bool,
 }
 
 /// A backend that can display an [`OverlayScene`]; `None` hides the overlay.
@@ -134,14 +138,24 @@ pub fn render(scene: &OverlayScene) -> Vec<u32> {
         h,
         px: vec![0; count],
     };
-    let local = |r: PxRect| {
-        inset(PxRect::new(
+    let to_local = |r: PxRect| {
+        PxRect::new(
             r.x.saturating_sub(scene.monitor.x),
             r.y.saturating_sub(scene.monitor.y),
             r.w,
             r.h,
-        ))
+        )
     };
+    // Zones with a user gap are drawn exactly; otherwise the tiles get a cosmetic gap.
+    let zone_local = |r: PxRect| {
+        if scene.gapped {
+            to_local(r)
+        } else {
+            inset(to_local(r))
+        }
+    };
+    // The edge-snap preview is not a zone and never carries the zone gap.
+    let preview_local = |r: PxRect| inset(to_local(r));
     let style = scene.style;
 
     let idle_fill = premul(style.color, style.opacity * 0.3);
@@ -151,17 +165,17 @@ pub fn render(scene: &OverlayScene) -> Vec<u32> {
 
     for (id, rect) in &scene.zones {
         if scene.highlight != Some(*id) {
-            canvas.tile(local(*rect), idle_fill, BORDER, idle_border);
+            canvas.tile(zone_local(*rect), idle_fill, BORDER, idle_border);
         }
     }
     // Highlight and preview last so they sit on top of their neighbours.
     for (id, rect) in &scene.zones {
         if scene.highlight == Some(*id) {
-            canvas.tile(local(*rect), active_fill, BORDER_ACTIVE, active_border);
+            canvas.tile(zone_local(*rect), active_fill, BORDER_ACTIVE, active_border);
         }
     }
     if let Some(p) = scene.preview {
-        canvas.tile(local(p), active_fill, BORDER_ACTIVE, active_border);
+        canvas.tile(preview_local(p), active_fill, BORDER_ACTIVE, active_border);
     }
     canvas.px
 }
@@ -182,7 +196,38 @@ mod tests {
             highlight,
             preview: None,
             style: STYLE,
+            gapped: false,
         }
+    }
+
+    #[test]
+    fn gapped_zones_are_drawn_exactly_where_the_window_will_land() {
+        // Two zones with a 10 px seam, as `zone_pixels_gapped` produces them.
+        let zones = vec![
+            (1, PxRect::new(10, 10, 80, 80)),
+            (2, PxRect::new(100, 10, 80, 80)),
+        ];
+        let mut s = scene(PxRect::new(0, 0, 200, 100), zones, Some(1));
+        s.gapped = true;
+        let buf = render(&s);
+        // The first painted column/row of zone 1 is its own left/top edge.
+        assert_ne!(alpha(at(&buf, 200, 10, 10)), 0, "top-left corner of zone 1");
+        assert_ne!(
+            alpha(at(&buf, 200, 89, 89)),
+            0,
+            "bottom-right corner of zone 1"
+        );
+        assert_eq!(alpha(at(&buf, 200, 9, 50)), 0, "outside zone 1");
+        assert_eq!(alpha(at(&buf, 200, 90, 50)), 0, "seam");
+        assert_ne!(alpha(at(&buf, 200, 100, 50)), 0, "left edge of zone 2");
+        // Without the flag the renderer shrinks each tile by its own cosmetic gap.
+        s.gapped = false;
+        let buf = render(&s);
+        assert_eq!(
+            alpha(at(&buf, 200, 10, 10)),
+            0,
+            "cosmetic inset hides the corner"
+        );
     }
 
     fn at(buf: &[u32], w: i32, x: i32, y: i32) -> u32 {

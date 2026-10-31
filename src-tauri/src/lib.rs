@@ -3,25 +3,31 @@
 //! Privacy by construction: no network access, no telemetry, and window titles
 //! are never read, logged or stored.
 
+mod actions;
 mod commands;
+#[cfg(all(test, windows))]
+mod desktop_reconnect_tests;
+#[cfg(all(test, windows))]
+mod desktop_tests;
 mod engine;
 mod model;
 mod tray;
+mod ui_window;
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use krova_core::{Config, LoadStatus};
 use krova_platform::Platform;
-use tauri::{Manager, WindowEvent};
+use tauri::{Manager, RunEvent, WindowEvent};
 
 use model::{AppModel, Shared};
 
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         // A second launch just brings the first one forward; two input hooks
         // would snap every window twice.
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            tray::show_window(app, Some("editor"));
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            ui_window::show(app, Some(ui_window::view_from_args(&args)));
         }))
         .setup(setup)
         .invoke_handler(tauri::generate_handler![
@@ -31,19 +37,36 @@ pub fn run() {
             commands::delete_layout,
             commands::set_active_layout,
             commands::list_templates,
+            commands::export_layout,
+            commands::import_layout,
             commands::edit_split_zone,
             commands::edit_remove_zone,
             commands::edit_move_divider,
+            ui_window::take_pending_view,
         ])
-        .on_window_event(|window, event| {
-            // The tray keeps the app alive: closing the window only hides it.
-            if let WindowEvent::CloseRequested { api, .. } = event {
+        .on_window_event(|window, event| match event {
+            // The tray keeps the app alive. By default closing the window destroys
+            // it so the embedded browser exits; `show` rebuilds it on demand.
+            WindowEvent::CloseRequested { api, .. } if !ui_window::DESTROY_ON_CLOSE => {
                 api.prevent_close();
                 let _ = window.hide();
             }
+            WindowEvent::Destroyed => ui_window::destroyed(window.app_handle()),
+            _ => {}
         })
-        .run(tauri::generate_context!())
-        .expect("error while running Krova");
+        .build(tauri::generate_context!())
+        .expect("error while building Krova");
+
+    app.run(|_app, event| {
+        // Closing the last window asks to exit with no code; the tray keeps the
+        // app running. `Quit` calls `app.exit(0)`, which carries a code and passes.
+        if let RunEvent::ExitRequested {
+            api, code: None, ..
+        } = event
+        {
+            api.prevent_exit();
+        }
+    });
 }
 
 fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
@@ -79,12 +102,9 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => eprintln!("krova: could not list monitors: {e}"),
     }
 
-    let shared = Arc::new(Shared {
-        model: Mutex::new(model),
-        platform,
-        input: Mutex::new(None),
-    });
+    let shared = Arc::new(Shared::new(model, platform));
     app.manage(Arc::clone(&shared));
+    app.manage(ui_window::UiState::default());
 
     let initial = commands::build_state(&shared);
     tray::build(app.handle(), &initial)?;

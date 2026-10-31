@@ -1,11 +1,17 @@
 //! App state shared by the tray, the Tauri commands and the drag engine.
 
 use std::path::PathBuf;
+use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
+use krova_core::registry::{ConnectedMonitor, SnapRegistry};
 use krova_core::{Config, ConfigError, MonitorDescriptor, MonitorView, PxRect, Settings};
-use krova_platform::{InputHandle, MonitorInfo, Permission, Platform};
+use krova_platform::{
+    Capabilities, HotkeyHandle, InputHandle, MonitorInfo, Permission, Platform, WatchHandle,
+};
 use serde::Serialize;
+
+use crate::engine::Msg;
 
 /// Everything the app threads share.
 pub struct Shared {
@@ -13,6 +19,61 @@ pub struct Shared {
     pub platform: Arc<dyn Platform>,
     /// Keeps the OS input hook alive; `None` if it could not be started.
     pub input: Mutex<Option<InputHandle>>,
+    /// Which window is in which zone. In memory only, never written anywhere.
+    pub registry: Mutex<SnapRegistry>,
+    /// The optional OS-level features (shortcuts, window watcher) and their state.
+    pub features: Mutex<Features>,
+    /// How to reach the engine thread; `None` before it has started.
+    pub engine_tx: Mutex<Option<Sender<Msg>>>,
+    /// Held while the shortcuts are being re-registered, so two settings changes
+    /// cannot interleave their stop/start.
+    pub shortcut_gate: Mutex<()>,
+}
+
+impl Shared {
+    pub fn new(model: AppModel, platform: Arc<dyn Platform>) -> Self {
+        Self {
+            model: Mutex::new(model),
+            platform,
+            input: Mutex::new(None),
+            registry: Mutex::new(SnapRegistry::new()),
+            features: Mutex::new(Features::default()),
+            engine_tx: Mutex::new(None),
+            shortcut_gate: Mutex::new(()),
+        }
+    }
+}
+
+/// Handles of the optional features, plus what the UI is told about the shortcuts.
+#[derive(Default)]
+pub struct Features {
+    pub hotkeys: Option<HotkeyHandle>,
+    pub watcher: Option<WatchHandle>,
+    pub shortcuts: ShortcutStatus,
+}
+
+/// Whether the global shortcuts are registered, and which ones the OS refused.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct ShortcutStatus {
+    pub active: bool,
+    /// One human-readable sentence per refused shortcut.
+    pub failed: Vec<String>,
+}
+
+/// What this platform can do; the UI hides the settings of features it cannot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct CapabilitiesState {
+    pub shortcuts: bool,
+    pub window_memory: bool,
+}
+
+impl From<Capabilities> for CapabilitiesState {
+    fn from(c: Capabilities) -> Self {
+        Self {
+            shortcuts: c.shortcuts,
+            window_memory: c.window_memory,
+        }
+    }
 }
 
 /// Lock a mutex, carrying on with the data if another thread panicked.
@@ -57,6 +118,8 @@ pub struct AppState {
     pub autostart: bool,
     pub permission: PermissionState,
     pub version: String,
+    pub shortcuts: ShortcutStatus,
+    pub capabilities: CapabilitiesState,
 }
 
 pub struct AppModel {
@@ -133,14 +196,55 @@ impl AppModel {
             .collect()
     }
 
-    pub fn state(&self, autostart: bool, permission: Permission) -> AppState {
+    pub fn state(
+        &self,
+        autostart: bool,
+        permission: Permission,
+        shortcuts: ShortcutStatus,
+        capabilities: Capabilities,
+    ) -> AppState {
         AppState {
             config: self.config.clone(),
             monitors: self.snapshots(),
             autostart,
             permission: permission.into(),
             version: env!("CARGO_PKG_VERSION").to_owned(),
+            shortcuts,
+            capabilities: capabilities.into(),
         }
+    }
+
+    /// Profile ids of the monitors connected right now, in enumeration order.
+    pub fn connected_ids(&self) -> Vec<String> {
+        self.profile_idx
+            .iter()
+            .map(|&p| self.config.monitors[p].id.clone())
+            .collect()
+    }
+
+    /// The connected monitors with their work areas, keyed by profile id.
+    pub fn connected(&self) -> Vec<ConnectedMonitor> {
+        self.monitors
+            .iter()
+            .zip(&self.profile_idx)
+            .map(|(m, &p)| ConnectedMonitor {
+                profile_id: self.config.monitors[p].id.clone(),
+                work: m.work,
+            })
+            .collect()
+    }
+
+    /// Profile id of the monitor whose rect contains the centre of `rect`.
+    pub fn profile_at(&self, rect: PxRect) -> Option<String> {
+        let (cx, cy) = (
+            rect.x.saturating_add(rect.w / 2),
+            rect.y.saturating_add(rect.h / 2),
+        );
+        self.monitors
+            .iter()
+            .zip(&self.profile_idx)
+            .find(|(m, _)| m.descriptor.rect.contains(cx, cy))
+            .map(|(_, &p)| self.config.monitors[p].id.clone())
     }
 }
 
@@ -229,16 +333,91 @@ mod tests {
         assert!(!path.exists());
     }
 
+    fn state_of(m: &AppModel) -> AppState {
+        m.state(
+            true,
+            Permission::Denied,
+            ShortcutStatus::default(),
+            Capabilities::default(),
+        )
+    }
+
     #[test]
     fn state_carries_version_and_permission() {
         let m = AppModel::new(Config::default(), PathBuf::from("unused.json"), false);
-        let s = m.state(true, Permission::Denied);
+        let s = state_of(&m);
         assert!(s.autostart);
         assert_eq!(s.permission, PermissionState::Denied);
         assert_eq!(s.version, env!("CARGO_PKG_VERSION"));
         let json = serde_json::to_value(&s).unwrap();
         assert_eq!(json["permission"], "denied");
         assert_eq!(json["config"]["settings"]["modifier"], "shift");
+    }
+
+    #[test]
+    fn state_carries_the_shortcut_status_and_capabilities_for_the_ui() {
+        let m = AppModel::new(Config::default(), PathBuf::from("unused.json"), false);
+        let s = m.state(
+            false,
+            Permission::NotRequired,
+            ShortcutStatus {
+                active: true,
+                failed: vec!["Win+Alt+3 is already used by another app".to_owned()],
+            },
+            Capabilities {
+                shortcuts: true,
+                window_memory: false,
+            },
+        );
+        let json = serde_json::to_value(&s).unwrap();
+        assert_eq!(json["shortcuts"]["active"], true);
+        assert_eq!(
+            json["shortcuts"]["failed"][0],
+            "Win+Alt+3 is already used by another app"
+        );
+        assert_eq!(json["capabilities"]["shortcuts"], true);
+        assert_eq!(json["capabilities"]["window_memory"], false);
+        // The new settings travel with the config under their contract names.
+        let settings = &json["config"]["settings"];
+        assert_eq!(settings["keyboard_shortcuts"], true);
+        assert_eq!(settings["shortcut_modifier"], "ctrl_alt_shift");
+        assert_eq!(settings["restore_on_reconnect"], true);
+        assert_eq!(settings["linked_dividers"], true);
+        assert_eq!(settings["zone_gap_px"], 0);
+    }
+
+    #[test]
+    fn default_status_is_inactive_with_nothing_failed() {
+        let s = ShortcutStatus::default();
+        assert!(!s.active && s.failed.is_empty());
+        let c = CapabilitiesState::from(Capabilities::default());
+        assert!(!c.shortcuts && !c.window_memory);
+    }
+
+    #[test]
+    fn connected_monitor_helpers_follow_the_enumeration() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut m = AppModel::new(Config::default(), dir.path().join("c.json"), true);
+        m.refresh_monitors(vec![info("A", 0), info("B", 1920)])
+            .unwrap();
+        assert_eq!(m.connected_ids(), vec!["monitor-1", "monitor-2"]);
+        let c = m.connected();
+        assert_eq!(c[1].profile_id, "monitor-2");
+        assert_eq!(c[1].work, PxRect::new(1920, 0, 1920, 1040));
+        // Centre of the window decides which monitor it is on.
+        assert_eq!(
+            m.profile_at(PxRect::new(1800, 100, 400, 300)).as_deref(),
+            Some("monitor-2")
+        );
+        assert_eq!(
+            m.profile_at(PxRect::new(100, 100, 400, 300)).as_deref(),
+            Some("monitor-1")
+        );
+        assert_eq!(m.profile_at(PxRect::new(9000, 0, 10, 10)), None);
+        // A disconnected monitor leaves the connected helpers but keeps its profile.
+        m.refresh_monitors(vec![info("A", 0)]).unwrap();
+        assert_eq!(m.connected_ids(), vec!["monitor-1"]);
+        assert_eq!(m.config.monitors.len(), 2);
     }
 
     #[test]

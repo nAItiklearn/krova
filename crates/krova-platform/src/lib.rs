@@ -12,6 +12,7 @@ use std::sync::Arc;
 
 use krova_core::{DragEvent, Modifier, MonitorDescriptor, PxRect};
 
+pub mod hotkeys;
 pub mod ids;
 pub mod input;
 #[cfg(target_os = "macos")]
@@ -21,7 +22,98 @@ pub mod overlay;
 #[cfg(windows)]
 pub mod win;
 #[cfg(windows)]
+pub mod win_events;
+#[cfg(windows)]
 pub mod win_overlay;
+
+pub use hotkeys::{HotkeyEvent, HotkeySpec};
+
+/// Where an OS-level notification is delivered. The closure runs on the platform's
+/// own thread and must only enqueue (a channel send) and return at once.
+pub type EventSink<T> = Arc<dyn Fn(T) + Send + Sync>;
+
+/// What this platform can do beyond moving windows by mouse. The UI hides the
+/// settings of features that are `false`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Capabilities {
+    /// Global keyboard shortcuts for moving windows between zones.
+    pub shortcuts: bool,
+    /// Reading where windows are (reconnect memory, linked dividers).
+    pub window_memory: bool,
+}
+
+/// Something happened that the engine wants to know about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WatchEvent {
+    /// The user started moving or resizing this window (the OS move/size loop).
+    MoveSizeStart(WindowId),
+    /// The user finished moving or resizing it.
+    MoveSizeEnd(WindowId),
+    /// The set or layout of the monitors may have changed (display change, work
+    /// area change, resume from sleep). Debounce before acting on it.
+    DisplayChanged,
+}
+
+/// Keeps the global shortcuts registered; dropping it unregisters them and stops
+/// their thread.
+pub struct HotkeyHandle {
+    registered: usize,
+    failed: Vec<String>,
+    stop: Option<Box<dyn FnOnce() + Send>>,
+}
+
+impl HotkeyHandle {
+    pub fn new(
+        registered: usize,
+        failed: Vec<String>,
+        stop: impl FnOnce() + Send + 'static,
+    ) -> Self {
+        Self {
+            registered,
+            failed,
+            stop: Some(Box::new(stop)),
+        }
+    }
+
+    /// How many shortcuts the OS accepted.
+    pub fn registered(&self) -> usize {
+        self.registered
+    }
+
+    /// One sentence per shortcut the OS refused, ready for the settings page.
+    pub fn failed(&self) -> &[String] {
+        &self.failed
+    }
+}
+
+impl Drop for HotkeyHandle {
+    fn drop(&mut self) {
+        if let Some(stop) = self.stop.take() {
+            stop();
+        }
+    }
+}
+
+/// Keeps the window-event watcher alive; dropping it removes the hooks.
+pub struct WatchHandle {
+    stop: Option<Box<dyn FnOnce() + Send>>,
+}
+
+impl WatchHandle {
+    pub fn new(stop: impl FnOnce() + Send + 'static) -> Self {
+        Self {
+            stop: Some(Box::new(stop)),
+        }
+    }
+}
+
+impl Drop for WatchHandle {
+    fn drop(&mut self) {
+        if let Some(stop) = self.stop.take() {
+            stop();
+        }
+    }
+}
 
 /// A connected monitor with everything the shell needs to lay zones on it.
 #[derive(Debug, Clone, PartialEq)]
@@ -154,6 +246,57 @@ pub trait Platform: Send + Sync {
     fn create_overlay(&self) -> Result<Box<dyn overlay::Overlay>, PlatformError>;
 
     fn permission(&self) -> Permission;
+
+    // ---- Optional capabilities. Every method below has a default that says
+    // "not supported", so a platform only overrides what it can really do.
+
+    fn capabilities(&self) -> Capabilities {
+        Capabilities::default()
+    }
+
+    /// Does the window still exist?
+    fn window_exists(&self, _window: WindowId) -> bool {
+        false
+    }
+
+    /// The window's visible frame right now (the same space `place_window` uses).
+    fn window_rect(&self, _window: WindowId) -> Result<PxRect, PlatformError> {
+        Err(PlatformError::Unsupported)
+    }
+
+    fn is_minimized(&self, _window: WindowId) -> bool {
+        false
+    }
+
+    fn is_maximized(&self, _window: WindowId) -> bool {
+        false
+    }
+
+    /// The window that has the keyboard focus, if any.
+    fn foreground_window(&self) -> Option<WindowId> {
+        None
+    }
+
+    /// Whether Krova may move this window: an ordinary, visible, un-minimized
+    /// application window of another program that is not protected (elevated).
+    fn is_movable_target(&self, _window: WindowId) -> bool {
+        false
+    }
+
+    /// Register the global shortcuts. They stay registered until the handle is
+    /// dropped. Shortcuts the OS refuses are reported in the handle, not as an error.
+    fn start_hotkeys(
+        &self,
+        _spec: HotkeySpec,
+        _sink: EventSink<HotkeyEvent>,
+    ) -> Result<HotkeyHandle, PlatformError> {
+        Err(PlatformError::Unsupported)
+    }
+
+    /// Watch for window move/resize and display changes until the handle is dropped.
+    fn start_watcher(&self, _sink: EventSink<WatchEvent>) -> Result<WatchHandle, PlatformError> {
+        Err(PlatformError::Unsupported)
+    }
 }
 
 /// Platform for OSes Krova does not support; every operation fails cleanly.
@@ -279,5 +422,55 @@ mod tests {
             p.start_input(Modifier::Shift, tx),
             Err(PlatformError::Unsupported)
         ));
+    }
+
+    #[test]
+    fn optional_capabilities_default_to_unsupported() {
+        let p = NullPlatform;
+        let w = WindowId(1);
+        assert_eq!(p.capabilities(), Capabilities::default());
+        assert!(!p.capabilities().shortcuts && !p.capabilities().window_memory);
+        assert!(!p.window_exists(w));
+        assert!(matches!(p.window_rect(w), Err(PlatformError::Unsupported)));
+        assert!(!p.is_minimized(w));
+        assert!(!p.is_maximized(w));
+        assert_eq!(p.foreground_window(), None);
+        assert!(!p.is_movable_target(w));
+        let spec = HotkeySpec {
+            modifier: krova_core::ShortcutModifier::WinAlt,
+        };
+        assert!(matches!(
+            p.start_hotkeys(spec, Arc::new(|_| {})),
+            Err(PlatformError::Unsupported)
+        ));
+        assert!(matches!(
+            p.start_watcher(Arc::new(|_| {})),
+            Err(PlatformError::Unsupported)
+        ));
+    }
+
+    #[test]
+    fn handles_run_their_stop_action_exactly_once() {
+        let stops = Arc::new(AtomicU8::new(0));
+        let s = Arc::clone(&stops);
+        let hotkeys = HotkeyHandle::new(
+            2,
+            vec!["Win+Alt+3 is already used by another app".into()],
+            move || {
+                s.fetch_add(1, Ordering::SeqCst);
+            },
+        );
+        assert_eq!(hotkeys.registered(), 2);
+        assert_eq!(hotkeys.failed().len(), 1);
+        drop(hotkeys);
+        assert_eq!(stops.load(Ordering::SeqCst), 1);
+
+        let s = Arc::clone(&stops);
+        let watch = WatchHandle::new(move || {
+            s.fetch_add(10, Ordering::SeqCst);
+        });
+        assert_eq!(stops.load(Ordering::SeqCst), 1);
+        drop(watch);
+        assert_eq!(stops.load(Ordering::SeqCst), 11);
     }
 }
