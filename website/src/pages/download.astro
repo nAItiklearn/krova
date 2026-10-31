@@ -6,6 +6,7 @@ import {
   CHECKSUMS_FILE,
   DOWNLOADS,
   DOWNLOADS_ENABLED,
+  MAC_RELEASED,
   RELEASES_URL,
   RELEASE_PUBLISHED,
   REPO_LINKS_ENABLED,
@@ -14,9 +15,12 @@ import {
   latestDownloadUrl,
 } from '../site';
 
-const title = 'Download Krova: Windows installer and macOS disk image';
-const description =
-  'Krova is free and MIT licensed. The Windows installer and macOS disk image are unsigned: here is what to expect, how to get past the warnings, and how to check the download.';
+const title = MAC_RELEASED
+  ? 'Download Krova: Windows installer and macOS disk image'
+  : 'Download Krova for Windows';
+const description = MAC_RELEASED
+  ? 'Krova is free and MIT licensed. The Windows installer and macOS disk image are unsigned: here is what to expect, how to get past the warnings, and how to check the download.'
+  : 'Krova is free and MIT licensed. The Windows installer is unsigned: here is what to expect, how to get past the SmartScreen warning, and how to check the download. macOS is coming once tested on real hardware.';
 
 const win = DOWNLOADS.find((d) => d.id === 'windows')!;
 const mac = DOWNLOADS.find((d) => d.id === 'macos')!;
@@ -29,10 +33,20 @@ const state = DOWNLOADS_ENABLED ? 'released' : RELEASE_PUBLISHED ? 'private' : '
     <header class="page-head">
       <p class="eyebrow">Download</p>
       <h1>Download Krova</h1>
-      <p class="lead">
-        Free, MIT license, no account. Two builds: a Windows installer and a macOS disk image. Both are unsigned, so
-        your system will warn you before the first run. Here is exactly what to expect.
-      </p>
+      {
+        MAC_RELEASED ? (
+          <p class="lead">
+            Free, MIT license, no account. Two builds: a Windows installer and a macOS disk image. Both are unsigned, so
+            your system will warn you before the first run. Here is exactly what to expect.
+          </p>
+        ) : (
+          <p class="lead">
+            Free, MIT license, no account. Krova is available for Windows. The installer is unsigned, so Windows will
+            warn you before the first run; here is exactly what to expect. macOS support is coming once it has been
+            tested on real hardware.
+          </p>
+        )
+      }
     </header>
 
     {
@@ -109,9 +123,21 @@ const state = DOWNLOADS_ENABLED ? 'released' : RELEASE_PUBLISHED ? 'private' : '
         </header>
         <p class="file"><code>{mac.file}</code></p>
 
-        <div class="note note--warn">
-          <p><strong>Never tested on a real Mac.</strong> The macOS build has not been run on a Mac yet. Treat it as experimental.</p>
-        </div>
+        {
+          MAC_RELEASED ? (
+            <div class="note note--warn">
+              <p><strong>Never tested on a real Mac.</strong> The macOS build has not been run on a Mac yet. Treat it as experimental.</p>
+            </div>
+          ) : (
+            <div class="note note--warn">
+              <p>
+                <strong>macOS support is coming once it has been tested on real hardware.</strong> The macOS version is
+                written and passes its automated checks, but it has never run on a Mac, so there is no download yet.
+                What follows is how it is meant to work.
+              </p>
+            </div>
+          )
+        }
 
         <h3>What you get</h3>
         <ul>
@@ -140,13 +166,16 @@ const state = DOWNLOADS_ENABLED ? 'released' : RELEASE_PUBLISHED ? 'private' : '
 
         <div class="get">
           {
-            DOWNLOADS_ENABLED ? (
+            DOWNLOADS_ENABLED && MAC_RELEASED ? (
               <a class="btn btn-primary" href={latestDownloadUrl(mac.file)}>
                 <Icon name="download" />
                 Download for macOS
               </a>
             ) : (
-              <p class="pill pill--warn"><span class="dot" aria-hidden="true"></span>Not available yet</p>
+              <p class="pill pill--warn">
+                <span class="dot" aria-hidden="true"></span>
+                {MAC_RELEASED ? 'Not available yet' : 'Coming after testing on a real Mac'}
+              </p>
             )
           }
         </div>
@@ -161,8 +190,14 @@ const state = DOWNLOADS_ENABLED ? 'released' : RELEASE_PUBLISHED ? 'private' : '
       </p>
       <p><strong>Windows</strong> (PowerShell), from the folder with the file:</p>
       <pre tabindex="0"><code>Get-FileHash .\{win.file} -Algorithm SHA256</code></pre>
-      <p><strong>macOS</strong> (Terminal):</p>
-      <pre tabindex="0"><code>shasum -a 256 {mac.file}</code></pre>
+      {
+        MAC_RELEASED && (
+          <>
+            <p><strong>macOS</strong> (Terminal):</p>
+            <pre tabindex="0"><code>shasum -a 256 {mac.file}</code></pre>
+          </>
+        )
+      }
       <p>
         The two should match exactly (letter case does not matter). A match proves the download was not corrupted on the
         way. It cannot prove who built the file, because the checksum comes from the same place as the file and the

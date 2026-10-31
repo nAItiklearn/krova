@@ -58,6 +58,13 @@ export const ISSUES_URL = `${repoBase}/issues`;
  */
 export const RELEASE_PUBLISHED = false;
 
+/**
+ * False while the macOS build has never run on a real Mac. Releases then attach only the Windows
+ * installer (.github/workflows/release.yml), and the site shows no macOS download, only a note that
+ * macOS support is coming once it has been tested on real hardware.
+ */
+export const MAC_RELEASED = false;
+
 export interface DownloadAsset {
   id: 'windows' | 'macos';
   label: string;

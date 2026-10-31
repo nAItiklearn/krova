@@ -12,7 +12,8 @@ name: release
 #
 # Asset names are version-free on purpose, so that releases/latest/download/<name> stays stable:
 #   Krova-windows-x64-setup.exe   NSIS installer (Windows)
-#   Krova-macos-universal.dmg     universal (Apple silicon + Intel)
+#   Krova-macos-universal.dmg     universal (Apple silicon + Intel); built as an artifact only, not
+#                                 attached to releases until it has been tested on a real Mac
 # website/src/site.ts (DOWNLOADS) must list exactly these names.
 on:
   workflow_dispatch:
@@ -40,6 +41,9 @@ jobs:
             bundle_dir: src-tauri/target/universal-apple-darwin/release/bundle
             args: "--target universal-apple-darwin --bundles dmg"
     runs-on: ${{ matrix.os }}
+    # The macOS build is not released yet (never run on a real Mac), so it may fail without
+    # blocking the release. Its artifact stays available for testing.
+    continue-on-error: ${{ matrix.name == 'macos' }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -115,20 +119,28 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          sparse-checkout: docs/release-notes
+      # Windows only for now: the macOS build is not released until it has run on a real Mac.
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
+          name: krova-windows
           path: assets
-          merge-multiple: true
       - name: Checksums
         run: cd assets && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      # Hand-written notes per version (docs/release-notes/<tag>.md); the job fails without them.
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
           REPO: ${{ github.repository }}
         run: |
+          set -euo pipefail
+          notes="docs/release-notes/$TAG.md"
+          test -f "$notes" || { echo "missing $notes" >&2; exit 1; }
           gh release create "$TAG" assets/* \
             --repo "$REPO" \
             --title "Krova $TAG" \
             --draft \
-            --generate-notes
+            --notes-file "$notes"

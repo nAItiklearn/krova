@@ -1,7 +1,7 @@
 ---
 import GuideLayout from '../../layouts/GuideLayout.astro';
 import { url } from '../../lib/url';
-import { DOWNLOADS, DOWNLOADS_ENABLED } from '../../site';
+import { DOWNLOADS, DOWNLOADS_ENABLED, MAC_RELEASED } from '../../site';
 
 const win = DOWNLOADS.find((d) => d.id === 'windows')!;
 const mac = DOWNLOADS.find((d) => d.id === 'macos')!;
@@ -78,7 +78,13 @@ const mac = DOWNLOADS.find((d) => d.id === 'macos')!;
     <p><strong>Never tested on a real Mac.</strong> The macOS build is unsigned, not notarised, and has not been run on a Mac. Expect problems, and treat what follows as the intended behaviour.</p>
   </div>
   <ol>
-    <li>Get <code>{mac.file}</code> from the <a href={url('/download/')}>Download page</a>. It runs on Apple silicon and Intel.</li>
+    <li>
+      {MAC_RELEASED ? (
+        <>Get <code>{mac.file}</code> from the <a href={url('/download/')}>Download page</a>. It runs on Apple silicon and Intel.</>
+      ) : (
+        <>There is no macOS download yet: macOS support is coming once it has been tested on real hardware. When it ships it will be <code>{mac.file}</code>, for Apple silicon and Intel.</>
+      )}
+    </li>
     <li>Open the disk image and drag <strong>Krova</strong> to <strong>Applications</strong>.</li>
     <li>
       The first launch is blocked by Gatekeeper. In Applications, right-click (or Control-click) <strong>Krova</strong>,

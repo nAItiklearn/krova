@@ -46,7 +46,7 @@ export const releases: readonly Release[] = [
           'Settings for the activation key, highlight colour and opacity, move behaviour, edge snapping, theme (system, light or dark), launch at login, the keyboard shortcuts and their modifier keys, window memory on reconnect, linked dividers and the space between zones. Changes save automatically.',
           'A tray icon (menu bar on macOS) with Enabled, Edit layouts, Settings, Launch at login and Quit. There is no taskbar window. Closing the editor window closes it for good, together with the embedded browser, so Krova waits in the tray using little memory; reopen it from the tray menu or by starting Krova again.',
           'On Windows: mixed-DPI monitors, the invisible window borders, each window’s own minimum and maximum size, and the taskbar area are all taken into account, and the app declares per-monitor DPI awareness. Minimized, fullscreen and administrator windows are skipped.',
-          'A per-user Windows installer (x64) and a universal macOS disk image. Both are unsigned.',
+          'A per-user Windows installer (x64), unsigned. No macOS download in this release: macOS support is coming once it has been tested on real hardware.',
           'Free under the MIT license. By design: no accounts, no telemetry, no network calls, and window titles are never read or stored.',
         ],
       },

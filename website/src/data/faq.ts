@@ -1,4 +1,4 @@
-import { DOWNLOADS_ENABLED, RELEASE_PUBLISHED } from '../site';
+import { DOWNLOADS_ENABLED, MAC_RELEASED, RELEASE_PUBLISHED } from '../site';
 
 /**
  * FAQ content. Answers use the inline markup from src/lib/inline.ts.
@@ -16,7 +16,9 @@ export interface FaqGroup {
 }
 
 const whenAvailable = DOWNLOADS_ENABLED
-  ? 'Now. The [[/download/|Download page]] has the Windows installer and the macOS disk image.'
+  ? MAC_RELEASED
+    ? 'Now. The [[/download/|Download page]] has the Windows installer and the macOS disk image.'
+    : 'Now, for Windows: the [[/download/|Download page]] has the installer. macOS support is coming once it has been tested on real hardware.'
   : RELEASE_PUBLISHED
     ? 'The release is published, but the repository is not public yet, so there is no download link on this site. The [[/download/|Download page]] explains what to expect.'
     : 'The first release is not published yet. The [[/download/|Download page]] says what each build will need and how to get past the unsigned-installer warnings, so you can decide before it exists.';
