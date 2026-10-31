@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest';
-import { STORAGE_KEY, createMockBackend } from './mockBackend';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Layout } from '../bindings';
+import {
+  DEMO_FAILED_SHORTCUTS,
+  STORAGE_KEY,
+  createMockBackend,
+  defaultSettings,
+} from './mockBackend';
 
 const fresh = () => createMockBackend({ persist: false });
 
@@ -184,5 +190,470 @@ describe('mock backend: persistence and events', () => {
     b.demo.setPermission('granted');
     expect(views).toEqual(['settings']);
     expect(perms).toEqual(['denied']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Keyboard shortcuts, window memory and zone gap settings
+// ---------------------------------------------------------------------------
+
+describe('mock backend: new settings', () => {
+  it('defaults match the contract', async () => {
+    const s = (await fresh().getState()).config.settings;
+    expect(s.keyboard_shortcuts).toBe(true);
+    expect(s.shortcut_modifier).toBe('win_alt');
+    expect(s.restore_on_reconnect).toBe(true);
+    expect(s.linked_dividers).toBe(true);
+    expect(s.zone_gap_px).toBe(0);
+    expect(defaultSettings()).toEqual(s);
+  });
+
+  it('saves every new field', async () => {
+    const b = fresh();
+    const cur = (await b.getState()).config.settings;
+    const s = await b.saveSettings({
+      ...cur,
+      keyboard_shortcuts: false,
+      shortcut_modifier: 'ctrl_alt_shift',
+      restore_on_reconnect: false,
+      linked_dividers: false,
+      zone_gap_px: 12,
+    });
+    expect(s.config.settings).toMatchObject({
+      keyboard_shortcuts: false,
+      shortcut_modifier: 'ctrl_alt_shift',
+      restore_on_reconnect: false,
+      linked_dividers: false,
+      zone_gap_px: 12,
+    });
+  });
+
+  it.each(['ctrl_alt', 'win_alt', 'ctrl_alt_shift', 'win_ctrl'] as const)(
+    'accepts the shortcut modifier %s',
+    async (m) => {
+      const b = fresh();
+      const cur = (await b.getState()).config.settings;
+      expect((await b.saveSettings({ ...cur, shortcut_modifier: m })).config.settings.shortcut_modifier).toBe(m);
+    },
+  );
+
+  it('rejects an unknown shortcut modifier with a string, leaving the settings alone', async () => {
+    const b = fresh();
+    const cur = (await b.getState()).config.settings;
+    for (const bad of ['alt', 'win_shift', '', 'CTRL_ALT', 'super']) {
+      await expect(
+        b.saveSettings({ ...cur, shortcut_modifier: bad as unknown as 'win_alt' }),
+      ).rejects.toBe(`invalid shortcut_modifier "${bad}"`);
+    }
+    expect((await b.getState()).config.settings).toEqual(cur);
+  });
+
+  it('clamps zone_gap_px to 0..32 and rounds it to an integer', async () => {
+    const b = fresh();
+    const cur = (await b.getState()).config.settings;
+    const gap = async (v: number) =>
+      (await b.saveSettings({ ...cur, zone_gap_px: v })).config.settings.zone_gap_px;
+    expect(await gap(-5)).toBe(0);
+    expect(await gap(0)).toBe(0);
+    expect(await gap(7.6)).toBe(8);
+    expect(await gap(32)).toBe(32);
+    expect(await gap(33)).toBe(32);
+    expect(await gap(1e9)).toBe(32);
+    expect(await gap(Number.POSITIVE_INFINITY)).toBe(0); // not finite: back to the default
+    expect(await gap(Number.NaN)).toBe(0);
+  });
+
+  it('keeps booleans boolean and fills in missing fields with their defaults', async () => {
+    const b = fresh();
+    const cur = (await b.getState()).config.settings;
+    const old = { ...cur } as Partial<typeof cur>;
+    delete old.keyboard_shortcuts;
+    delete old.restore_on_reconnect;
+    delete old.linked_dividers;
+    delete old.zone_gap_px;
+    delete old.shortcut_modifier;
+    const s = (await b.saveSettings(old as typeof cur)).config.settings;
+    expect(s.keyboard_shortcuts).toBe(true);
+    expect(s.restore_on_reconnect).toBe(true);
+    expect(s.linked_dividers).toBe(true);
+    expect(s.zone_gap_px).toBe(0);
+    expect(s.shortcut_modifier).toBe('win_alt');
+
+    const odd = await b.saveSettings({
+      ...cur,
+      keyboard_shortcuts: 'no' as unknown as boolean,
+      linked_dividers: 0 as unknown as boolean,
+    });
+    expect(odd.config.settings.keyboard_shortcuts).toBe(true); // not a boolean: default
+    expect(odd.config.settings.linked_dividers).toBe(true);
+  });
+
+  it('persists the new settings and fills defaults into an older persisted state', async () => {
+    const m = new Map<string, string>();
+    const storage = {
+      getItem: (k: string) => m.get(k) ?? null,
+      setItem: (k: string, v: string) => void m.set(k, v),
+      removeItem: (k: string) => void m.delete(k),
+    };
+    const a = createMockBackend({ storage });
+    const cur = (await a.getState()).config.settings;
+    await a.saveSettings({ ...cur, shortcut_modifier: 'win_ctrl', zone_gap_px: 20, linked_dividers: false });
+    const b = createMockBackend({ storage });
+    expect((await b.getState()).config.settings).toMatchObject({
+      shortcut_modifier: 'win_ctrl',
+      zone_gap_px: 20,
+      linked_dividers: false,
+    });
+
+    // A persisted state from before these settings existed.
+    const persisted = JSON.parse(m.get(STORAGE_KEY) ?? '{}') as {
+      config: { settings: Record<string, unknown> };
+    };
+    for (const k of ['keyboard_shortcuts', 'shortcut_modifier', 'restore_on_reconnect', 'linked_dividers', 'zone_gap_px']) {
+      delete persisted.config.settings[k];
+    }
+    m.set(STORAGE_KEY, JSON.stringify(persisted));
+    const c = createMockBackend({ storage });
+    expect((await c.getState()).config.settings).toEqual(defaultSettings());
+  });
+});
+
+describe('mock backend: shortcuts and capabilities', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('defaults to active shortcuts and full capabilities', async () => {
+    const s = await fresh().getState();
+    expect(s.shortcuts).toEqual({ active: true, failed: [] });
+    expect(s.capabilities).toEqual({ shortcuts: true, window_memory: true });
+  });
+
+  it('shortcuts=failed reports the demo conflict and stays active', async () => {
+    const s = await createMockBackend({ persist: false, shortcuts: 'failed' }).getState();
+    expect(s.shortcuts).toEqual({
+      active: true,
+      failed: ['Win+Alt+3 is already used by another app'],
+    });
+    expect(DEMO_FAILED_SHORTCUTS).toEqual(['Win+Alt+3 is already used by another app']);
+  });
+
+  it('shortcuts=off reports inactive shortcuts', async () => {
+    const s = await createMockBackend({ persist: false, shortcuts: 'off' }).getState();
+    expect(s.shortcuts).toEqual({ active: false, failed: [] });
+  });
+
+  it('capabilities=none turns both capabilities off, and the shortcuts with them', async () => {
+    const s = await createMockBackend({
+      persist: false,
+      capabilities: 'none',
+      shortcuts: 'failed',
+    }).getState();
+    expect(s.capabilities).toEqual({ shortcuts: false, window_memory: false });
+    expect(s.shortcuts).toEqual({ active: false, failed: [] });
+  });
+
+  it('switching the setting off deactivates the shortcuts and clears the conflicts', async () => {
+    const b = createMockBackend({ persist: false, shortcuts: 'failed' });
+    const cur = (await b.getState()).config.settings;
+    let s = await b.saveSettings({ ...cur, keyboard_shortcuts: false });
+    expect(s.shortcuts).toEqual({ active: false, failed: [] });
+    s = await b.saveSettings({ ...cur, keyboard_shortcuts: true });
+    expect(s.shortcuts.active).toBe(true);
+    expect(s.shortcuts.failed).toHaveLength(1);
+  });
+
+  it('reads ?shortcuts= and ?capabilities= from the URL', async () => {
+    vi.stubGlobal('location', { search: '?nopersist&shortcuts=failed&capabilities=none' });
+    const s = await createMockBackend().getState();
+    expect(s.capabilities).toEqual({ shortcuts: false, window_memory: false });
+    vi.stubGlobal('location', { search: '?shortcuts=failed' });
+    expect((await createMockBackend({ persist: false }).getState()).shortcuts.failed).toHaveLength(1);
+    vi.stubGlobal('location', { search: '?shortcuts=off' });
+    expect((await createMockBackend({ persist: false }).getState()).shortcuts.active).toBe(false);
+    vi.stubGlobal('location', { search: '?shortcuts=bogus&capabilities=bogus' });
+    const d = await createMockBackend({ persist: false }).getState();
+    expect(d.shortcuts).toEqual({ active: true, failed: [] });
+    expect(d.capabilities).toEqual({ shortcuts: true, window_memory: true });
+  });
+
+  it('the demo hooks change them live, emit state-changed and reset restores the start', async () => {
+    const b = createMockBackend({ persist: false });
+    const seen: string[] = [];
+    await b.onStateChanged((s) =>
+      seen.push(`${s.shortcuts.active}/${s.shortcuts.failed.length}/${s.capabilities.shortcuts}`),
+    );
+    b.demo.setShortcuts('failed');
+    b.demo.setCapabilities('none');
+    b.demo.setCapabilities('all');
+    b.demo.setShortcuts('off');
+    expect(seen).toEqual(['true/1/true', 'false/0/false', 'true/1/true', 'false/0/true']);
+    b.demo.reset();
+    expect((await b.getState()).shortcuts).toEqual({ active: true, failed: [] });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Layout export and import
+// ---------------------------------------------------------------------------
+
+const customLayout = (id: string, name = id): Layout => ({
+  id,
+  name,
+  zones: [
+    { id: 1, rect: { x: 0, y: 0, w: 0.25, h: 1 } },
+    { id: 2, rect: { x: 0.25, y: 0, w: 0.75, h: 1 } },
+  ],
+});
+
+describe('mock backend: layout save limits', () => {
+  it('saveLayout enforces the shared rules: 64 zones, 64 characters, 0.01 sides', async () => {
+    const b = fresh();
+    const many = Array.from({ length: 65 }, (_, i) => ({
+      id: i + 1,
+      rect: { x: 0, y: 0, w: 1, h: 1 },
+    }));
+    await expect(b.saveLayout('monitor-1', { id: 'x', name: 'x', zones: many })).rejects.toBe(
+      'layout has too many zones (at most 64)',
+    );
+    await expect(b.saveLayout('monitor-1', customLayout('x'.repeat(65)))).rejects.toBe(
+      'layout id or name is too long (at most 64 characters)',
+    );
+    await expect(b.saveLayout('monitor-1', customLayout('ok', 'n'.repeat(65)))).rejects.toBe(
+      'layout id or name is too long (at most 64 characters)',
+    );
+    const thin = customLayout('thin');
+    thin.zones[0].rect.w = 0.005;
+    await expect(b.saveLayout('monitor-1', thin)).rejects.toBe('zone 1 has an invalid rectangle');
+  });
+
+  it('a monitor holds at most 64 layouts, but existing ones can still be replaced', async () => {
+    const b = fresh();
+    for (let i = 4; i < 64; i++) await b.saveLayout('monitor-1', customLayout(`l${i}`));
+    expect((await b.getState()).config.monitors[0].layouts).toHaveLength(64);
+    await expect(b.saveLayout('monitor-1', customLayout('one-too-many'))).rejects.toBe(
+      'a monitor can hold at most 64 layouts',
+    );
+    const s = await b.saveLayout('monitor-1', customLayout('l10', 'Renamed'));
+    expect(s.config.monitors[0].layouts).toHaveLength(64);
+    expect(s.config.monitors[0].layouts.find((l) => l.id === 'l10')?.name).toBe('Renamed');
+    // The other monitor has its own allowance.
+    expect((await b.saveLayout('monitor-2', customLayout('free'))).config.monitors[1].layouts).toHaveLength(5);
+  });
+});
+
+describe('mock backend: export_layout', () => {
+  it('returns the envelope text for a valid layout', async () => {
+    const b = fresh();
+    const [halves] = await b.listTemplates();
+    const text = await b.exportLayout(halves);
+    const parsed = JSON.parse(text) as { krova_layout: number; layout: Layout };
+    expect(parsed.krova_layout).toBe(1);
+    expect(parsed.layout).toEqual(halves);
+    expect(text).toContain('\n  "layout": {');
+  });
+
+  it('rejects an invalid layout with a string', async () => {
+    const b = fresh();
+    await expect(b.exportLayout({ id: 'e', name: 'e', zones: [] })).rejects.toBe(
+      'layout has no zones',
+    );
+    const bad = customLayout('bad');
+    bad.zones[1].id = 1;
+    await expect(b.exportLayout(bad)).rejects.toBe('duplicate zone id 1');
+  });
+});
+
+describe('mock backend: import_layout', () => {
+  it('imports an exported layout onto the other monitor and keeps it unchanged', async () => {
+    const b = fresh();
+    await b.saveLayout('monitor-1', customLayout('side-bar', 'Side bar'));
+    const text = await b.exportLayout(customLayout('side-bar', 'Side bar'));
+
+    const s = await b.importLayout('monitor-2', text);
+    const layouts = s.config.monitors[1].layouts;
+    expect(layouts.map((l) => l.id)).toEqual(['halves', 'thirds', 'grid', 'priority', 'side-bar']);
+    expect(layouts[4]).toEqual(customLayout('side-bar', 'Side bar'));
+    // Importing never changes which layout is active, and the other monitor is untouched.
+    expect(s.config.monitors[1].active_layout).toBe('thirds');
+    expect(s.config.monitors[0].layouts).toHaveLength(5);
+  });
+
+  it('round-trips every template through export and import (ids get suffixes)', async () => {
+    const b = fresh();
+    const originals = await b.listTemplates();
+    let state = await b.getState();
+    for (const t of originals) state = await b.importLayout('monitor-1', await b.exportLayout(t));
+    const added = state.config.monitors[0].layouts.slice(4);
+    expect(added.map((l) => l.id)).toEqual(['halves-2', 'thirds-2', 'grid-2', 'priority-2']);
+    expect(added.map((l) => ({ name: l.name, zones: l.zones }))).toEqual(
+      originals.map((l) => ({ name: l.name, zones: l.zones })),
+    );
+  });
+
+  it('makes the id unique with a suffix each time and never overwrites', async () => {
+    const b = fresh();
+    const text = await b.exportLayout(customLayout('x', 'Same name'));
+    let s = await b.importLayout('monitor-1', text);
+    expect(s.config.monitors[0].layouts.at(-1)?.id).toBe('x');
+    s = await b.importLayout('monitor-1', text);
+    expect(s.config.monitors[0].layouts.at(-1)?.id).toBe('x-2');
+    s = await b.importLayout('monitor-1', text);
+    expect(s.config.monitors[0].layouts.at(-1)?.id).toBe('x-3');
+    const ids = s.config.monitors[0].layouts.map((l) => l.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(s.config.monitors[0].layouts.filter((l) => l.name === 'Same name')).toHaveLength(3);
+  });
+
+  it('uses a suffix that still fits a 64-character id', async () => {
+    const b = fresh();
+    const id = 'a'.repeat(64);
+    const text = await b.exportLayout(customLayout(id));
+    await b.importLayout('monitor-1', text);
+    const s = await b.importLayout('monitor-1', text);
+    const imported = s.config.monitors[0].layouts.at(-1);
+    expect(imported?.id).toBe(`${'a'.repeat(62)}-2`);
+    expect(imported?.id).toHaveLength(64);
+    // And the result is still a layout the save rules accept.
+    await expect(b.saveLayout('monitor-1', imported as Layout)).resolves.toBeDefined();
+  });
+
+  it('refuses the 65th layout of a monitor, saying so, and changes nothing', async () => {
+    const b = fresh();
+    const text = await b.exportLayout(customLayout('extra'));
+    for (let i = 0; i < 60; i++) await b.importLayout('monitor-1', text);
+    const full = await b.getState();
+    expect(full.config.monitors[0].layouts).toHaveLength(64);
+    await expect(b.importLayout('monitor-1', text)).rejects.toBe(
+      'a monitor can hold at most 64 layouts',
+    );
+    expect(await b.getState()).toEqual(full);
+    // Another monitor is not full; and deleting one makes room again.
+    await expect(b.importLayout('monitor-2', text)).resolves.toBeDefined();
+    await b.deleteLayout('monitor-1', 'extra');
+    await expect(b.importLayout('monitor-1', text)).resolves.toBeDefined();
+  });
+
+  it('rejects with the exact strings of the contract', async () => {
+    const b = fresh();
+    const before = await b.getState();
+    const unit = { x: 0, y: 0, w: 1, h: 1 };
+    const cases: Array<[string, string]> = [
+      ['', 'that is not valid JSON'],
+      ['{ nope', 'that is not valid JSON'],
+      ['[]', 'not a Krova layout file'],
+      ['{"layout":{}}', 'not a Krova layout file'],
+      [JSON.stringify({ krova_layout: 2, layout: {} }), 'unsupported layout file version 2'],
+      [JSON.stringify({ krova_layout: 0, layout: {} }), 'unsupported layout file version 0'],
+      [' '.repeat(65 * 1024), 'layout file is larger than 64 KiB'],
+      [
+        JSON.stringify({ krova_layout: 1, layout: { id: 'a', name: 'n', zones: [] } }),
+        'layout has no zones',
+      ],
+      [
+        JSON.stringify({
+          krova_layout: 1,
+          layout: {
+            id: 'a',
+            name: 'n',
+            zones: Array.from({ length: 65 }, (_, i) => ({ id: i + 1, rect: unit })),
+          },
+        }),
+        'layout has too many zones (at most 64)',
+      ],
+      [
+        JSON.stringify({
+          krova_layout: 1,
+          layout: { id: 'a'.repeat(65), name: 'n', zones: [{ id: 1, rect: unit }] },
+        }),
+        'layout id or name is too long (at most 64 characters)',
+      ],
+      [
+        JSON.stringify({
+          krova_layout: 1,
+          layout: { id: 'a', name: 'n', zones: [{ id: 9, rect: { ...unit, w: 3 } }] },
+        }),
+        'zone 9 has an invalid rectangle',
+      ],
+      [
+        JSON.stringify({
+          krova_layout: 1,
+          layout: {
+            id: 'a',
+            name: 'n',
+            zones: [
+              { id: 4, rect: { x: 0, y: 0, w: 0.5, h: 1 } },
+              { id: 4, rect: { x: 0.5, y: 0, w: 0.5, h: 1 } },
+            ],
+          },
+        }),
+        'duplicate zone id 4',
+      ],
+      [
+        '{"krova_layout":1,"layout":{"id":"a","name":"n","zones":[{"id":1,"rect":{"x":0,"y":0,"w":1e999,"h":1}}]}}',
+        'zone 1 has an invalid rectangle',
+      ],
+    ];
+    for (const [text, message] of cases) {
+      await expect(b.importLayout('monitor-1', text), message).rejects.toBe(message);
+    }
+    await expect(
+      b.importLayout('nope', await b.exportLayout(customLayout('ok'))),
+    ).rejects.toBe('monitor nope not found');
+    expect(await b.getState()).toEqual(before);
+  });
+
+  it('rejects with plain strings, never Error objects', async () => {
+    const b = fresh();
+    for (const text of ['', '[]', '{"krova_layout":9}', 'x'.repeat(70_000)]) {
+      const e: unknown = await b.importLayout('monitor-1', text).catch((err: unknown) => err);
+      expect(typeof e).toBe('string');
+    }
+    expect(typeof (await b.exportLayout({ id: 'e', name: 'e', zones: [] }).catch((e: unknown) => e))).toBe('string');
+  });
+
+  it('survives hostile input without changing anything', async () => {
+    const b = fresh();
+    const before = await b.getState();
+    const hostile = [
+      'x'.repeat(5 * 1024 * 1024),
+      '['.repeat(30_000) + ']'.repeat(30_000),
+      '{"krova_layout":1,"layout":' + '{"a":'.repeat(5_000) + '1' + '}'.repeat(5_000) + '}',
+      JSON.stringify({
+        krova_layout: 1,
+        layout: {
+          id: 'a',
+          name: 'n',
+          zones: Array.from({ length: 10_000 }, (_, i) => ({
+            id: i,
+            rect: { x: 0, y: 0, w: 1, h: 1 },
+          })),
+        },
+      }),
+      '{"krova_layout":1,"layout":{"id":"a","name":"n","zones":[{"id":1,"rect":{"x":NaN,"y":0,"w":1,"h":1}}]}}',
+      '{"__proto__":{"krova_layout":1}}',
+    ];
+    for (const text of hostile) {
+      await expect(b.importLayout('monitor-1', text)).rejects.toEqual(expect.any(String));
+    }
+    expect(await b.getState()).toEqual(before);
+  });
+
+  it('persists imported layouts like any other edit', async () => {
+    const m = new Map<string, string>();
+    const storage = {
+      getItem: (k: string) => m.get(k) ?? null,
+      setItem: (k: string, v: string) => void m.set(k, v),
+      removeItem: (k: string) => void m.delete(k),
+    };
+    const a = createMockBackend({ storage });
+    await a.importLayout('monitor-2', await a.exportLayout(customLayout('kept', 'Kept')));
+    const b = createMockBackend({ storage });
+    expect((await b.getState()).config.monitors[1].layouts.at(-1)).toEqual(customLayout('kept', 'Kept'));
+  });
+
+  it('returns a state that does not alias the imported object', async () => {
+    const b = fresh();
+    const s = await b.importLayout('monitor-1', await b.exportLayout(customLayout('z')));
+    s.config.monitors[0].layouts.at(-1)!.zones.length = 0;
+    expect((await b.getState()).config.monitors[0].layouts.at(-1)?.zones).toHaveLength(2);
   });
 });

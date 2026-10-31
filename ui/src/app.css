@@ -274,8 +274,72 @@ select:disabled {
   opacity: 0.5;
 }
 
-input[aria-invalid='true'] {
+input[aria-invalid='true'],
+textarea[aria-invalid='true'] {
   border-color: var(--danger);
+}
+
+textarea {
+  display: block;
+  width: 100%;
+  min-height: 150px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: 0.85rem/1.4 var(--mono);
+  resize: vertical;
+}
+
+textarea[readonly] {
+  background: var(--surface-2);
+}
+
+/* ---- key caps ----------------------------------------------------------- */
+
+kbd {
+  display: inline-block;
+  min-width: 1.7em;
+  padding: 1px 7px;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: 0.85rem/1.35 var(--mono);
+  text-align: center;
+}
+
+/* ---- notices (information and warnings inside a card) --------------------- */
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.notice.warn {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--warn-text);
+}
+
+.notice svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  margin-top: 1px;
+}
+
+.notice ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
 }
 
 /* ---- motion ------------------------------------------------------------- */

@@ -36,6 +36,12 @@ export type Modifier = 'shift' | 'ctrl' | 'alt' | 'super';
 export type MoveMode = 'animate' | 'instant';
 export type Theme = 'system' | 'light' | 'dark';
 
+/**
+ * Keys held together with Left/Right/Up/1..9 for the window-move shortcuts.
+ * `win` is the Windows key (Command on macOS, once shortcuts exist there).
+ */
+export type ShortcutModifier = 'ctrl_alt' | 'win_alt' | 'ctrl_alt_shift' | 'win_ctrl';
+
 export interface Settings {
   enabled: boolean;
   modifier: Modifier;
@@ -49,6 +55,16 @@ export interface Settings {
   edge_size_px: number;
   launch_at_login: boolean;
   theme: Theme;
+  /** Global keyboard shortcuts that move the focused window between zones. Default true. */
+  keyboard_shortcuts: boolean;
+  /** Default `win_alt`. */
+  shortcut_modifier: ShortcutModifier;
+  /** Snapped windows return to their zones when their monitor reconnects. Default true. */
+  restore_on_reconnect: boolean;
+  /** Dragging the edge between two snapped windows resizes both. Default true. */
+  linked_dividers: boolean;
+  /** Space between zones in px, integer 0..32. Default 0. May be inert in early backends. */
+  zone_gap_px: number;
 }
 
 export interface MonitorProfile {
@@ -82,12 +98,27 @@ export interface MonitorSnapshot {
 /** `denied` means macOS Accessibility access is still needed. */
 export type Permission = 'not_required' | 'granted' | 'denied';
 
+/** Whether the global shortcuts are registered, and which ones could not be. */
+export interface ShortcutStatus {
+  active: boolean;
+  /** Human-readable, e.g. "Win+Alt+3 is already used by another app". */
+  failed: string[];
+}
+
+/** What this build of Krova can do on this operating system (false on macOS for now). */
+export interface Capabilities {
+  shortcuts: boolean;
+  window_memory: boolean;
+}
+
 export interface AppState {
   config: Config;
   monitors: MonitorSnapshot[];
   autostart: boolean;
   permission: Permission;
   version: string;
+  shortcuts: ShortcutStatus;
+  capabilities: Capabilities;
 }
 
 /**

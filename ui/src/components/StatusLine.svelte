@@ -7,6 +7,7 @@
      (for example "the change would leave a zone smaller than the minimum size")
      are shown verbatim and the previous layout is kept. -->
 <p
+  id="editor-status"
   class="status {editor.status.kind}"
   role="status"
   aria-live="polite"

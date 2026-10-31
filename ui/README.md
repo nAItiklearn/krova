@@ -50,6 +50,8 @@ else defines contract types.
 | `deleteLayout(monitorId, layoutId)` | `delete_layout` | `{ monitorId, layoutId }` | `AppState` |
 | `setActiveLayout(monitorId, layoutId)` | `set_active_layout` | `{ monitorId, layoutId }` | `AppState` |
 | `listTemplates()` | `list_templates` | | `Layout[]` |
+| `exportLayout(layout)` | `export_layout` | `{ layout }` | `string` (pretty JSON of `{"krova_layout":1,"layout":{...}}`) |
+| `importLayout(monitorId, json)` | `import_layout` | `{ monitorId, json }` | `AppState` (JSON at most 64 KiB; the layout's id is made unique on that monitor) |
 | `editSplitZone(layout, zoneId, axis, at)` | `edit_split_zone` | `{ layout, zoneId, axis, at }` | `Layout` |
 | `editRemoveZone(layout, zoneId)` | `edit_remove_zone` | `{ layout, zoneId }` | `Layout` |
 | `editMoveDivider(layout, axis, from, to)` | `edit_move_divider` | `{ layout, axis, from, to }` | `Layout` |
@@ -73,6 +75,13 @@ in the `role="status"` line under the canvas and keeps the previous layout.
   from `list_templates`. New layout calls `save_layout` right away.
   "Set as active" saves unsaved edits of that layout first.
 * Delete layout needs a second press (no blocking `confirm()` dialog).
+* **Export / Import** (last card of the layout panel, `LayoutTransfer.svelte`):
+  Export shows the layout on screen (unsaved edits included) as the text of
+  `export_layout` in a read-only text area, with a Copy button (async clipboard,
+  then `execCommand('copy')`, then "text is selected, press Ctrl+C"). Import takes
+  pasted text, calls `import_layout` for the selected monitor, selects the new
+  layout and closes; a refusal is shown verbatim in the status line and the
+  text and panel stay. No file dialogs or plugins: text and clipboard only.
 
 ### Keyboard
 
@@ -101,10 +110,23 @@ URL parameters (demo/browser only):
   `not_required` also accepted).
 * `?reset` forgets persisted demo edits at startup.
 * `?nopersist` keeps everything in memory only.
+* `?shortcuts=failed` reports `shortcuts: { active: true, failed: ["Win+Alt+3 is
+  already used by another app"] }`; `?shortcuts=off` reports `active: false`.
+  (Either way the mock also turns the shortcuts off when the Settings switch is
+  off or the capability is missing.)
+* `?capabilities=none` reports `capabilities: { shortcuts: false, window_memory:
+  false }`, the macOS case today. The default is both `true`.
 
 Hooks on `window.__krovaDemo` (demo only): `navigate('editor'|'settings')`,
 `setPermission('denied'|'granted'|'not_required')`, `toggleEnabled()`,
+`setShortcuts('ok'|'failed'|'off')`, `setCapabilities('all'|'none')`,
 `reset()`. They emit the same events the real backend would.
+
+The mock also mirrors `Layout::validate` (at most 64 zones, id and name at most
+64 characters, every side at least 0.01, unique zone ids), the cap of 64 layouts
+per monitor and the layout file rules (`mock/exchange.ts`: 64 KiB limit,
+envelope version 1, de-duplicated ids). Details and every error string:
+`docs/ui-contract-notes.md`.
 
 ### Test ids for e2e
 
@@ -117,17 +139,29 @@ Hooks on `window.__krovaDemo` (demo only): `navigate('editor'|'settings')`,
 sliders, text) and `setting-<key>-<value>` for radio options, `nav-editor`,
 `nav-settings`, `version`, `privacy`.
 
+Added with keyboard shortcuts, window memory and export/import:
+`setting-keyboard_shortcuts`, `setting-shortcut_modifier` (a `select`),
+`setting-restore_on_reconnect`, `setting-linked_dividers`, `setting-zone_gap_px`,
+`settings-shortcuts` / `settings-windows` (the two cards), `shortcuts-keymap`,
+`keymap-left|right|number|up`, `shortcuts-status` (live region),
+`shortcuts-failed`, `shortcuts-inactive`, `shortcuts-unavailable`,
+`window-memory-unavailable`, `layout-transfer` (the card), `export-layout`,
+`import-layout` (the two openers, `aria-expanded`), `export-panel`,
+`export-text`, `export-copy` (`data-copied`), `export-close`, `import-panel`,
+`import-text`, `import-submit`, `import-close`.
+
 ## Layout of the source
 
 ```
 src/main.ts                 entry
 src/App.svelte              shell: nav, banner, views, footer, theme
 src/app.css                 design tokens (light/dark), shared controls
-src/components/             Editor, LayoutCanvas, Toolbar, MonitorTabs, LayoutPanel,
+src/components/             Editor, LayoutCanvas, Toolbar, MonitorTabs, LayoutPanel, LayoutTransfer,
                             StatusLine, SettingsView, PermissionBanner, DemoBadge, Icon, LayoutThumb
 src/lib/backend.ts          Backend interface, tauriBackend, api selection
 src/lib/bindings/index.ts   contract types (only place types are defined)
-src/lib/mock/               mockBackend, edit.ts (edit.rs mirror), templates.ts, tests
+src/lib/mock/               mockBackend, edit.ts (edit.rs / zone.rs mirror), exchange.ts
+                            (export/import mirror), templates.ts, tests
 src/lib/*.svelte.ts         app / editor / settings stores (Svelte 5 runes)
 src/lib/geometry.ts         hit-testing, divider discovery, previews (UI only)
 ```

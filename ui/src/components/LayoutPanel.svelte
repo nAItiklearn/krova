@@ -2,6 +2,7 @@
   import { editor } from '../lib/editor.svelte';
   import Icon from './Icon.svelte';
   import LayoutThumb from './LayoutThumb.svelte';
+  import LayoutTransfer from './LayoutTransfer.svelte';
 
   const ratio = $derived(editor.monitor ? editor.monitor.work.w / editor.monitor.work.h : 16 / 9);
   const onlyLayout = $derived(editor.layouts.length <= 1);
@@ -131,6 +132,9 @@
       {/each}
     </ul>
   </section>
+
+  <!-- Last on purpose: it adds Tab stops after the templates, not in the middle. -->
+  <LayoutTransfer />
 </aside>
 
 <style>
