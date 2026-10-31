@@ -179,7 +179,7 @@ export const rows: readonly Row[] = [
   {
     label: 'Release status',
     cells: {
-      krova: { kind: 'no', text: 'v0.1, not released; unsigned; macOS untested' },
+      krova: { kind: 'part', text: 'v0.1.0, 31 Oct 2026, Windows only; early preview, unsigned; macOS untested' },
       snap: { kind: 'text', text: 'Part of Windows. Windows 10 support ended 14 Oct 2025' },
       fz: { kind: 'text', text: 'v0.102.3001, 27 Oct 2026' },
       rect: { kind: 'text', text: 'v2.0.4, 20 Oct 2026' },
