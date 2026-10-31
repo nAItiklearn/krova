@@ -64,6 +64,34 @@ pub enum Theme {
     Dark,
 }
 
+/// Modifier chord for the keyboard zone shortcuts (`<mods>+Left`, `+1` ... `+9`).
+/// Ctrl+Alt+Left/Right is taken by many IDEs (back / forward), so the default is
+/// Windows key + Alt. Serialised as snake_case strings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ShortcutModifier {
+    CtrlAlt,
+    #[default]
+    WinAlt,
+    CtrlAltShift,
+    WinCtrl,
+}
+
+impl ShortcutModifier {
+    /// Human-readable prefix such as `Win+Alt`, used in messages and the UI.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::CtrlAlt => "Ctrl+Alt",
+            Self::WinAlt => "Win+Alt",
+            Self::CtrlAltShift => "Ctrl+Alt+Shift",
+            Self::WinCtrl => "Win+Ctrl",
+        }
+    }
+}
+
+/// Largest gap (in pixels) between zones and around the screen edge.
+pub const MAX_ZONE_GAP_PX: i32 = 32;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -76,6 +104,15 @@ pub struct Settings {
     pub edge_size_px: i32,
     pub launch_at_login: bool,
     pub theme: Theme,
+    /// Global keyboard shortcuts that move the focused window between zones.
+    pub keyboard_shortcuts: bool,
+    pub shortcut_modifier: ShortcutModifier,
+    /// Put windows back into their zones when their monitor is reconnected.
+    pub restore_on_reconnect: bool,
+    /// Resizing a snapped window by an edge moves the neighbours' shared edge too.
+    pub linked_dividers: bool,
+    /// Space between zones and around the work area, in pixels (0..=32).
+    pub zone_gap_px: i32,
 }
 
 /// `#rrggbb` (any case, optional `#`, surrounding spaces ignored) as lowercase `#rrggbb`.
@@ -98,6 +135,7 @@ impl Settings {
             defaults.highlight_opacity
         };
         self.edge_size_px = self.edge_size_px.clamp(2, 64);
+        self.zone_gap_px = self.zone_gap_px.clamp(0, MAX_ZONE_GAP_PX);
         self.highlight_color =
             normalize_hex_color(&self.highlight_color).unwrap_or(defaults.highlight_color);
         self
@@ -116,6 +154,11 @@ impl Default for Settings {
             edge_size_px: 8,
             launch_at_login: false,
             theme: Theme::System,
+            keyboard_shortcuts: true,
+            shortcut_modifier: ShortcutModifier::WinAlt,
+            restore_on_reconnect: true,
+            linked_dividers: true,
+            zone_gap_px: 0,
         }
     }
 }
@@ -525,6 +568,102 @@ mod hardening_tests {
         assert_eq!(c.settings.highlight_opacity, 1.0);
         assert_eq!(c.settings.edge_size_px, 64);
         assert_eq!(c.settings.highlight_color, "#3b82f6");
+    }
+
+    #[test]
+    fn new_settings_default_to_the_documented_values() {
+        let d = Settings::default();
+        assert!(d.keyboard_shortcuts);
+        assert_eq!(d.shortcut_modifier, ShortcutModifier::WinAlt);
+        assert!(d.restore_on_reconnect);
+        assert!(d.linked_dividers);
+        assert_eq!(d.zone_gap_px, 0);
+        // Settings that are already valid are left alone by sanitising.
+        assert_eq!(d.clone().sanitized(), d);
+    }
+
+    #[test]
+    fn a_v01_config_without_the_new_fields_loads_with_their_defaults() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("config.json");
+        fs::write(
+            &p,
+            r##"{"schema_version":1,"settings":{"enabled":false,"modifier":"alt","highlight_color":"#112233","highlight_opacity":0.5,"move_mode":"instant","edge_snapping":true,"edge_size_px":10,"launch_at_login":true,"theme":"dark"},"monitors":[]}"##,
+        )
+        .unwrap();
+        let (c, st) = Config::load(&p).unwrap();
+        assert_eq!(st, LoadStatus::Loaded);
+        assert_eq!(c.schema_version, SCHEMA_VERSION);
+        assert!(!c.settings.enabled);
+        assert_eq!(c.settings.modifier, Modifier::Alt);
+        assert_eq!(c.settings.theme, Theme::Dark);
+        let d = Settings::default();
+        assert_eq!(c.settings.keyboard_shortcuts, d.keyboard_shortcuts);
+        assert_eq!(c.settings.shortcut_modifier, d.shortcut_modifier);
+        assert_eq!(c.settings.restore_on_reconnect, d.restore_on_reconnect);
+        assert_eq!(c.settings.linked_dividers, d.linked_dividers);
+        assert_eq!(c.settings.zone_gap_px, d.zone_gap_px);
+    }
+
+    #[test]
+    fn shortcut_modifiers_use_snake_case_strings() {
+        for (m, s) in [
+            (ShortcutModifier::CtrlAlt, "\"ctrl_alt\""),
+            (ShortcutModifier::WinAlt, "\"win_alt\""),
+            (ShortcutModifier::CtrlAltShift, "\"ctrl_alt_shift\""),
+            (ShortcutModifier::WinCtrl, "\"win_ctrl\""),
+        ] {
+            assert_eq!(serde_json::to_string(&m).unwrap(), s);
+            assert_eq!(serde_json::from_str::<ShortcutModifier>(s).unwrap(), m);
+        }
+        assert!(serde_json::from_str::<ShortcutModifier>("\"super\"").is_err());
+        let json = serde_json::to_value(Settings::default()).unwrap();
+        assert_eq!(json["shortcut_modifier"], "win_alt");
+        assert_eq!(json["keyboard_shortcuts"], true);
+        assert_eq!(json["zone_gap_px"], 0);
+    }
+
+    #[test]
+    fn shortcut_labels_read_like_key_chords() {
+        assert_eq!(ShortcutModifier::WinAlt.label(), "Win+Alt");
+        assert_eq!(ShortcutModifier::CtrlAlt.label(), "Ctrl+Alt");
+        assert_eq!(ShortcutModifier::CtrlAltShift.label(), "Ctrl+Alt+Shift");
+        assert_eq!(ShortcutModifier::WinCtrl.label(), "Win+Ctrl");
+    }
+
+    #[test]
+    fn the_zone_gap_is_clamped_to_zero_through_thirty_two() {
+        for (given, want) in [
+            (-5, 0),
+            (0, 0),
+            (7, 7),
+            (32, 32),
+            (33, 32),
+            (i32::MAX, 32),
+            (i32::MIN, 0),
+        ] {
+            let s = Settings {
+                zone_gap_px: given,
+                ..Settings::default()
+            }
+            .sanitized();
+            assert_eq!(s.zone_gap_px, want, "gap {given}");
+        }
+    }
+
+    #[test]
+    fn a_hand_edited_gap_is_clamped_on_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("config.json");
+        fs::write(
+            &p,
+            r#"{"schema_version":1,"settings":{"zone_gap_px":99999,"shortcut_modifier":"win_ctrl","keyboard_shortcuts":false}}"#,
+        )
+        .unwrap();
+        let (c, _) = Config::load(&p).unwrap();
+        assert_eq!(c.settings.zone_gap_px, MAX_ZONE_GAP_PX);
+        assert_eq!(c.settings.shortcut_modifier, ShortcutModifier::WinCtrl);
+        assert!(!c.settings.keyboard_shortcuts);
     }
 
     #[test]

@@ -106,6 +106,34 @@ impl Layout {
             .find(|z| z.id == zone_id)
             .map(|z| work.denormalize(z.rect))
     }
+
+    /// Like [`Layout::zone_pixels`] but leaves `gap` pixels between neighbouring
+    /// zones and between a zone and the edge of `work`. A gap of 0 (or less) gives
+    /// exactly `zone_pixels`. Odd gaps are split so seams and margins are exactly
+    /// `gap` wide; a zone never shrinks below 1 pixel.
+    pub fn zone_pixels_gapped(&self, zone_id: u32, work: PxRect, gap: i32) -> Option<PxRect> {
+        let gap = gap.clamp(0, crate::config::MAX_ZONE_GAP_PX);
+        if gap == 0 {
+            return self.zone_pixels(zone_id, work);
+        }
+        let lo = gap / 2;
+        let hi = gap - lo;
+        // Margin around the screen first, then each zone gives up half a gap on
+        // every side (`hi` on the left/top, `lo` on the right/bottom).
+        let inner = PxRect::new(
+            work.x.saturating_add(lo),
+            work.y.saturating_add(lo),
+            work.w.saturating_sub(gap).max(1),
+            work.h.saturating_sub(gap).max(1),
+        );
+        let r = self.zone_pixels(zone_id, inner)?;
+        Some(PxRect::new(
+            r.x.saturating_add(hi),
+            r.y.saturating_add(hi),
+            r.w.saturating_sub(gap).max(1),
+            r.h.saturating_sub(gap).max(1),
+        ))
+    }
 }
 
 /// Built-in starter layouts.
@@ -244,6 +272,69 @@ mod tests {
         l.name = "ok".to_owned();
         l.id = "y".repeat(MAX_NAME_LEN + 1);
         assert_eq!(l.validate(), Err(LayoutError::TextTooLong));
+    }
+
+    #[test]
+    fn a_zero_gap_is_exactly_the_plain_zone_rect() {
+        let l = &templates()[2];
+        let work = PxRect::new(100, 50, 1001, 777);
+        for z in &l.zones {
+            assert_eq!(
+                l.zone_pixels_gapped(z.id, work, 0),
+                l.zone_pixels(z.id, work)
+            );
+            assert_eq!(
+                l.zone_pixels_gapped(z.id, work, -4),
+                l.zone_pixels(z.id, work)
+            );
+        }
+        assert_eq!(l.zone_pixels_gapped(99, work, 8), None);
+    }
+
+    #[test]
+    fn gaps_are_exact_between_zones_and_around_the_edge() {
+        let l = &templates()[0]; // halves
+        let work = PxRect::new(0, 0, 1920, 1040);
+        let a = l.zone_pixels_gapped(1, work, 10).unwrap();
+        let b = l.zone_pixels_gapped(2, work, 10).unwrap();
+        assert_eq!(a, PxRect::new(10, 10, 945, 1020));
+        assert_eq!(b, PxRect::new(965, 10, 945, 1020));
+        assert_eq!(b.x - a.right(), 10, "seam between the zones");
+        assert_eq!(a.x - work.x, 10, "left margin");
+        assert_eq!(work.right() - b.right(), 10, "right margin");
+        assert_eq!(a.y - work.y, 10, "top margin");
+        assert_eq!(work.bottom() - a.bottom(), 10, "bottom margin");
+    }
+
+    #[test]
+    fn odd_gaps_still_add_up_exactly() {
+        let l = &templates()[2]; // 2x2 grid
+        let work = PxRect::new(-1920, 20, 1920, 1000);
+        for gap in [1, 3, 7, 31, 32] {
+            let z: Vec<PxRect> = (1..=4)
+                .map(|i| l.zone_pixels_gapped(i, work, gap).unwrap())
+                .collect();
+            assert_eq!(z[1].x - z[0].right(), gap, "horizontal seam, gap {gap}");
+            assert_eq!(z[2].y - z[0].bottom(), gap, "vertical seam, gap {gap}");
+            assert_eq!(z[0].x - work.x, gap, "left margin, gap {gap}");
+            assert_eq!(z[0].y - work.y, gap, "top margin, gap {gap}");
+            assert_eq!(work.right() - z[3].right(), gap, "right margin, gap {gap}");
+            assert_eq!(
+                work.bottom() - z[3].bottom(),
+                gap,
+                "bottom margin, gap {gap}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_huge_gap_is_clamped_and_never_collapses_a_zone() {
+        let l = &templates()[0];
+        let work = PxRect::new(0, 0, 40, 30);
+        let z = l.zone_pixels_gapped(1, work, i32::MAX).unwrap();
+        assert!(z.w >= 1 && z.h >= 1);
+        let same = l.zone_pixels_gapped(1, work, crate::config::MAX_ZONE_GAP_PX);
+        assert_eq!(Some(z), same, "gaps above the maximum count as the maximum");
     }
 
     #[test]
