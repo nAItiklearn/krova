@@ -278,6 +278,7 @@ mod tests {
             highlight: Some(1),
             preview: None,
             style: OverlayStyle::from_settings("#3b82f6", 0.35),
+            gapped: false,
         }));
         overlay.set_scene(None);
         drop(overlay);
