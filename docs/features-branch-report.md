@@ -11,8 +11,8 @@ Everything here was built and run on one Windows 11 machine (10.0.26300, one 153
 | T0 window destroy-on-close | **done, measured** | `"create": false` in `tauri.conf.json`; `ui_window.rs` creates the window on demand and destroys it on close; `RunEvent::ExitRequested` is vetoed only when it carries no exit code, so the tray's Quit (`app.exit(0)`) still exits. |
 | T1 `registry` (core) | **done, unit-tested** | `SnapRegistry` (bounded, 1024), `plan_reconnect`, zone selection helpers, `plan_keyboard_move`. |
 | T2 engine, reconnect memory | **done, unit-tested, exercised end to end with a faked second monitor** | snaps (zone and keyboard) are recorded; a drag of a registered window removes its entry; display-change watcher plus a press-time check; 1.5 s debounce; restore through `place_window`. |
-| T3 keyboard zone control | **done; registration measured, delivery measured for Ctrl+Alt (see below)** | `RegisterHotKey` thread, live re-registration on settings change, status in `AppState`. |
-| T4 linked dividers | **done, unit-tested; real-mouse test results below** | `SetWinEventHook` (MOVESIZESTART/END), `krova_core::linked` planner, applied when the mouse button is released. No live following. |
+| T3 keyboard zone control | **done, measured** | `RegisterHotKey` thread, live re-registration on settings change, status in `AppState`; end-to-end test passes. |
+| T4 linked dividers | **done and tested except the OS event** | `SetWinEventHook` (MOVESIZESTART/END), `krova_core::linked` planner, applied when the mouse button is released. No live following. The engine path passes an end-to-end test with a synthetic end event; real delivery of the event by Windows is unverified (see below). |
 | T5 layout files | **done, unit-tested** | `layout_io` plus `export_layout` / `import_layout` commands. |
 | T6 zone gap | **done, unit-tested** | `Layout::zone_pixels_gapped`, used by the snap session, keyboard moves, reconnect, linked dividers and the overlay (`OverlayScene::gapped`). |
 | T7 docs | **done** | this file, `docs/features-contract.md`. `SECURITY-REVIEW.md` is untouched. |
@@ -45,9 +45,23 @@ Method: a separate debug binary built with `TAURI_CONFIG='{"identifier":"dev.kro
 
 After close the app stays alive in the tray and the six WebView2 processes are gone; reopening works repeatedly. Idle CPU with no window: 0.39% and 0.78% of one core in two 4 s samples (noise level; the tray and hooks are idle). The owner's earlier measurement (window open): 230 MB private, 473 MB working set across 7 processes. A screenshot of the recreated window on `--settings` showed the Settings view, so the parked `navigate` event was delivered. Not tested: the tray menu items themselves (a script cannot click the tray), Quit from the tray.
 
-### T3: hotkeys
+### T3: hotkeys (this machine, Windows 11 10.0.26300)
 
-See the table in the section "Hotkey measurements" below (filled from the last desktop run).
+`RegisterHotKey` results, measured with a Python probe and again by the app's own thread:
+
+| Modifier | Refused | Notes |
+|---|---|---|
+| Win+Alt | **12 of 12** (error 1409) | Windows keeps Win+Alt+digit and the Win+Alt arrows. |
+| Win+Ctrl | **11 of 12** (error 1409) | Only Win+Ctrl+Up is accepted; Left/Right switch virtual desktops. |
+| Ctrl+Alt | 0 of 12 | All 12 pressed with `SendInput` and delivered. |
+| Ctrl+Alt+Shift | 0 of 12 | All 12 pressed with `SendInput` and delivered (arrows need the extended-key flag when injected; a real keyboard sends it). |
+
+End-to-end (`src-tauri`, ignored tests, real `notepad.exe`, real engine thread, real hotkeys): Ctrl+Alt+2 moved Notepad to exactly zone 2's rectangle (`want` equals `got`), 1/Right/Left walked zones, Up with one monitor did nothing, turning `keyboard_shortcuts` off released the keys and turning it on with Ctrl+Alt+Shift re-registered them live (`active=true, failed=[]`).
+
+### T2 / T4 end to end (ignored tests, real Notepad windows)
+
+- Reconnect: a fake second monitor (the machine has one) was removed, the window displaced to the first monitor, the monitor returned and a display-change event delivered: the window was back in zone 2 of the returned monitor after **1.6 s** (the debounce is 1.5 s). Another event changed nothing (idempotent). A window whose entry was removed (what a drag does) was left where the user put it.
+- Linked dividers: two Notepads snapped into halves by shortcut, the right one resized 96 px to the left with `SetWindowPos`, the move/size-end event delivered by hand: the left window shrank from 768 to 672 px, the seam closed, outer edges unchanged, registry rects updated. **What is not proven: that Windows really delivers `EVENT_SYSTEM_MOVESIZESTART/END` to the watcher for a user's mouse resize.** Two real-mouse tests (`the_watcher_reports_a_title_bar_drag`, `the_watcher_reports_an_edge_resize` in `crates/krova-platform/tests/windows_desktop.rs`) failed on every run: the injected mouse did not move or resize Notepad at all while someone was using the machine, so they say nothing about the hook. In one earlier run the injected mouse did resize a window, but the event path was not observed. Please try linked dividers by hand (item 4 below).
 
 ### Things only unit-tested
 
@@ -76,7 +90,7 @@ Reconnect planning against real monitor changes (this machine has one monitor; t
 Build an isolated copy first so the installed Krova is not disturbed: `TAURI_CONFIG='{"identifier":"dev.krova.test"}' CARGO_TARGET_DIR=<somewhere> cargo build --manifest-path src-tauri/Cargo.toml --features tauri/custom-protocol` (UI built first with `npm run build --prefix ui`). Start `krova-app.exe`; start it again to open the editor, or with `--settings` for Settings.
 
 1. **Memory fix.** Open the window, then close it with the X: in Task Manager the `msedgewebview2.exe` children disappear and Krova stays in the tray. Tray, Edit layouts reopens it.
-2. **Keyboard.** Focus any ordinary window (not elevated). Press Ctrl+Alt+Shift+2: it goes to zone 2 of its monitor. Ctrl+Alt+Shift+Right / Left: next / previous zone, wrapping. Ctrl+Alt+Shift+Up: next monitor, same zone number.
+2. **Keyboard.** Focus any ordinary window (not elevated). Press Ctrl+Alt+Shift+2: it goes to zone 2 of its monitor. Ctrl+Alt+Shift+Right / Left: next / previous zone, wrapping. Ctrl+Alt+Shift+Up: next monitor, same zone number. (There is no settings UI for the modifier yet; edit `shortcut_modifier` in `config.json` while Krova is not running, for example to `"ctrl_alt"`.)
 3. **Reconnect.** Snap a window to a zone on the external monitor (Shift-drag), unplug the monitor, plug it back, wait two seconds: the window returns to its zone. Drag the window yourself first and it is left alone.
 4. **Linked dividers.** Snap two windows side by side (halves). Drag the edge between them with the mouse and release: the other window's edge follows.
 5. **Layout files.** (UI pending.) With the commands: `export_layout` returns JSON; `import_layout` stores it on a monitor.
