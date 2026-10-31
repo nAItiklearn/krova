@@ -24,13 +24,21 @@ export function modifierLabel(m: Modifier, mac: boolean = isMac()): string {
 
 export const MODIFIERS: Modifier[] = ['shift', 'ctrl', 'alt', 'super'];
 
-/** Choices for the keyboard-shortcut modifier, default first. */
+/**
+ * Choices for the keyboard-shortcut modifier: the default first, the Win-key
+ * choices last (Windows keeps most of those chords for itself).
+ */
 export const SHORTCUT_MODIFIERS: ShortcutModifier[] = [
-  'win_alt',
-  'ctrl_alt',
   'ctrl_alt_shift',
+  'ctrl_alt',
+  'win_alt',
   'win_ctrl',
 ];
+
+/** Does this choice use the Windows key (Command on a Mac)? */
+export function usesWinKey(m: ShortcutModifier): boolean {
+  return m === 'win_alt' || m === 'win_ctrl';
+}
 
 /**
  * The keys of a shortcut modifier, in the words of the platform: "Win" (or "Cmd"),

@@ -43,6 +43,12 @@ export interface Backend {
   /** Moves every zone edge on coordinate `from` to `to`. */
   editMoveDivider(layout: Layout, axis: Axis, from: number, to: number): Promise<Layout>;
 
+  /**
+   * The view a tray click asked for while the window was still being created
+   * (`take_pending_view`), or null. The real app destroys its window on close and
+   * parks the `navigate` event; call this once after `onNavigate` is registered.
+   */
+  takePendingView(): Promise<string | null>;
   /** Backend event "navigate" (from the tray menu). */
   onNavigate(cb: (view: View) => void): Promise<Unlisten>;
   /** Backend event "state-changed". */
@@ -84,6 +90,7 @@ export const tauriBackend: Backend = {
   editMoveDivider: (layout, axis, from, to) =>
     invoke<Layout>('edit_move_divider', { layout, axis, from, to }),
 
+  takePendingView: () => invoke<string | null>('take_pending_view'),
   onNavigate: (cb) => listen<View>('navigate', (e) => cb(e.payload)),
   onStateChanged: (cb) => listen<AppState>('state-changed', (e) => cb(e.payload)),
 };

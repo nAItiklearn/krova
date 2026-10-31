@@ -65,8 +65,9 @@ Generated files (`e2e/.results`, `e2e/.report`) are git-ignored by
 | --- | --- |
 | `settings-shortcuts`, `settings-windows` | the two Settings cards (`role="group"`, named by their `h3`) |
 | `setting-keyboard_shortcuts` | switch "Use keyboard shortcuts" |
-| `setting-shortcut_modifier` | `select` "Modifier keys" (`win_alt`, `ctrl_alt`, `ctrl_alt_shift`, `win_ctrl`) |
-| `shortcuts-keymap` | the `dl` of key combinations; rows `keymap-left`, `keymap-right`, `keymap-number`, `keymap-up` are the `dt`s ("Win + Alt + Left", "... + 1 to 9") |
+| `setting-shortcut_modifier` | `select` "Modifier keys" (`ctrl_alt_shift` is the default and comes first, then `ctrl_alt`, `win_alt`, `win_ctrl`) |
+| `shortcuts-win-hint` | hint under the select, only for `win_alt` / `win_ctrl` ("Windows keeps many shortcuts with the Windows key for itself ...") |
+| `shortcuts-keymap` | the `dl` of key combinations; rows `keymap-left`, `keymap-right`, `keymap-number`, `keymap-up` are the `dt`s ("Ctrl + Alt + Shift + Left", "... + 1 to 9") |
 | `shortcuts-status` | polite live region around the next three |
 | `shortcuts-failed` | warning with the list of shortcuts that could not be registered |
 | `shortcuts-inactive` | note "Keyboard shortcuts are not active right now." |

@@ -163,11 +163,13 @@ const scenarios: Scenario[] = [
     name: 'settings, keyboard shortcuts and windows groups after changing them',
     arrange: async (page) => {
       await page.getByTestId('nav-settings').click();
-      await page.getByTestId('setting-shortcut_modifier').selectOption('ctrl_alt_shift');
+      // A Win-key choice also shows the "Windows keeps many of these" hint.
+      await page.getByTestId('setting-shortcut_modifier').selectOption('win_alt');
       await page.getByTestId('setting-zone_gap_px').fill('12');
       await page.getByRole('switch', { name: 'Linked dividers' }).uncheck();
       await expect(page.getByTestId('save-indicator')).toContainText('Saved');
-      await expect(page.getByTestId('keymap-left')).toHaveText('Ctrl + Alt + Shift + Left');
+      await expect(page.getByTestId('keymap-left')).toHaveText('Win + Alt + Left');
+      await expect(page.getByTestId('shortcuts-win-hint')).toBeVisible();
     },
   },
   {

@@ -38,7 +38,7 @@ export type ShortcutsMode = 'ok' | 'failed' | 'off';
 export type CapabilitiesMode = 'all' | 'none';
 
 /** What `?shortcuts=failed` reports as the shortcuts that could not be registered. */
-export const DEMO_FAILED_SHORTCUTS = ['Win+Alt+3 is already used by another app'];
+export const DEMO_FAILED_SHORTCUTS = ['Ctrl+Alt+Shift+3 is already used by another app'];
 
 export interface MockOptions {
   /** Persist config edits to localStorage (default true when it is available). */
@@ -85,7 +85,7 @@ export function defaultSettings(): Settings {
     launch_at_login: false,
     theme: 'system',
     keyboard_shortcuts: true,
-    shortcut_modifier: 'win_alt',
+    shortcut_modifier: 'ctrl_alt_shift',
     restore_on_reconnect: true,
     linked_dividers: true,
     zone_gap_px: 0,
@@ -426,6 +426,11 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
 
     async editMoveDivider(layout, axis, from, to) {
       return run(() => editMoveDivider(layout, axis, from, to));
+    },
+
+    // The browser demo has no window lifecycle: nothing is ever parked.
+    async takePendingView() {
+      return null;
     },
 
     async onNavigate(cb): Promise<Unlisten> {

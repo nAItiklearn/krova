@@ -201,7 +201,7 @@ describe('mock backend: new settings', () => {
   it('defaults match the contract', async () => {
     const s = (await fresh().getState()).config.settings;
     expect(s.keyboard_shortcuts).toBe(true);
-    expect(s.shortcut_modifier).toBe('win_alt');
+    expect(s.shortcut_modifier).toBe('ctrl_alt_shift');
     expect(s.restore_on_reconnect).toBe(true);
     expect(s.linked_dividers).toBe(true);
     expect(s.zone_gap_px).toBe(0);
@@ -214,14 +214,14 @@ describe('mock backend: new settings', () => {
     const s = await b.saveSettings({
       ...cur,
       keyboard_shortcuts: false,
-      shortcut_modifier: 'ctrl_alt_shift',
+      shortcut_modifier: 'win_ctrl',
       restore_on_reconnect: false,
       linked_dividers: false,
       zone_gap_px: 12,
     });
     expect(s.config.settings).toMatchObject({
       keyboard_shortcuts: false,
-      shortcut_modifier: 'ctrl_alt_shift',
+      shortcut_modifier: 'win_ctrl',
       restore_on_reconnect: false,
       linked_dividers: false,
       zone_gap_px: 12,
@@ -242,7 +242,7 @@ describe('mock backend: new settings', () => {
     const cur = (await b.getState()).config.settings;
     for (const bad of ['alt', 'win_shift', '', 'CTRL_ALT', 'super']) {
       await expect(
-        b.saveSettings({ ...cur, shortcut_modifier: bad as unknown as 'win_alt' }),
+        b.saveSettings({ ...cur, shortcut_modifier: bad as unknown as 'ctrl_alt_shift' }),
       ).rejects.toBe(`invalid shortcut_modifier "${bad}"`);
     }
     expect((await b.getState()).config.settings).toEqual(cur);
@@ -277,7 +277,7 @@ describe('mock backend: new settings', () => {
     expect(s.restore_on_reconnect).toBe(true);
     expect(s.linked_dividers).toBe(true);
     expect(s.zone_gap_px).toBe(0);
-    expect(s.shortcut_modifier).toBe('win_alt');
+    expect(s.shortcut_modifier).toBe('ctrl_alt_shift');
 
     const odd = await b.saveSettings({
       ...cur,
@@ -331,9 +331,9 @@ describe('mock backend: shortcuts and capabilities', () => {
     const s = await createMockBackend({ persist: false, shortcuts: 'failed' }).getState();
     expect(s.shortcuts).toEqual({
       active: true,
-      failed: ['Win+Alt+3 is already used by another app'],
+      failed: ['Ctrl+Alt+Shift+3 is already used by another app'],
     });
-    expect(DEMO_FAILED_SHORTCUTS).toEqual(['Win+Alt+3 is already used by another app']);
+    expect(DEMO_FAILED_SHORTCUTS).toEqual(['Ctrl+Alt+Shift+3 is already used by another app']);
   });
 
   it('shortcuts=off reports inactive shortcuts', async () => {

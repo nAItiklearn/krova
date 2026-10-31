@@ -57,7 +57,10 @@ export interface Settings {
   theme: Theme;
   /** Global keyboard shortcuts that move the focused window between zones. Default true. */
   keyboard_shortcuts: boolean;
-  /** Default `win_alt`. */
+  /**
+   * Default `ctrl_alt_shift`. Windows refuses most Win+Alt and Win+Ctrl chords, so
+   * `shortcuts.failed` says which ones were not registered.
+   */
   shortcut_modifier: ShortcutModifier;
   /** Snapped windows return to their zones when their monitor reconnects. Default true. */
   restore_on_reconnect: boolean;
@@ -101,7 +104,7 @@ export type Permission = 'not_required' | 'granted' | 'denied';
 /** Whether the global shortcuts are registered, and which ones could not be. */
 export interface ShortcutStatus {
   active: boolean;
-  /** Human-readable, e.g. "Win+Alt+3 is already used by another app". */
+  /** Human-readable, e.g. "Ctrl+Alt+Shift+3 is already used by another app". */
   failed: string[];
 }
 

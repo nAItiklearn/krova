@@ -20,11 +20,12 @@ const restoreSwitch = (page: Page) =>
 const linkedSwitch = (page: Page) => page.getByRole('switch', { name: 'Linked dividers' });
 const gapSlider = (page: Page) => page.getByRole('slider', { name: 'Space between zones (px)' });
 
+// In the order of the select: the default first, the Win-key choices last.
 const MODIFIER_CHOICES = [
-  { value: 'win_alt', label: 'Win + Alt' },
-  { value: 'ctrl_alt', label: 'Ctrl + Alt' },
-  { value: 'ctrl_alt_shift', label: 'Ctrl + Alt + Shift' },
-  { value: 'win_ctrl', label: 'Win + Ctrl' },
+  { value: 'ctrl_alt_shift', label: 'Ctrl + Alt + Shift', winKey: false },
+  { value: 'ctrl_alt', label: 'Ctrl + Alt', winKey: false },
+  { value: 'win_alt', label: 'Win + Alt', winKey: true },
+  { value: 'win_ctrl', label: 'Win + Ctrl', winKey: true },
 ] as const;
 
 /** The four rows of the key map for a modifier label like "Ctrl + Alt". */
@@ -52,18 +53,26 @@ test.describe('Keyboard shortcuts group: defaults', () => {
     const select = modifierSelect(page);
     await expect(select).toHaveAttribute('data-testid', 'setting-shortcut_modifier');
     await expect(select).toBeEnabled();
-    await expect(select).toHaveValue('win_alt');
+    // Windows refuses most Win-key chords, so the default is Ctrl + Alt + Shift.
+    await expect(select).toHaveValue('ctrl_alt_shift');
     await expect(select.locator('option')).toHaveText(MODIFIER_CHOICES.map((c) => c.label));
     await expect(select.locator('option')).toHaveCount(4);
     for (const c of MODIFIER_CHOICES) {
       await expect(select.locator(`option[value="${c.value}"]`)).toHaveText(c.label);
     }
+    await expect(page.getByTestId('shortcuts-win-hint')).toHaveCount(0);
 
-    await expectKeymap(page, 'Win + Alt');
-    await expect(page.getByTestId('keymap-left').locator('kbd')).toHaveText(['Win', 'Alt', 'Left']);
-    await expect(page.getByTestId('keymap-number').locator('kbd')).toHaveText([
-      'Win',
+    await expectKeymap(page, 'Ctrl + Alt + Shift');
+    await expect(page.getByTestId('keymap-left').locator('kbd')).toHaveText([
+      'Ctrl',
       'Alt',
+      'Shift',
+      'Left',
+    ]);
+    await expect(page.getByTestId('keymap-number').locator('kbd')).toHaveText([
+      'Ctrl',
+      'Alt',
+      'Shift',
       '1',
       '9',
     ]);
@@ -102,7 +111,7 @@ test.describe('Keyboard shortcuts group: changing it', () => {
     await expect(shortcutsSwitch(page)).not.toBeChecked();
     await expect(modifierSelect(page)).toBeDisabled();
     // The value is kept while it is greyed out.
-    await expect(modifierSelect(page)).toHaveValue('win_alt');
+    await expect(modifierSelect(page)).toHaveValue('ctrl_alt_shift');
 
     await shortcutsSwitch(page).check();
     await expectSaved(page);
@@ -121,17 +130,26 @@ test.describe('Keyboard shortcuts group: changing it', () => {
       await expect(modifierSelect(page)).toHaveValue(choice.value);
       await expectKeymap(page, choice.label);
       await expectSaved(page);
+
+      // Windows keeps many Win-key chords for itself: those choices carry a hint.
+      const hint = page.getByTestId('shortcuts-win-hint');
+      if (choice.winKey) {
+        await expect(hint).toBeVisible();
+        await expect(hint).toContainText('Ctrl + Alt + Shift is the safest choice');
+        await expect(modifierSelect(page)).toHaveAccessibleDescription(/Windows keeps many shortcuts/);
+      } else {
+        await expect(hint).toHaveCount(0);
+      }
     });
   }
 
   test('the key map follows the choice at once, before the save is done', async ({ page }) => {
     await openSettings(page);
-    await modifierSelect(page).selectOption('ctrl_alt_shift');
-    await expectKeymap(page, 'Ctrl + Alt + Shift');
+    await modifierSelect(page).selectOption('win_ctrl');
+    await expectKeymap(page, 'Win + Ctrl');
     await expect(page.getByTestId('keymap-left').locator('kbd')).toHaveText([
+      'Win',
       'Ctrl',
-      'Alt',
-      'Shift',
       'Left',
     ]);
   });
@@ -162,7 +180,7 @@ test.describe('Keyboard shortcuts group: what the backend reports', () => {
     await expect(warning).toContainText('These shortcuts could not be registered');
     await expect(warning.getByRole('list')).toBeVisible();
     await expect(warning.getByRole('listitem')).toHaveText([
-      'Win+Alt+3 is already used by another app',
+      'Ctrl+Alt+Shift+3 is already used by another app',
     ]);
     await expect(warning).toContainText('Choose other modifier keys');
 
@@ -226,7 +244,7 @@ test.describe('Without platform support (?capabilities=none, the macOS case toda
     await expect(modifierSelect(page)).toBeDisabled();
     // The stored values are still shown.
     await expect(shortcutsSwitch(page)).toBeChecked();
-    await expect(modifierSelect(page)).toHaveValue('win_alt');
+    await expect(modifierSelect(page)).toHaveValue('ctrl_alt_shift');
 
     // A key list for keys that do nothing here would only mislead.
     await expect(page.getByTestId('shortcuts-keymap')).toHaveCount(0);
@@ -375,7 +393,8 @@ test.describe('persistence and keyboard order', () => {
   }) => {
     await openSettings(page, '?reset');
 
-    await modifierSelect(page).selectOption('ctrl_alt_shift');
+    // Not the default (Ctrl + Alt + Shift), so a stored choice is told apart from a default.
+    await modifierSelect(page).selectOption('win_alt');
     await expectSaved(page);
     await restoreSwitch(page).uncheck();
     await linkedSwitch(page).uncheck();
@@ -387,13 +406,13 @@ test.describe('persistence and keyboard order', () => {
     await page.goto('/');
     await page.getByTestId('nav-settings').click();
     await expect(shortcutsSwitch(page)).not.toBeChecked();
-    await expect(modifierSelect(page)).toHaveValue('ctrl_alt_shift');
+    await expect(modifierSelect(page)).toHaveValue('win_alt');
     await expect(restoreSwitch(page)).not.toBeChecked();
     await expect(linkedSwitch(page)).not.toBeChecked();
     await expect(gapSlider(page)).toHaveValue('9');
     // The key map reflects the stored choice too (turn the switch on to read it).
     await shortcutsSwitch(page).check();
-    await expectKeymap(page, 'Ctrl + Alt + Shift');
+    await expectKeymap(page, 'Win + Alt');
   });
 
   test('the new groups follow Appearance in the Tab order, each stop shows a focus ring', async ({

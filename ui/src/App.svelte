@@ -8,6 +8,7 @@
   import { api } from './lib/backend';
   import type { View } from './lib/bindings';
   import { editor } from './lib/editor.svelte';
+  import { applyPendingView } from './lib/pendingView';
   import { settings } from './lib/settings.svelte';
 
   const VIEWS: { id: View; label: string }[] = [
@@ -36,15 +37,24 @@
 
     let disposed = false;
     const unlisteners: Array<() => void> = [];
-    const track = (pending: Promise<() => void>): void => {
+    /** Resolves to whether the listener got registered. */
+    const track = (pending: Promise<() => void>): Promise<boolean> =>
       pending
-        .then((off) => (disposed ? off() : unlisteners.push(off)))
+        .then((off) => {
+          if (disposed) off();
+          else unlisteners.push(off);
+          return true;
+        })
         .catch(() => {
           // No event bridge (for example in a plain browser): the UI still works.
+          return false;
         });
-    };
-    track(api.onNavigate((view) => app.navigate(view)));
-    track(api.onStateChanged((state) => app.setState(state)));
+    void track(api.onNavigate((view) => app.navigate(view))).then((registered) => {
+      // The window may have been created for a tray click: take the parked view, once,
+      // now that nothing can be missed (the real backend only; see lib/pendingView.ts).
+      if (registered && !disposed) void applyPendingView(api, (view) => app.navigate(view));
+    });
+    void track(api.onStateChanged((state) => app.setState(state)));
 
     return () => {
       disposed = true;
