@@ -119,8 +119,14 @@ pub const LIST_EXCLUDE_DESKTOP: u32 = 16;
 
 // ----------------------------------------------------------- frameworks
 
+// One block per framework: the link attributes are identical in effect to stacking
+// them on a single block, but clippy flags stacked `#[link(kind = ..)]` as duplicates.
 #[link(name = "AppKit", kind = "framework")]
+extern "C" {}
+
 #[link(name = "Foundation", kind = "framework")]
+extern "C" {}
+
 #[link(name = "ServiceManagement", kind = "framework")]
 extern "C" {}
 

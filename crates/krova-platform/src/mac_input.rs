@@ -238,9 +238,8 @@ pub fn start(modifier: Modifier, sink: Sender<InputEvent>) -> Result<InputHandle
     if RUNNING.swap(true, Ordering::SeqCst) {
         return Err(PlatformError::Os("input monitor is already running".into()));
     }
-    start_inner(modifier, sink).map_err(|e| {
+    start_inner(modifier, sink).inspect_err(|_| {
         RUNNING.store(false, Ordering::SeqCst);
-        e
     })
 }
 
