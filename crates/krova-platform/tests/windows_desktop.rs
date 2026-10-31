@@ -32,8 +32,9 @@ use windows::Win32::UI::HiDpi::{
 };
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT, KEYBD_EVENT_FLAGS,
-    KEYEVENTF_KEYUP, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEINPUT, MOUSE_EVENT_FLAGS,
-    VIRTUAL_KEY, VK_CONTROL, VK_LWIN, VK_MENU, VK_SHIFT,
+    KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEINPUT,
+    MOUSE_EVENT_FLAGS, VIRTUAL_KEY, VK_CONTROL, VK_LEFT, VK_LWIN, VK_MENU, VK_RIGHT, VK_SHIFT,
+    VK_UP,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GetClassNameW, GetForegroundWindow, IsWindow, IsWindowVisible, PostMessageW,
@@ -126,17 +127,20 @@ impl Drop for Notepad {
 }
 
 fn key_input(vk: VIRTUAL_KEY, up: bool) -> INPUT {
+    // Arrow keys are "extended" keys; without the flag a held Shift turns an injected
+    // arrow into a numpad key and the hotkey never matches.
+    let extended = matches!(vk, VK_LEFT | VK_RIGHT | VK_UP);
+    let mut flags = if extended { KEYEVENTF_EXTENDEDKEY.0 } else { 0 };
+    if up {
+        flags |= KEYEVENTF_KEYUP.0;
+    }
     INPUT {
         r#type: INPUT_KEYBOARD,
         Anonymous: INPUT_0 {
             ki: KEYBDINPUT {
                 wVk: vk,
                 wScan: 0,
-                dwFlags: if up {
-                    KEYEVENTF_KEYUP
-                } else {
-                    KEYBD_EVENT_FLAGS(0)
-                },
+                dwFlags: KEYBD_EVENT_FLAGS(flags),
                 time: 0,
                 dwExtraInfo: 0,
             },
@@ -367,7 +371,9 @@ fn the_watcher_reports_a_title_bar_drag() {
         .expect("watcher starts");
 
     // Grab the title bar (near the top, left of the caption buttons) and move it.
-    let grab = (start.x + 200, start.y + 14);
+    // Notepad's title bar holds the tabs on the left and the caption buttons on the
+    // right; the empty stretch in between is the draggable caption.
+    let grab = (start.right() - 300, start.y + 14);
     // SAFETY: moves the real cursor for the duration of the test.
     unsafe {
         let _ = SetCursorPos(grab.0, grab.1);

@@ -22,22 +22,21 @@ use std::time::{Duration, Instant};
 
 use krova_core::registry::WindowKey;
 use krova_core::{Config, MoveMode, PxRect, ShortcutModifier};
-use krova_platform::{Platform, WindowId};
+use krova_platform::{Platform, WatchEvent, WindowId};
 use windows::Win32::Foundation::{BOOL, HWND, LPARAM, TRUE, WPARAM};
 use windows::Win32::UI::HiDpi::{
     SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
 };
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT, KEYBD_EVENT_FLAGS,
-    KEYEVENTF_KEYUP, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEINPUT, MOUSE_EVENT_FLAGS,
+    SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS, KEYEVENTF_KEYUP,
     VIRTUAL_KEY, VK_CONTROL, VK_LEFT, VK_MENU, VK_RIGHT, VK_UP,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GetClassNameW, GetForegroundWindow, IsWindow, IsWindowVisible, PostMessageW,
-    SendMessageW, SetCursorPos, SetForegroundWindow, WM_CLOSE, WM_NCHITTEST,
+    SetForegroundWindow, WM_CLOSE,
 };
 
-use crate::engine;
+use crate::engine::{self, Msg};
 use crate::model::{lock, AppModel, Shared};
 
 fn hwnd(id: WindowId) -> HWND {
@@ -130,20 +129,10 @@ fn key(vk: VIRTUAL_KEY, up: bool) -> INPUT {
     }
 }
 
-fn mouse(flags: MOUSE_EVENT_FLAGS) -> INPUT {
-    INPUT {
-        r#type: INPUT_MOUSE,
-        Anonymous: INPUT_0 {
-            mi: MOUSEINPUT {
-                dx: 0,
-                dy: 0,
-                mouseData: 0,
-                dwFlags: flags,
-                time: 0,
-                dwExtraInfo: 0,
-            },
-        },
-    }
+/// Hand a message to the running engine thread.
+fn send_msg(shared: &Shared, msg: Msg) {
+    let tx = lock(&shared.engine_tx).clone().expect("engine is running");
+    tx.send(msg).expect("engine thread is alive");
 }
 
 fn send(inputs: &[INPUT]) {
@@ -358,10 +347,9 @@ fn zone_number(layout: &krova_core::Layout, n: usize) -> u32 {
     krova_core::registry::zone_by_number(layout, n).expect("zone exists")
 }
 
-/// Two notepads side by side; dragging the seam between them with the real mouse
-/// makes the other one follow.
+/// Two notepads side by side; resizing one at the seam makes the other one follow.
 #[test]
-#[ignore = "spawns two notepads, injects keystrokes and drags a window edge with the real mouse"]
+#[ignore = "spawns two notepads and injects keystrokes"]
 fn desktop_linked_dividers_move_the_neighbours_edge() {
     let shared = start_engine(ShortcutModifier::CtrlAlt);
     let status = lock(&shared.features).shortcuts.clone();
@@ -407,62 +395,54 @@ fn desktop_linked_dividers_move_the_neighbours_edge() {
     let before_right = platform.window_rect(right.id).unwrap();
     println!("before: left {before_left:?}, right {before_right:?}");
 
-    // Find the left window's right resize border by asking the window itself.
-    let y = before_left.y + before_left.h / 2;
-    let hit = |x: i32| -> isize {
-        let lparam = ((y as u16 as isize) << 16) | (x as u16 as isize & 0xFFFF);
-        // SAFETY: WM_NCHITTEST is a read-only query.
-        unsafe { SendMessageW(hwnd(left.id), WM_NCHITTEST, WPARAM(0), LPARAM(lparam)) }.0
-    };
-    let Some(x) = (before_left.right() - 4..=before_left.right() + 10).find(|&x| hit(x) == 11)
-    else {
-        println!("SKIPPED: no right-edge resize border found on the left window");
-        return;
-    };
+    // The user drags the seam to the left by 96 px, grabbing the right window's left
+    // edge. The real mouse is not used (it is unreliable while someone else works at
+    // the machine): the same resize is applied with SetWindowPos, and the event the
+    // OS sends when a move/size loop ends is delivered to the engine by hand. The
+    // pause keeps the engine's "we just placed this window ourselves" guard out of it.
+    sleep(Duration::from_millis(800));
+    let dragged = PxRect::new(
+        before_right.x - 96,
+        before_right.y,
+        before_right.w + 96,
+        before_right.h,
+    );
+    platform
+        .place_window(right.id, dragged, work, false)
+        .expect("resize the right window");
+    send_msg(&shared, Msg::Watch(WatchEvent::MoveSizeEnd(right.id)));
 
-    // SAFETY: moves the real cursor for the duration of the test.
-    unsafe {
-        let _ = SetCursorPos(x, y);
-    }
-    sleep(Duration::from_millis(250));
-    send(&[mouse(MOUSEEVENTF_LEFTDOWN)]);
-    sleep(Duration::from_millis(150));
-    for step in 1..=8 {
-        // SAFETY: as above.
-        unsafe {
-            let _ = SetCursorPos(x - step * 12, y);
-        }
-        sleep(Duration::from_millis(40));
-    }
-    send(&[mouse(MOUSEEVENTF_LEFTUP)]);
-
-    // The engine reacts to MOVESIZEEND: the right window's left edge follows.
+    // The engine compares the window with the registry, sees a resize and moves the
+    // left window's right edge: the seam closes again and the outer edges stay put.
     let started = Instant::now();
-    let mut moved = false;
+    let mut closed = false;
     let (mut now_left, mut now_right) = (before_left, before_right);
-    while started.elapsed() < Duration::from_secs(5) {
+    while started.elapsed() < Duration::from_secs(6) {
         now_left = platform.window_rect(left.id).unwrap();
         now_right = platform.window_rect(right.id).unwrap();
-        if now_right.x != before_right.x {
-            moved = true;
+        let changed = now_left.w != before_left.w || now_right.x != before_right.x;
+        if changed && (now_right.x - now_left.right()).abs() <= 3 {
+            closed = true;
             break;
         }
         sleep(Duration::from_millis(150));
     }
-    println!("after: left {now_left:?}, right {now_right:?}");
-    assert!(
-        now_left.w < before_left.w,
-        "the drag really narrowed the left window"
+    println!("after: left {now_left:?}, right {now_right:?}, seam closed: {closed}");
+    assert_eq!(
+        now_right.x, dragged.x,
+        "the resized window stays where it was put"
     );
-    assert!(moved, "the right window did not follow the dragged seam");
-    assert!(
-        (now_right.x - now_left.right()).abs() <= 3,
-        "the seam stays closed"
+    assert!(closed, "the neighbour did not follow the dragged seam");
+    assert_eq!(
+        now_left.right(),
+        dragged.x,
+        "the left window's edge followed"
     );
+    assert_eq!(now_left.x, before_left.x, "the far left edge stays put");
     assert_eq!(
         now_right.right(),
         before_right.right(),
-        "the far edge stays put"
+        "the far right edge stays put"
     );
     let reg = lock(&shared.registry);
     assert!(near(reg.get(WindowKey(left.id.0)).unwrap().rect, now_left));
