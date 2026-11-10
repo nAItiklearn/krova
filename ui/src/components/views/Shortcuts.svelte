@@ -300,7 +300,7 @@
         id="set-shortcut-mod"
         data-testid="setting-shortcut_modifier"
         value={s.shortcut_modifier}
-        disabled={!s.keyboard_shortcuts}
+        disabled={(capabilities ? !capabilities.shortcuts : false) || !s.keyboard_shortcuts}
         onchange={(e) => settings.update({ shortcut_modifier: e.currentTarget.value as ShortcutModifier })}
       >
         {#each Object.entries(MOD_LABEL) as [v, l] (v)}<option value={v}>{l}</option>{/each}
