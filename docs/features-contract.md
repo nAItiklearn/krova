@@ -97,3 +97,57 @@ A quick overlay listing the saved layouts of one monitor as stacked cards: tap o
 ## Not part of the contract
 
 Everything about the registry, the engine messages and the platform traits is internal and may change.
+
+## Wave 4 (branch `wave4`): reserved edges, focus follows mouse, hover picker, updates, languages
+
+Additive like everything above: every new field has a serde default, `schema_version` stays `1`, a v0.1 config loads unchanged.
+
+### Settings additions
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `focus_follows_mouse` | bool | `false` | Activate the window under the cursor once it rests. Opt-in. |
+| `focus_follows_mouse_delay_ms` | int | `350` | Rest time before the activation, clamped to `150..=800`. |
+| `hover_picker` | bool | `false` | With the activation `modifier` held on a window's title bar, the backend emits `hover-picker`. |
+| `language` | string enum | `"system"` | `"system"`, `"en"`, `"es"`, `"de"`, `"ja"`, `"zh-Hans"`. Anything else is sanitised to `"system"`. Only the native strings (tray, notifications, overlay labels) follow it in this branch. |
+
+### `MonitorProfile.reserved`
+
+`{ "top": 0, "right": 0, "bottom": 0, "left": 0 }`, for third-party docks and bars that do not shrink the OS work area themselves. **Units: logical pixels (96 dpi)**, multiplied by the monitor's `scale` when applied. Each side is clamped to `0..=400` (the file loader accepts any number and clamps it). The result is subtracted from the OS work area in one place (`AppModel::work_of`), so zones, zone and edge snapping, keyboard moves, the reconnect restore, the overlay and `MonitorSnapshot.work` all use the reduced area. If the two sides of one axis would leave less than 200 physical pixels of it, that axis's reserves are ignored (the other axis still applies). Missing in old configs (treat as all zero).
+
+### `AppState` additions (top level)
+
+```jsonc
+{
+  "wave4_capabilities": { "focus_follows_mouse": true, "hover_picker": true, "open_releases_page": true },
+  "pointer": { "active": false, "focus_refused": 0 },
+  "language": "en",
+  "languages": [ { "id": "system", "name": "System" }, { "id": "en", "name": "English" }, { "id": "es", "name": "Español" },
+                 { "id": "de", "name": "Deutsch" }, { "id": "ja", "name": "日本語" }, { "id": "zh-Hans", "name": "简体中文" } ]
+}
+```
+
+- `wave4_capabilities`: true on Windows, all false on macOS for now. Hide the settings of features that are false.
+- `pointer.active`: the resting-cursor watcher runs (a pointer feature is on, the capability exists, Krova is enabled). `pointer.focus_refused`: how often Windows refused an activation since Krova started; a non-zero value is worth one sentence ("Windows blocked some focus changes").
+- `language`: the language actually in use (never `"system"`); `languages`: the picker's choices in order.
+
+### Commands
+
+| Command | Arguments | Returns | Notes |
+|---|---|---|---|
+| `set_reserved_edges` | `monitorId: string`, `reserved: {top,right,bottom,left}` | `AppState` | Sanitised (`0..=400` each). Unknown monitor: `"monitor X not found"`. Persists and emits `state-changed`. |
+| `place_hovered` | `zoneId: number` | `null` | Moves the window under the open hover picker into that zone of its monitor's active layout (gap applied, animated per `move_mode`) and remembers it like a drag snap. Errors: `"no window is under the picker"`, `"zone N is not in the active layout"`, `"monitor X is not connected"`, `"that window can no longer be moved"`. Emits `hover-picker-end` on success. |
+| `open_releases_page` | none | `null` | Opens `https://github.com/nAItiklearn/krova/releases` (fixed at compile time) in the default browser via `ShellExecuteW`. Krova itself makes no network request. The tray has the same entry, "Check for updates…". |
+
+### Events
+
+- `hover-picker`: `{ monitor_id, window_rect: PxRect, cursor: [x, y], layout_id, zones: [{ id, rect: PxRect }] }`. Pixels are virtual-screen physical pixels; `zones` are exactly where `place_hovered` would put the window. Never carries a title.
+- `hover-picker-end`: payload `null`. The cursor came to rest somewhere else (not on Krova's own windows), the modifier was released before the next rest, or a zone was chosen. Close the picker.
+
+### Behaviour and limits
+
+- **Zero idle CPU.** Both pointer features reuse the existing `WH_MOUSE_LL` drag hook. The hook stores the cursor position and pokes a capacity-1 channel; a worker thread sleeps until then and runs one one-shot wait per enabled feature (hover 250 ms, focus 150-800 ms) after each movement. Nothing runs while the cursor is still or while both features are off (the watcher is stopped). Both pause with Krova's master switch (the hook is the drag hook).
+- **Focus follows mouse never activates** while a mouse button is held or was clicked during the rest, Krova's own windows, the desktop or taskbar, tool and no-activate windows, disabled windows (an open modal dialog), windows of elevated programs, while a menu or move/size loop is open, or while a full-screen app is in front (`SHQueryUserNotificationState` busy/D3D/presentation, or a foreground window covering its whole monitor). It does not raise windows by any other means.
+- **Only documented focus APIs.** Activation is `SetForegroundWindow`. No `AttachThreadInput`, no injected input, no change to the system "activate on hover" setting. Windows' foreground-lock rules may refuse; Windows then flashes the window's taskbar button, Krova counts the refusal (`pointer.focus_refused`) and does not retry that window until the cursor rests on another one. How often Windows refuses on a real desktop is not measured yet (manual test below).
+- **Hover picker** checks the title bar with `WM_NCHITTEST` via `SendMessageTimeout` (20 ms, abort if hung), so a hung program cannot stall it. Only movable windows (not elevated, not Krova's own, captioned) qualify.
+- **Languages**: tables in `src-tauri/i18n/<id>.json` (flat `"key": "text"`, `_`-prefixed keys are notes). English is the source; `es`, `de`, `ja`, `zh-Hans` are English copies marked `"_status": "TODO"`, to be translated by people. Per-key fallback to English, then to the key. `"system"` resolves from `GetUserDefaultUILanguage` (zh-CN and zh-SG get `zh-Hans`; Traditional Chinese and unknown languages get English). The tray relabels itself when the language changes.

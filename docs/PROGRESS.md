@@ -84,3 +84,19 @@ No Critical or High findings in Krova's own code; privacy promises hold for Krov
 - macOS: blanket `#![allow(dead_code, unused_unsafe, unused_imports, ...)]` in the mac files predates the first green macOS CI run; tighten it now that the lints pass. The overlay is the lowest-confidence macOS item; if it misbehaves, make `create_overlay` return `Err(Unsupported)`.
 - macOS: `start_input` fails until Accessibility is granted. `get_state` retries it once permission is `Granted`; a restart may still be needed. The Accessibility prompt helper (`prompt_for_accessibility`) is not yet wired to any command.
 - Window memory, keyboard shortcuts and linked dividers are Windows-only (`capabilities` is false for them on macOS).
+
+## Manual tests for the wave4 branch
+
+Backend only (no Svelte view yet). Automated: core 384, platform 83 (+4 ignored), app 74 (+3 ignored), UI vitest 185, `svelte-check` clean. The items below need a real Windows desktop; none has been run yet.
+
+- [ ] **Reserved edges.** With a third-party bar that does not register as an app bar (or just pretend), `set_reserved_edges` on one monitor (for example `left: 48`): drag-snap, keyboard moves, edge snaps and the overlay all stop 48 logical px from the left edge, on a 100 % and a 150 % or 200 % monitor; the other monitor is unchanged. A reserve of 400 on both sides of a small monitor is ignored for that axis. Unplug and replug the monitor: the restore uses the reduced area.
+- [ ] **Focus follows mouse, basic.** Turn it on (default 350 ms). Rest the cursor over an inactive Notepad: it becomes active after about the delay; moving across windows without stopping activates nothing. Try 150 and 800 ms.
+- [ ] **Focus follows mouse, refusals.** Note whether Windows lets the activation through (`SetForegroundWindow` foreground-lock rules) or flashes the taskbar button instead, and whether `pointer.focus_refused` counts it. This decides whether the feature is usable as built (the ignored test `rest_at_the_cursor_reports_what_would_happen` in `krova-platform` prints the outcome at the cursor).
+- [ ] **Focus follows mouse, exclusions.** Nothing is activated: with a mouse button held, right after a click, over the desktop and the taskbar, over Krova's own editor, over Task Manager or another elevated window, while a context menu or the Start menu is open, while a video or game is full screen, over a window that has a modal dialog open.
+- [ ] **Hover picker.** Turn `hover_picker` on, hold Shift (the activation modifier) and rest on Notepad's title bar: one `hover-picker` event with the monitor's zones (watch it in the devtools console or a test page); `place_hovered` moves Notepad into the zone and a later reconnect restores it there. Resting elsewhere sends `hover-picker-end`. A hung window (for example a debugger-paused process) does not stall the cursor watcher. Shift-drag snapping still works with the picker on.
+- [ ] **Idle CPU.** With both pointer features on and the cursor still, Krova's CPU stays at 0 % in Task Manager (and the `krova-pointer` thread does not wake); with both off the thread is gone.
+- [ ] **Check for updates.** The tray item and `open_releases_page` open the GitHub releases page in the default browser; no request is made by Krova itself (watch with Resource Monitor).
+- [ ] **Languages.** Set `language` to `de` (stub, still English text) and to `system` on a German Windows: the tray labels come from the right table and relabel without a restart; a missing key shows English.
+- [ ] **macOS** (when a Mac is available): `wave4_capabilities` are all false and nothing above runs.
+
+New surfaces not yet reviewed (add to the review list): the pointer watcher (hook callback, `SendMessageTimeout` to other windows, `SetForegroundWindow`), `ShellExecuteW` with a fixed URL (guarded by `is_safe_https_url`), and the string tables (compiled in, size and length limits).
