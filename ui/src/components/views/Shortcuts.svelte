@@ -235,6 +235,7 @@
     </p>
   </div>
 
+  <span id="sc-hint" class="sr-only">Press to record new keys. Backspace turns it off, Escape cancels.</span>
   <div class="cols">
     {#each GROUPS as g (g)}
       <Group title={g} id="sc-{g.toLowerCase()}">
@@ -249,12 +250,14 @@
             onpointerenter={() => (hovered = a.id)}
             onpointerleave={() => (hovered = null)}
           >
-            <span class="sc-label">{a.label}</span>
+            <span class="sc-label" id="sc-l-{a.id}">{a.label}</span>
             <button
               type="button"
               class="rec-btn"
               class:recording={recording === a.id}
-              aria-label={`${a.label}: ${c ?? 'off'}. Press to record new keys.`}
+              id="sc-b-{a.id}"
+              aria-labelledby="sc-l-{a.id} sc-b-{a.id}"
+              aria-describedby="sc-hint"
               data-testid="shortcut-{a.id}"
               onclick={() => (recording === a.id ? stop() : start(a.id))}
               onfocus={() => (hovered = a.id)}
