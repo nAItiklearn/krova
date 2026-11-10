@@ -27,11 +27,14 @@ export default defineConfig({
     // the shared chunk is still linked with <link rel="modulepreload">.
     modulePreload: { polyfill: false },
     rollupOptions: {
-      // Two windows: the editor/settings app and the layout switcher, which loads
-      // only what it needs (src/switcher.ts).
+      // One page per window: the editor/settings app (index.html), the layout
+      // switcher (switcher.html) and the quick panel the notch opens (panel.html).
+      // Each loads only its own entry; shared code lands in common chunks.
+      // Paths are relative to the project root (this folder; npm scripts run here).
       input: {
         main: 'index.html',
         switcher: 'switcher.html',
+        panel: 'panel.html',
       },
     },
   },

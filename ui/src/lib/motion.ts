@@ -16,6 +16,11 @@ export const MAX_FRAME = 0.05;
  */
 export const motionPrefs = { reduced: false };
 
+/** True when the user asked the OS for less motion. */
+export function prefersReducedMotion(): boolean {
+  return typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
 /** Read `prefers-reduced-motion` and keep `motionPrefs.reduced` in sync. */
 export function watchReducedMotion(): () => void {
   if (typeof matchMedia === 'undefined') return () => {};
@@ -29,10 +34,16 @@ export function watchReducedMotion(): () => void {
 }
 
 export interface SpringOptions {
-  /** Stiffness (1/s^2). Higher = faster. */
+  /** Stiffness (1/s^2). Higher = faster. Default 420. */
   k?: number;
-  /** Damping ratio: 1 = critically damped, < 1 overshoots a little. */
+  /** Damping ratio: 1 = critically damped, < 1 overshoots a little. Default 0.86. */
   zeta?: number;
+  /** Alias of `k` (spring constant with unit mass). */
+  stiffness?: number;
+  /** Damping coefficient (1/s); overrides `zeta` when given. */
+  damping?: number;
+  /** Distance under which the spring counts as at rest (speed: 10x). Default 0.001. */
+  precision?: number;
 }
 
 /** Damped harmonic oscillator. `vel` is in units per second. */
@@ -42,14 +53,26 @@ export class Spring {
   vel = 0;
   readonly k: number;
   readonly c: number;
+  readonly precision: number;
   /** Carry-over of time shorter than one substep, so 60 and 144 Hz agree. */
   private acc = 0;
 
-  constructor(value: number, { k = 420, zeta = 0.86 }: SpringOptions = {}) {
+  constructor(value = 0, opts: SpringOptions = {}) {
     this.value = value;
     this.target = value;
-    this.k = k;
-    this.c = 2 * Math.sqrt(k) * zeta;
+    this.k = opts.stiffness ?? opts.k ?? 420;
+    this.c = opts.damping ?? 2 * Math.sqrt(this.k) * (opts.zeta ?? 0.86);
+    this.precision = opts.precision ?? 1e-3;
+  }
+
+  /** Spring constant (same as `k`). */
+  get stiffness(): number {
+    return this.k;
+  }
+
+  /** Damping coefficient (same as `c`). */
+  get damping(): number {
+    return this.c;
   }
 
   /** Move towards `target`, optionally starting with velocity `vel`. */
@@ -82,7 +105,7 @@ export class Spring {
   }
 
   get settled(): boolean {
-    return Math.abs(this.value - this.target) < 1e-3 && Math.abs(this.vel) < 1e-2;
+    return Math.abs(this.value - this.target) < this.precision && Math.abs(this.vel) < this.precision * 10;
   }
 }
 

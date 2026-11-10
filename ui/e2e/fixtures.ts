@@ -20,6 +20,15 @@ declare global {
       setShortcuts(mode: string): void;
       setCapabilities(mode: string): void;
       reset(): void;
+      /** Like a click on the notch: sends "panel-anchor" (src/lib/backend.ts PanelAnchor). */
+      panelAnchor(anchor: {
+        x: number;
+        y: number;
+        w: number;
+        h: number;
+        corner: string;
+        monitor_id: string;
+      }): void;
     };
   }
 }

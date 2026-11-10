@@ -4,7 +4,7 @@
 //
 // Like the Tauri commands, every method rejects with a plain string on error.
 
-import type { Backend, Unlisten } from '../backend';
+import type { Backend, PanelAnchor, Unlisten } from '../backend';
 import type {
   AppState,
   Capabilities,
@@ -73,7 +73,19 @@ export interface DemoControls {
   setCapabilities(mode: CapabilitiesMode): void;
   /** Back to the initial demo state (also clears localStorage). */
   reset(): void;
+  /** Behaves like a click on the notch: sends "panel-anchor". */
+  panelAnchor(anchor: PanelAnchor): void;
 }
+
+/** The anchor the demo sends once a panel listens: the top-centre notch of Display 1. */
+export const DEMO_ANCHOR: PanelAnchor = {
+  x: 1280 - 60,
+  y: 6,
+  w: 120,
+  h: 28,
+  corner: 'top_center',
+  monitor_id: 'monitor-1',
+};
 
 export type MockBackend = Backend & { demo: DemoControls };
 
@@ -231,6 +243,7 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
   // The demo's "cursor" is on the first monitor until a test says otherwise.
   let switcherMonitorId: string | null = MONITORS[0].profile_id;
   const stateListeners = new Set<(s: AppState) => void>();
+  const anchorListeners = new Set<(a: PanelAnchor) => void>();
 
   function persist(): void {
     if (!storage) return;
@@ -356,6 +369,9 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
     reset() {
       reset(true);
       emitState();
+    },
+    panelAnchor(anchor) {
+      for (const cb of anchorListeners) cb(anchor);
     },
   };
 
@@ -498,6 +514,15 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
     async onNavigate(cb): Promise<Unlisten> {
       navigateListeners.add(cb);
       return () => navigateListeners.delete(cb);
+    },
+
+    // The demo "clicks the notch" as soon as a panel listens.
+    async onPanelAnchor(cb): Promise<Unlisten> {
+      anchorListeners.add(cb);
+      setTimeout(() => {
+        if (anchorListeners.has(cb)) cb({ ...DEMO_ANCHOR });
+      }, 0);
+      return () => anchorListeners.delete(cb);
     },
 
     async onStateChanged(cb): Promise<Unlisten> {
