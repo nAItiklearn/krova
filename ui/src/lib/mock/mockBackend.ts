@@ -13,6 +13,9 @@ import type {
   MonitorProfile,
   MonitorSnapshot,
   NavigateTarget,
+  NotchCorner,
+  NotchNavigateTarget,
+  PanelAnchor,
   Permission,
   Settings,
   ShortcutStatus,
@@ -26,6 +29,9 @@ import {
   uniqueLayoutId,
 } from './exchange';
 import { templates } from './templates';
+// --- notch ---
+import { defaultNotchSettings, demoAnchor, sanitizeNotch } from './notch';
+// --- notch ---
 
 /** localStorage key used for the optional persistence of demo edits. */
 export const STORAGE_KEY = 'krova-demo';
@@ -73,6 +79,16 @@ export interface DemoControls {
   setCapabilities(mode: CapabilitiesMode): void;
   /** Back to the initial demo state (also clears localStorage). */
   reset(): void;
+  // --- notch ---
+  /**
+   * As if the notch were clicked: sends "panel-anchor" for the primary monitor at
+   * `corner` (default: `settings.notch.corner`); `onNotchNavigate` listeners then
+   * get `panel`, like the real panel window.
+   */
+  clickNotch(corner?: NotchCorner): PanelAnchor;
+  /** Listen to the notch's extra navigate targets (`panel`, `cheatsheet`). */
+  onNotchNavigate(cb: (view: NotchNavigateTarget) => void): () => void;
+  // --- notch ---
 }
 
 export type MockBackend = Backend & { demo: DemoControls };
@@ -94,6 +110,9 @@ export function defaultSettings(): Settings {
     linked_dividers: true,
     zone_gap_px: 0,
     layout_switcher_shortcut: true,
+    // --- notch ---
+    notch: defaultNotchSettings(),
+    // --- notch ---
   };
 }
 
@@ -171,6 +190,9 @@ function sanitizeSettings(s: Settings): Settings {
     linked_dividers: flag(s.linked_dividers, defaults.linked_dividers),
     zone_gap_px: Math.min(32, Math.max(0, gap)),
     layout_switcher_shortcut: flag(s.layout_switcher_shortcut, defaults.layout_switcher_shortcut),
+    // --- notch ---
+    notch: sanitizeNotch(s.notch),
+    // --- notch ---
   };
 }
 
@@ -231,6 +253,19 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
   // The demo's "cursor" is on the first monitor until a test says otherwise.
   let switcherMonitorId: string | null = MONITORS[0].profile_id;
   const stateListeners = new Set<(s: AppState) => void>();
+  // --- notch ---
+  const anchorListeners = new Set<(a: PanelAnchor) => void>();
+  const notchNavigateListeners = new Set<(v: NotchNavigateTarget) => void>();
+  let lastAnchor: PanelAnchor | null = null;
+  function sendAnchor(corner?: NotchCorner): PanelAnchor {
+    const monitor = MONITORS.find((m) => m.primary) ?? MONITORS[0];
+    const anchor = demoAnchor(monitor, corner ?? config.settings.notch.corner);
+    lastAnchor = anchor;
+    for (const cb of anchorListeners) cb({ ...anchor });
+    for (const cb of notchNavigateListeners) cb('panel');
+    return { ...anchor };
+  }
+  // --- notch ---
 
   function persist(): void {
     if (!storage) return;
@@ -357,6 +392,15 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
       reset(true);
       emitState();
     },
+    // --- notch ---
+    clickNotch(corner) {
+      return sendAnchor(corner);
+    },
+    onNotchNavigate(cb) {
+      notchNavigateListeners.add(cb);
+      return () => notchNavigateListeners.delete(cb);
+    },
+    // --- notch ---
   };
 
   const backend: MockBackend = {
@@ -504,6 +548,24 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
       stateListeners.add(cb);
       return () => stateListeners.delete(cb);
     },
+
+    // --- notch ---
+    async onPanelAnchor(cb): Promise<Unlisten> {
+      anchorListeners.add(cb);
+      // The demo has no real notch: pretend it was just clicked.
+      if (lastAnchor) cb({ ...lastAnchor });
+      else queueMicrotask(() => sendAnchor());
+      return () => anchorListeners.delete(cb);
+    },
+
+    async panelAnchor() {
+      return lastAnchor ? { ...lastAnchor } : null;
+    },
+
+    async hidePanel() {
+      // A browser tab has no panel window to hide.
+    },
+    // --- notch ---
   };
 
   return backend;

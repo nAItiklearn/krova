@@ -7,7 +7,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { AppState, Axis, Layout, NavigateTarget, Settings } from './bindings';
+import type { AppState, Axis, Layout, NavigateTarget, PanelAnchor, Settings } from './bindings';
 import { createMockBackend, type DemoControls, type MockBackend } from './mock/mockBackend';
 
 export type Unlisten = () => void;
@@ -79,6 +79,19 @@ export interface Backend {
   onNavigate(cb: (view: NavigateTarget) => void): Promise<Unlisten>;
   /** Backend event "state-changed". */
   onStateChanged(cb: (state: AppState) => void): Promise<Unlisten>;
+
+  // --- notch ---
+  /**
+   * Backend event "panel-anchor": the notch was clicked and the `panel` window was
+   * placed next to it. In demo mode a fake anchor (the notch on the primary monitor)
+   * is sent right after subscribing, and `demoControls.clickNotch()` sends more.
+   */
+  onPanelAnchor(cb: (anchor: PanelAnchor) => void): Promise<Unlisten>;
+  /** The last anchor, for a panel page that missed the event (null if none). */
+  panelAnchor(): Promise<PanelAnchor | null>;
+  /** Hide the panel window (Esc). It stays warm for the next click. */
+  hidePanel(): Promise<void>;
+  // --- notch ---
 }
 
 /** Commands reject with a string; be tolerant of Error objects too. */
@@ -124,6 +137,12 @@ export const tauriBackend: Backend = {
   takePendingView: () => invoke<string | null>('take_pending_view'),
   onNavigate: (cb) => listen<NavigateTarget>('navigate', (e) => cb(e.payload)),
   onStateChanged: (cb) => listen<AppState>('state-changed', (e) => cb(e.payload)),
+
+  // --- notch ---
+  onPanelAnchor: (cb) => listen<PanelAnchor>('panel-anchor', (e) => cb(e.payload)),
+  panelAnchor: () => invoke<PanelAnchor | null>('panel_anchor'),
+  hidePanel: () => invoke<void>('hide_panel'),
+  // --- notch ---
 };
 
 /** True when running inside the Tauri webview. */
