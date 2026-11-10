@@ -3,21 +3,15 @@
 //
 // Demo flags used here: ?shortcuts=failed|off and ?capabilities=none (see ui/README.md).
 //
-// Some tests are `test.fixme`: they need parts of the Shortcuts view that the new
-// sidebar UI does not have (yet): the key map (shortcuts-keymap, keymap-*), the
-// Win-key hint (shortcuts-win-hint) and the "not active" note (shortcuts-inactive).
+// The v0.1 controls (switch, modifier select, key map, Win-key hint, notes) live in
+// the "Keyboard" group at the end of the Shortcuts view, with their v0.1 wording.
 
 import type { Page } from '@playwright/test';
-import { demo, expect, focusRingVisible, gotoSection, openArrange, openSection, test } from './fixtures';
+import { demo, expect, focusRingVisible, gotoSection, openArrange, openSection, test, expectSaved } from './fixtures';
 
 const openShortcuts = (page: Page, query?: string) => openSection(page, 'shortcuts', query);
 
 const indicator = (page: Page) => page.getByTestId('save-indicator');
-
-async function expectSaved(page: Page): Promise<void> {
-  await expect(indicator(page)).toHaveAttribute('data-state', 'saved');
-  await expect(indicator(page)).toContainText('Saved');
-}
 
 const shortcutsSwitch = (page: Page) => page.getByTestId('setting-keyboard_shortcuts');
 const modifierSelect = (page: Page) => page.getByTestId('setting-shortcut_modifier');
@@ -142,7 +136,6 @@ test.describe('Keyboard shortcuts group: changing it', () => {
     });
 
     test(`choosing "${choice.label}" rewrites the key map and hints at Win-key trouble`, async ({ page }) => {
-      // fixme: the new Shortcuts view has no key map (keymap-*) or Win-key hint (shortcuts-win-hint) yet.
       await openShortcuts(page);
       // Start from something else so a change really happens.
       const other = choice.value === 'ctrl_alt' ? 'win_ctrl' : 'ctrl_alt';
