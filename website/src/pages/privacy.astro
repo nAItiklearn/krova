@@ -140,6 +140,32 @@ const description =
         listening described above.
       </p>
 
+      <h2>Coming in 0.2: what changes</h2>
+      <p>
+        Everything above describes v0.1, the version you can download today. Version 0.2 keeps a little more on your PC.
+        This page will be updated when it ships; in short:
+      </p>
+      <ul>
+        <li>
+          <strong>Workspaces save program paths.</strong> When you save a workspace, Krova writes the full path of each
+          program on screen (for example <code>C:\Users\you\AppData\Local\Programs\App\app.exe</code>, which includes your
+          Windows user name) and the zone it sits in to <code>config.json</code>. Window titles and program arguments are never
+          stored. Delete a workspace to remove its paths, and remove workspaces before you share your settings file. When a
+          restore would start a program, Krova shows its full path and asks first; it refuses programs in Temp, Downloads,
+          the Desktop, roaming app data, removable drives and network locations.
+        </li>
+        <li>
+          <strong>Focus follows mouse and the title-bar zone picker</strong> (both off by default) read the cursor position
+          while they are on, to see where it rests. That stays in memory and is never written down.
+        </li>
+        <li>
+          <strong>New settings in <code>config.json</code>:</strong> auto-arrange, app rules (program file names only),
+          shortcuts, appearance, screen corners, the notch, focus dim, highlight, calm desk, share-safe, reserved screen
+          edges and language.
+        </li>
+      </ul>
+      <p>Krova 0.2 still makes no network calls. &ldquo;Check for updates&rdquo; opens the releases page in your browser.</p>
+
       <h2>Permissions</h2>
       <p>
         On macOS, Krova asks for <strong>Accessibility</strong> permission (System Settings, Privacy &amp; Security,
