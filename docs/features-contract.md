@@ -94,6 +94,50 @@ A quick overlay listing the saved layouts of one monitor as stacked cards: tap o
 
 **Window.** Today `navigate("switcher")` goes to the `main` window like the other views. Recommended for the real view: a separate small window (label `switcher`, transparent, undecorated, always on top, no taskbar entry, created on demand and destroyed on close like `main`), so opening it never replaces an editor that has unsaved edits, closing it never takes the editor with it, and its size and position come from the target monitor. The contract above (events, commands, state) does not change with that; only `ui_window.rs`, `tauri.conf.json` and the capability file do.
 
+## Wave 3: workspaces, focus dim, calm desk, share-safe, window highlight (branch `wave3`)
+
+All additions; a config without them loads unchanged and `schema_version` stays `1`.
+
+**Settings** (`config.settings`, sanitised in Rust like the rest):
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `focus` | `{ enabled: bool, opacity: number }` | `{ false, 0.45 }` | Focus dim. `opacity` clamped to `0.2..=0.8`. Toggle with `toggle_focus_dim` (the engine binds `Ctrl+Alt+F` to `wave3::toggle_focus` later). |
+| `calm_desk` | `{ all_monitors: bool }` | `{ true }` | `false`: only the monitor under the cursor. |
+| `share_safe` | bool | `false` | While on, Krova's overlays, previews and switcher show only zone shapes, never app names, icons or window contents. Rust code asks `wave3::share_safe(&Shared)` (native overlay code: `krova_platform::desk::share_safe()`); the UI reads `AppState.wave3.share_safe`. |
+| `highlight` | `{ mode: "none" \| "active" \| "all" \| "glow", color: "#rrggbb" \| null, width_px: 1..6 }` | `{ "none", null, 2 }` | `color: null` = the appearance accent (`#ff5b1f` until `settings.appearance.accent` exists; read through one function, `krova_core::focus::appearance`). On Windows 11 (build 22000+) `active` and `all` with `width_px <= 2` use the border colour Windows draws itself (`DWMWA_BORDER_COLOR`, about 1 px); wider borders, older builds and `glow` use a click-through overlay. |
+
+**Config:** `config.workspaces: Workspace[]` (at most 32; invalid ones are dropped on load).
+
+```jsonc
+{ "id": "ws-1", "name": "Coding",
+  "layouts": [ { "monitor_id": "monitor-1", "layout_id": "halves" } ],  // active layout per monitor at capture
+  "entries": [ { "exe": "C:\\Program Files\\Code\\Code.exe", "monitor_id": "monitor-1", "zone_id": 1 } ] }
+```
+
+Names follow the layout rules: 1-64 characters after trimming spaces, no control characters, no zero-width characters (U+200B-200D, U+2060, U+FEFF), no direction controls (U+202A-202E, U+2066-2069), no U+2028/2029. At most 64 entries. An entry is only an executable path, a monitor profile id and a zone id: never a window title, never command-line arguments.
+
+**`AppState.wave3`** (TS `Wave3State`): `capabilities { workspaces, calm_desk, focus_dim, highlight, dwm_borders }` (all `false` on macOS for now), `calm_desk { active, count }`, `focus_active` (dim on and its overlays running), `share_safe`, `visuals_error` (why the overlays could not start, or `null`), `restoring` (id of the workspace being restored, or `null`).
+
+**Commands** (errors are plain strings; each persists and emits `state-changed`):
+
+| Command | Arguments | Returns | Notes |
+|---|---|---|---|
+| `toggle_focus_dim` | none | `AppState` | Flips `settings.focus.enabled`. |
+| `toggle_calm_desk` | none | `AppState` | On: minimises (never closes) every visible arrangeable window that is neither snapped by Krova into the active layout nor sitting in one of its zones (12 px tolerance, plain or gapped rects). Off: restores exactly the windows calm desk minimised that are still minimised. Memory only, never persisted. |
+| `capture_workspace` | `name: string`, `id: string \| null` | `AppState` | Visible arrangeable windows, topmost first; each is mapped to its zone through the snap registry, else by the largest overlap with a zone of its monitor's active layout. Windows in no zone are skipped. With `id`, replaces that workspace. |
+| `rename_workspace` | `id`, `name` | `AppState` | |
+| `delete_workspace` | `id` | `AppState` | |
+| `restore_workspace` | `id`, `launch: bool` | `RestoreReport` | Runs off the UI thread; one restore at a time. Activates the recorded layouts (if they still exist); reuses one open window per entry with the same executable (paths compared without case; minimised windows count and are restored). With `launch`, starts a missing program with `ShellExecuteExW` (no arguments, from its own folder) only if the captured path is a local `X:\...` path ending in `.exe`, without `..`, not on a network share, not under a temp folder (`%TEMP%`, `%TMP%`, `%LOCALAPPDATA%\Temp`, `%SystemRoot%\Temp`, any folder called `Temp` or `Tmp`) and the file still exists; then waits up to 10 s, event-driven (WinEvent hook), for each launched program's first arrangeable window. Places the windows one after another with the normal (animated) move and records them in the snap registry; minimises every other arrangeable window. Pushes `state-changed` at the end. |
+
+`RestoreReport = { workspace_id, minimized: number, entries: [{ program, monitor_id, zone_id, outcome }] }`; `program` is the file name only (`Code.exe`); `outcome` is one of `placed`, `launched`, `timed_out`, `not_running`, `refused`, `no_zone`, `failed`.
+
+**Focus dim** draws one layered, click-through, no-activate, topmost black window per monitor at the configured opacity, with a rounded hole (radius `settings.appearance.corner_radius_px`, default 10 px, DPI-scaled) where the focused window is. It fades, and the hole moves between windows, with the shared spring (damping 0.88, settled after 220 ms); the 16 ms frame timer exists only while a spring moves, so it costs nothing while idle. It follows focus and the focused window's moves, and fades out when the focus is on the desktop, the taskbar or a minimised window.
+
+**Highlight overlay** (when Windows does not draw it): a click-through ring following the focused window, eased between windows on focus change, shaped for Windows 11's rounded corners (8 px at 100 %); `all` puts one ring just above each window (at most 48; unfocused ones fainter); `glow` is a soft per-pixel-alpha halo. Hidden for full-screen, minimised and cloaked windows. Switching off resets every border colour Krova set. The overlay thread runs only while focus dim or a highlight is on, and is per-monitor DPI aware.
+
+**Known limits:** packaged (Microsoft Store) apps report a path under `WindowsApps` that cannot be started directly, so restore reuses them when they are open and otherwise reports `refused` or `timed_out`. Programs running as administrator are not listed (Krova cannot move them). The Svelte views (workspace cards in the switcher deck, quick-panel toggles) are not built.
+
 ## Not part of the contract
 
 Everything about the registry, the engine messages and the platform traits is internal and may change.
