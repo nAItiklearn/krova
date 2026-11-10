@@ -89,6 +89,12 @@ fn on_caption(h: HWND, x: i32, y: i32) -> bool {
     answered.0 != 0 && result == HTCAPTION as usize
 }
 
+/// `movable && hit()`, with `hit` (the cross-process hit test) only run for a
+/// movable window.
+fn caption_hit(movable: bool, hit: impl FnOnce() -> bool) -> bool {
+    movable && hit()
+}
+
 fn hover_at(config: &PointerConfig, x: i32, y: i32) -> Option<PointerEvent> {
     let modifier = modifier_down(config.hover_modifier());
     let button = any_button_down();
@@ -98,7 +104,10 @@ fn hover_at(config: &PointerConfig, x: i32, y: i32) -> Option<PointerEvent> {
     }
     let h = window_at(x, y)?;
     let movable = snappable(h) && !is_own_process_window(h) && !target_is_protected(h);
-    if !hover_wanted(true, true, false, on_caption(h, x, y), movable) {
+    // F-28: a rejected window (protected, elevated, Krova's own) never receives
+    // WM_NCHITTEST; the hit test only runs for a window we could move.
+    let caption = caption_hit(movable, || on_caption(h, x, y));
+    if !hover_wanted(true, true, false, caption, movable) {
         return None;
     }
     Some(PointerEvent::HoverCaption {
@@ -219,6 +228,18 @@ pub(crate) fn start(
 mod tests {
     use super::*;
     use std::sync::mpsc;
+
+    #[test]
+    fn rejected_windows_are_never_hit_tested() {
+        let mut asked = false;
+        assert!(!caption_hit(false, || {
+            asked = true;
+            true
+        }));
+        assert!(!asked, "WM_NCHITTEST must not reach a rejected window");
+        assert!(caption_hit(true, || true));
+        assert!(!caption_hit(true, || false));
+    }
 
     #[test]
     fn lparam_packs_negative_screen_coordinates() {
