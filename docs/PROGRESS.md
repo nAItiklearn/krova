@@ -84,3 +84,22 @@ No Critical or High findings in Krova's own code; privacy promises hold for Krov
 - macOS: blanket `#![allow(dead_code, unused_unsafe, unused_imports, ...)]` in the mac files predates the first green macOS CI run; tighten it now that the lints pass. The overlay is the lowest-confidence macOS item; if it misbehaves, make `create_overlay` return `Err(Unsupported)`.
 - macOS: `start_input` fails until Accessibility is granted. `get_state` retries it once permission is `Granted`; a restart may still be needed. The Accessibility prompt helper (`prompt_for_accessibility`) is not yet wired to any command.
 - Window memory, keyboard shortcuts and linked dividers are Windows-only (`capabilities` is false for them on macOS).
+
+## Manual tests for the corners branch
+
+Automated: `krova_core::corners` unit tests (outer corners incl. L-shaped and mixed-DPI sets, dwell, re-arm, buttons, cooldown, ripple), `win_corners` table tests, `src-tauri` corners tests, `ui/src/lib/mock/cornersMock.test.ts`. Real desktop: `cargo test -p krova-platform a_real_cursor_in_a_corner_fires_once -- --ignored` (moves the mouse into the primary monitor's top-left corner with `SendInput`; passed 2026-11-10 on Windows 11 10.0.26300, single 125% monitor).
+
+For a security reviewer (not yet reviewed): the only change inside `mouse_proc` is `win_corners::on_mouse_move`, which does atomic loads, bounded indexing (`i < COUNT.min(64)`), no lock, no allocation, and at most one `PostThreadMessageW`; it cannot panic or block. The full-screen check reads the foreground window's rect and class name, never its title. Nothing about corners is logged or written except the settings themselves.
+
+By hand, on a real Windows PC:
+- [ ] Default settings, one monitor: throw the cursor into the top-right corner and stop. After about 0.3 s an orange quarter-circle blooms and fades there and the layout switcher opens for that monitor. Staying in the corner does nothing more.
+- [ ] Wiggle a little in the corner (under ~24 px): nothing. Move clearly away and back: it fires again (not sooner than 0.6 s after the last fire).
+- [ ] Pass through the corner without stopping: nothing.
+- [ ] Drag a window (title bar held) into the top-right corner and keep holding: nothing fires. Release there and keep resting: it fires one dwell later.
+- [ ] Bottom-right with the default `calm_desk`: the ripple shows and the `hot-corner` event arrives (devtools: `api.onHotCorner`); calm desk itself runs once that branch is merged.
+- [ ] Two monitors side by side: the two corners where the screens meet never fire; the far corners of both screens do. Repeat with a staggered (L-shaped) arrangement and with one screen at 100 % and the other at 150-200 %: the hit zone feels the same on both.
+- [ ] Rearrange or unplug a monitor while Krova runs: the new outer corners work without a restart.
+- [ ] A full-screen video or game in front: nothing fires (ripple included). Set `ignore_fullscreen` off: it fires.
+- [ ] Switch Krova off in the tray: no corner fires. Back on: they work.
+- [ ] Windows Settings, Accessibility, Visual effects, Animation effects off: the ripple is a still quarter-circle that disappears after a moment.
+- [ ] Task Manager with the cursor resting in a set corner and elsewhere: no CPU use beyond the fire itself.
