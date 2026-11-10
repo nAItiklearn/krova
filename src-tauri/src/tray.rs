@@ -1,66 +1,139 @@
-//! Tray / menu-bar icon: Enable, Edit layouts, Settings, Launch at login, Quit.
+//! Tray / menu-bar icon: Enable, Pause arranging, Quick panel, Edit layouts,
+//! Settings, Launch at login, Quit. A left click opens the quick panel; while
+//! auto-arrange is paused the icon is drawn dimmed.
 
 use std::sync::Arc;
 
+use tauri::image::Image;
 use tauri::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
-use tauri::tray::TrayIconBuilder;
+use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, Wry};
 
 use crate::commands::{change_settings, commit};
+use crate::engine::{self, Msg};
 use crate::model::{AppState, Shared};
-use crate::ui_window;
+use crate::{popups, ui_window};
 
-/// Handles to the two checkable entries, so they can follow the real state.
+/// Handles to the checkable entries and the two icons, so they can follow the state.
 pub struct TrayItems {
     enabled: CheckMenuItem<Wry>,
+    paused: CheckMenuItem<Wry>,
     autostart: CheckMenuItem<Wry>,
+    tray: TrayIcon<Wry>,
+    normal: Option<Image<'static>>,
+    dimmed: Option<Image<'static>>,
+}
+
+/// The icon at 40 % opacity: the "paused" look.
+pub fn dim(rgba: &[u8]) -> Vec<u8> {
+    rgba.chunks_exact(4)
+        .flat_map(|p| [p[0], p[1], p[2], (u16::from(p[3]) * 2 / 5) as u8])
+        .collect()
 }
 
 pub fn build(app: &AppHandle, state: &AppState) -> tauri::Result<()> {
+    // --- wave4 ---: labels come from the native string table (src-tauri/i18n).
+    let lang = state.wave4.language.as_str();
+    let t = |key: &str| crate::i18n::tr(lang, key);
     let enabled = CheckMenuItem::with_id(
         app,
         "enabled",
-        "Enabled",
+        t("tray.enabled"),
         true,
         state.config.settings.enabled,
         None::<&str>,
     )?;
-    let edit = MenuItem::with_id(app, "edit", "Edit layouts…", true, None::<&str>)?;
-    let settings = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
+    let paused = CheckMenuItem::with_id(
+        app,
+        "pause",
+        t("tray.pause"),
+        true,
+        state.paused,
+        None::<&str>,
+    )?;
+    let panel = MenuItem::with_id(app, "panel", t("tray.panel"), true, None::<&str>)?;
+    let edit = MenuItem::with_id(app, "edit", t("tray.edit"), true, None::<&str>)?;
+    let settings = MenuItem::with_id(app, "settings", t("tray.settings"), true, None::<&str>)?;
     let autostart = CheckMenuItem::with_id(
         app,
         "autostart",
-        "Launch at login",
+        t("tray.autostart"),
         true,
         state.autostart,
         None::<&str>,
     )?;
-    let quit = MenuItem::with_id(app, "quit", "Quit Krova", true, None::<&str>)?;
+    // --- wave4 ---
+    let updates = MenuItem::with_id(app, "updates", t("tray.updates"), true, None::<&str>)?;
+    // --- end wave4 ---
+    let quit = MenuItem::with_id(app, "quit", t("tray.quit"), true, None::<&str>)?;
     let sep_top = PredefinedMenuItem::separator(app)?;
     let sep_bottom = PredefinedMenuItem::separator(app)?;
     let menu = Menu::with_items(
         app,
         &[
             &enabled,
+            &paused,
             &sep_top,
+            &panel,
             &edit,
             &settings,
             &autostart,
+            &updates, // --- wave4 ---
             &sep_bottom,
             &quit,
         ],
     )?;
 
+    let normal = app.default_window_icon().map(|i| i.clone().to_owned());
+    let dimmed = normal
+        .as_ref()
+        .map(|i| Image::new_owned(dim(i.rgba()), i.width(), i.height()));
     let mut tray = TrayIconBuilder::with_id("krova")
-        .tooltip("Krova")
+        .tooltip(t("tray.tooltip"))
         .menu(&menu)
-        .on_menu_event(handle_menu_event);
-    if let Some(icon) = app.default_window_icon() {
-        tray = tray.icon(icon.clone());
+        // The left click is the panel; the menu stays on the right click.
+        .show_menu_on_left_click(false)
+        .on_menu_event(handle_menu_event)
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                popups::show(tray.app_handle(), "panel");
+            }
+        });
+    if let Some(icon) = normal.clone() {
+        tray = tray.icon(icon);
     }
-    tray.build(app)?;
+    let tray = tray.build(app)?;
 
-    app.manage(TrayItems { enabled, autostart });
+    // --- wave4 ---
+    use crate::wave4::TrayEntry::{Check, Plain};
+    crate::wave4::manage_tray_labels(
+        app,
+        lang,
+        vec![
+            ("tray.enabled", Check(enabled.clone())),
+            ("tray.pause", Check(paused.clone())),
+            ("tray.panel", Plain(panel)),
+            ("tray.edit", Plain(edit)),
+            ("tray.settings", Plain(settings)),
+            ("tray.autostart", Check(autostart.clone())),
+            ("tray.updates", Plain(updates)),
+            ("tray.quit", Plain(quit)),
+        ],
+    );
+    // --- end wave4 ---
+    app.manage(TrayItems {
+        enabled,
+        paused,
+        autostart,
+        tray,
+        normal,
+        dimmed,
+    });
     Ok(())
 }
 
@@ -74,6 +147,7 @@ fn handle_menu_event(app: &AppHandle, event: MenuEvent) {
                 eprintln!("krova: {e}");
             }
         }
+        "pause" => engine::notify(&shared, Msg::SetPaused(!shared.is_paused())),
         "autostart" => {
             let result = change_settings(&shared, |s| s.launch_at_login = !s.launch_at_login)
                 .and_then(|()| commit(app, &shared).map(|_| ()));
@@ -81,8 +155,16 @@ fn handle_menu_event(app: &AppHandle, event: MenuEvent) {
                 eprintln!("krova: {e}");
             }
         }
+        "panel" => popups::show(app, "panel"),
         "edit" => ui_window::show(app, Some("editor")),
         "settings" => ui_window::show(app, Some("settings")),
+        // --- wave4 ---
+        "updates" => {
+            if let Err(e) = crate::wave4::open_releases(&shared) {
+                eprintln!("krova: {e}");
+            }
+        }
+        // --- end wave4 ---
         // An explicit exit request: lib.rs lets `Some(code)` through and only
         // vetoes the implicit "last window closed" exit.
         "quit" => app.exit(0),
@@ -90,10 +172,38 @@ fn handle_menu_event(app: &AppHandle, event: MenuEvent) {
     }
 }
 
-/// Keep the checkmarks in step with the real state (also after UI changes).
+/// Keep the checkmarks and the icon in step with the real state.
 pub fn sync(app: &AppHandle, state: &AppState) {
+    // --- wave4 --- (first: the paused tooltip below wins over the plain one)
+    crate::wave4::relabel_tray(app, state);
+    // --- end wave4 ---
     if let Some(items) = app.try_state::<TrayItems>() {
         let _ = items.enabled.set_checked(state.config.settings.enabled);
+        let _ = items.paused.set_checked(state.paused);
         let _ = items.autostart.set_checked(state.autostart);
+        let icon = if state.paused {
+            items.dimmed.clone()
+        } else {
+            items.normal.clone()
+        };
+        if icon.is_some() {
+            let _ = items.tray.set_icon(icon);
+        }
+        let _ = items.tray.set_tooltip(Some(if state.paused {
+            "Krova (paused)"
+        } else {
+            "Krova"
+        }));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::dim;
+
+    #[test]
+    fn the_dimmed_icon_keeps_the_colour_and_lowers_the_alpha() {
+        let px = [10, 20, 30, 255, 1, 2, 3, 0];
+        assert_eq!(dim(&px), [10, 20, 30, 102, 1, 2, 3, 0]);
     }
 }

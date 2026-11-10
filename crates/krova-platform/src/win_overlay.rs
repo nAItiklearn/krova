@@ -32,7 +32,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW, PeekMessageW,
     PostThreadMessageW, RegisterClassExW, SetWindowPos, ShowWindow, TranslateMessage,
     UpdateLayeredWindow, HMENU, HWND_TOPMOST, MSG, PM_NOREMOVE, PM_REMOVE, SWP_NOACTIVATE,
-    SWP_SHOWWINDOW, SW_HIDE, ULW_ALPHA, WM_APP, WM_QUIT, WNDCLASSEXW, WS_EX_LAYERED,
+    SWP_SHOWWINDOW, SW_HIDE, ULW_ALPHA, WM_APP, WM_CLOSE, WM_QUIT, WNDCLASSEXW, WS_EX_LAYERED,
     WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
 };
 
@@ -101,6 +101,10 @@ unsafe extern "system" fn wnd_proc(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
+    // Ignore a WM_CLOSE sent by another program: it would destroy the overlay.
+    if msg == WM_CLOSE {
+        return LRESULT(0);
+    }
     unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
 }
 
@@ -135,7 +139,10 @@ fn create_window() -> windows::core::Result<HWND> {
 
 fn run(scene: SharedScene, ready: mpsc::Sender<Result<u32, String>>) {
     let hwnd = match create_window() {
-        Ok(h) => h,
+        Ok(h) => {
+            crate::win_capture::register_overlay(h);
+            h
+        }
         Err(e) => {
             let _ = ready.send(Err(e.to_string()));
             return;
@@ -167,6 +174,7 @@ fn run(scene: SharedScene, ready: mpsc::Sender<Result<u32, String>>) {
             DispatchMessageW(&msg);
         }
     }
+    crate::win_capture::unregister_overlay(hwnd);
     let _ = unsafe { DestroyWindow(hwnd) };
 }
 

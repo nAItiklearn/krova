@@ -1,0 +1,20 @@
+{
+  "_about": "Krova native strings (tray menu, notifications, overlay labels), English source. Keys are stable ids; {name} placeholders are filled in by Krova. Keep labels to 1-3 words and helper text to one sentence.",
+  "tray.tooltip": "Krova",
+  "tray.enabled": "Enabled",
+  "tray.pause": "Pause arranging",
+  "tray.panel": "Quick panel",
+  "tray.edit": "Edit layouts…",
+  "tray.settings": "Settings…",
+  "tray.autostart": "Launch at login",
+  "tray.updates": "Check for updates…",
+  "tray.quit": "Quit Krova",
+  "shortcut.in_use": "{chord} is already used by another app",
+  "shortcut.failed": "{chord} could not be registered (error {code})",
+  "notify.config_recovered": "Your settings file could not be read. Krova kept a copy and started fresh.",
+  "notify.config_too_new": "These settings are from a newer Krova, so they are left unchanged.",
+  "notify.focus_refused": "Windows did not let Krova switch to that window.",
+  "notify.updates_failed": "The releases page could not be opened.",
+  "overlay.zone": "Zone {n}",
+  "overlay.layout": "Layout: {name}"
+}

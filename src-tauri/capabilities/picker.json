@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "picker",
+  "description": "The hover zone picker window: listen to app events and hide itself. It calls place_hovered (app commands are our own and callable from every local window: there is no per-command app manifest yet, see SECURITY-REVIEW F-08); no fs, shell or http plugins are enabled.",
+  "windows": ["picker"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten", "core:window:allow-hide"]
+}

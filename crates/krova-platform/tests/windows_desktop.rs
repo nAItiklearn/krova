@@ -22,8 +22,8 @@ use std::sync::Arc;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-use krova_core::{PxRect, ShortcutModifier};
-use krova_platform::hotkeys::{chord_label, HOTKEYS};
+use krova_core::PxRect;
+
 use krova_platform::win::WindowsPlatform;
 use krova_platform::{HotkeySpec, Platform, WatchEvent, WindowId};
 use windows::Win32::Foundation::{BOOL, HWND, LPARAM, TRUE, WPARAM};
@@ -179,15 +179,6 @@ fn press_chord(mods: &[VIRTUAL_KEY], key: VIRTUAL_KEY) {
     send(&seq);
 }
 
-fn modifier_keys(m: ShortcutModifier) -> Vec<VIRTUAL_KEY> {
-    match m {
-        ShortcutModifier::CtrlAlt => vec![VK_CONTROL, VK_MENU],
-        ShortcutModifier::WinAlt => vec![VK_LWIN, VK_MENU],
-        ShortcutModifier::CtrlAltShift => vec![VK_CONTROL, VK_MENU, VK_SHIFT],
-        ShortcutModifier::WinCtrl => vec![VK_LWIN, VK_CONTROL],
-    }
-}
-
 /// Bring `id` to the foreground. Returns whether it really got the focus.
 fn focus(id: WindowId) -> bool {
     let h = hwnd(id);
@@ -277,70 +268,75 @@ fn place_window_and_the_window_queries_work_on_a_real_notepad() {
 #[test]
 #[ignore = "registers global hotkeys and injects keystrokes into the interactive session"]
 fn global_hotkeys_register_and_deliver_for_every_modifier() {
+    use krova_platform::hotkeys::HotkeyBinding;
     make_dpi_aware();
     let platform = WindowsPlatform::new();
-    let all = [
-        ShortcutModifier::WinAlt,
-        ShortcutModifier::CtrlAlt,
-        ShortcutModifier::CtrlAltShift,
-        ShortcutModifier::WinCtrl,
-    ];
+    let spec = HotkeySpec {
+        bindings: krova_core::shortcuts::ShortcutMap::new()
+            .effective()
+            .into_iter()
+            .filter_map(|(action, chord)| {
+                Some(HotkeyBinding {
+                    action,
+                    chord: chord?,
+                })
+            })
+            .collect(),
+    };
+    let (tx, rx) = mpsc::channel();
+    let sink = Arc::new(move |ev: krova_platform::HotkeyEvent| {
+        let _ = tx.send(ev.action);
+    });
+    let handle = platform
+        .start_hotkeys(spec.clone(), sink)
+        .expect("hotkey thread starts");
+    println!(
+        "REGISTRATION: {} of {} accepted; refused: {:?}",
+        handle.registered(),
+        spec.bindings.len(),
+        handle.failed()
+    );
+    assert_eq!(
+        handle.registered() + handle.failed().len(),
+        spec.bindings.len()
+    );
     let mut undelivered: Vec<String> = Vec::new();
-    for modifier in all {
-        let (tx, rx) = mpsc::channel();
-        let sink = Arc::new(move |ev: krova_platform::HotkeyEvent| {
-            let _ = tx.send(ev.action);
-        });
-        let handle = platform
-            .start_hotkeys(
-                HotkeySpec {
-                    modifier,
-                    window_moves: true,
-                    switcher: true,
-                },
-                sink,
-            )
-            .expect("hotkey thread starts");
-        println!(
-            "REGISTRATION {}: {} of {} accepted; refused: {:?}",
-            modifier.label(),
-            handle.registered(),
-            HOTKEYS.len(),
-            handle.failed()
-        );
-        assert_eq!(handle.registered() + handle.failed().len(), HOTKEYS.len());
-
-        let safe_to_press = !matches!(modifier, ShortcutModifier::WinCtrl);
-        if !safe_to_press {
-            continue;
+    for b in &spec.bindings {
+        if !handle.is_registered(b.action) {
+            continue; // refused: pressing it would trigger someone else's action
         }
-        for def in HOTKEYS {
-            let chord = chord_label(modifier, def.key);
-            if handle.failed().iter().any(|m| m.starts_with(&chord)) {
-                continue; // refused by the OS: pressing it would trigger someone else's action
+        let chord = b.chord;
+        let mut mods = Vec::new();
+        if chord.ctrl {
+            mods.push(VK_CONTROL);
+        }
+        if chord.alt {
+            mods.push(VK_MENU);
+        }
+        if chord.shift {
+            mods.push(VK_SHIFT);
+        }
+        if chord.win {
+            mods.push(VK_LWIN);
+        }
+        let vk = VIRTUAL_KEY(krova_platform::win_events::virtual_key(chord.key) as u16);
+        press_chord(&mods, vk);
+        match rx.recv_timeout(Duration::from_secs(2)) {
+            Ok(action) => {
+                assert_eq!(action, b.action, "{chord}");
+                println!("DELIVERED {chord}");
             }
-            let vk = VIRTUAL_KEY(krova_platform::win_events::virtual_key(def.key) as u16);
-            press_chord(&modifier_keys(modifier), vk);
-            match rx.recv_timeout(Duration::from_secs(2)) {
-                Ok(action) => {
-                    assert_eq!(action, def.action, "{chord}");
-                    println!("DELIVERED {chord}");
-                }
-                Err(_) => {
-                    println!("NOT DELIVERED {chord} (registered, injected keys did not arrive)");
-                    undelivered.push(chord);
-                }
+            Err(_) => {
+                println!("NOT DELIVERED {chord} (registered, injected keys did not arrive)");
+                undelivered.push(chord.to_string());
             }
         }
-        drop(handle);
-        assert!(rx.try_recv().is_err(), "nothing queued after unregistering");
     }
-    // Ctrl+Alt is the chord every machine accepts; it must work end to end.
+    drop(handle);
+    assert!(rx.try_recv().is_err(), "nothing queued after unregistering");
     assert!(
-        !undelivered
-            .iter()
-            .any(|c| c.starts_with("Ctrl+Alt+") && !c.starts_with("Ctrl+Alt+Shift")),
-        "Ctrl+Alt chords must be delivered: {undelivered:?}"
+        undelivered.is_empty(),
+        "registered chords must be delivered: {undelivered:?}"
     );
 }
 

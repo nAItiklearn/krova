@@ -8,23 +8,27 @@
 
 use krova_core::PxRect;
 
-/// Default highlight colour, used when the configured one does not parse.
-const DEFAULT_COLOR: [u8; 3] = [0x3b, 0x82, 0xf6];
+/// Default accent colour (`#ff5b1f`), used when the configured one does not parse.
+const DEFAULT_COLOR: [u8; 3] = [0xff, 0x5b, 0x1f];
 
 /// Space between neighbouring zones, so they read as separate tiles.
 const GAP: i32 = 4;
 const BORDER: i32 = 2;
-const BORDER_ACTIVE: i32 = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct OverlayStyle {
     pub color: [u8; 3],
     /// Fill opacity of the highlighted zone, `0.0..=1.0`.
     pub opacity: f32,
+    /// Corner radius of the zone tiles, in device pixels (`0` = square).
+    pub radius: i32,
+    /// Border width of an idle zone in device pixels; the highlight uses twice this.
+    pub border: i32,
 }
 
 impl OverlayStyle {
-    /// Build from the settings strings; an unparsable colour falls back to blue.
+    /// Build from the settings strings; an unparsable colour falls back to the
+    /// accent default. Square corners and a 2 px border.
     pub fn from_settings(hex: &str, opacity: f32) -> Self {
         Self {
             color: parse_hex_color(hex).unwrap_or(DEFAULT_COLOR),
@@ -33,7 +37,21 @@ impl OverlayStyle {
             } else {
                 0.35
             },
+            radius: 0,
+            border: BORDER,
         }
+    }
+
+    /// The appearance settings (logical pixels) at the monitor's `scale`.
+    pub fn with_shape(mut self, radius_px: i32, border_px: i32, scale: f64) -> Self {
+        let s = if scale.is_finite() && scale > 0.0 {
+            scale.min(8.0)
+        } else {
+            1.0
+        };
+        self.radius = (f64::from(radius_px.clamp(0, 16)) * s).round() as i32;
+        self.border = ((f64::from(border_px.clamp(1, 6)) * s).round() as i32).max(1);
+        self
     }
 }
 
@@ -75,6 +93,13 @@ fn premul(color: [u8; 3], alpha: f32) -> u32 {
     (a << 24) | (c(color[0]) << 16) | (c(color[1]) << 8) | c(color[2])
 }
 
+/// A premultiplied pixel at `k` (`0.0..=1.0`) of its strength.
+fn scale_premul(p: u32, k: f32) -> u32 {
+    let k = k.clamp(0.0, 1.0);
+    let ch = |shift: u32| ((((p >> shift) & 0xFF) as f32 * k).round() as u32) << shift;
+    ch(24) | ch(16) | ch(8) | ch(0)
+}
+
 struct Canvas {
     w: i32,
     h: i32,
@@ -104,9 +129,48 @@ impl Canvas {
         self.fill(r.x + r.w - t, r.y + t, t, r.h - 2 * t, value);
     }
 
-    fn tile(&mut self, r: PxRect, fill: u32, border: i32, border_value: u32) {
+    fn tile(&mut self, r: PxRect, fill: u32, border: i32, border_value: u32, radius: i32) {
         self.fill(r.x, r.y, r.w, r.h, fill);
         self.stroke(r, border, border_value);
+        let rad = radius.min(r.w / 2).min(r.h / 2);
+        if rad > 0 {
+            self.round_corners(r, rad, border, fill, border_value);
+        }
+    }
+
+    /// Redraw the four corner squares of a tile as rounded corners: outside the arc
+    /// transparent, on the ring the border colour, inside the fill, anti-aliased.
+    /// Only `4 * radius^2` pixels are touched, so a large zone costs nothing extra.
+    fn round_corners(&mut self, r: PxRect, rad: i32, border: i32, fill: u32, ring: u32) {
+        let radf = rad as f32;
+        let t = border.max(1) as f32;
+        let corners = [
+            (r.x, r.y, r.x + rad, r.y + rad),
+            (r.x + r.w - rad, r.y, r.x + r.w - rad, r.y + rad),
+            (r.x, r.y + r.h - rad, r.x + rad, r.y + r.h - rad),
+            (
+                r.x + r.w - rad,
+                r.y + r.h - rad,
+                r.x + r.w - rad,
+                r.y + r.h - rad,
+            ),
+        ];
+        for (x0, y0, cx, cy) in corners {
+            for py in y0.max(0)..(y0 + rad).min(self.h) {
+                for px in x0.max(0)..(x0 + rad).min(self.w) {
+                    // Distance from the arc's centre to the pixel centre.
+                    let dx = px as f32 + 0.5 - cx as f32;
+                    let dy = py as f32 + 0.5 - cy as f32;
+                    let d = (dx * dx + dy * dy).sqrt();
+                    let outside = (d - radf + 0.5).clamp(0.0, 1.0);
+                    let in_ring = (d - (radf - t) + 0.5).clamp(0.0, 1.0);
+                    let inside = 1.0 - outside;
+                    let value = if in_ring > 0.5 { ring } else { fill };
+                    let i = py as usize * self.w as usize + px as usize;
+                    self.px[i] = scale_premul(value, inside);
+                }
+            }
+        }
     }
 }
 
@@ -165,17 +229,35 @@ pub fn render(scene: &OverlayScene) -> Vec<u32> {
 
     for (id, rect) in &scene.zones {
         if scene.highlight != Some(*id) {
-            canvas.tile(zone_local(*rect), idle_fill, BORDER, idle_border);
+            canvas.tile(
+                zone_local(*rect),
+                idle_fill,
+                style.border,
+                idle_border,
+                style.radius,
+            );
         }
     }
     // Highlight and preview last so they sit on top of their neighbours.
     for (id, rect) in &scene.zones {
         if scene.highlight == Some(*id) {
-            canvas.tile(zone_local(*rect), active_fill, BORDER_ACTIVE, active_border);
+            canvas.tile(
+                zone_local(*rect),
+                active_fill,
+                style.border * 2,
+                active_border,
+                style.radius,
+            );
         }
     }
     if let Some(p) = scene.preview {
-        canvas.tile(preview_local(p), active_fill, BORDER_ACTIVE, active_border);
+        canvas.tile(
+            preview_local(p),
+            active_fill,
+            style.border * 2,
+            active_border,
+            style.radius,
+        );
     }
     canvas.px
 }
@@ -187,6 +269,8 @@ mod tests {
     const STYLE: OverlayStyle = OverlayStyle {
         color: [255, 255, 255],
         opacity: 0.4,
+        radius: 0,
+        border: 2,
     };
 
     fn scene(monitor: PxRect, zones: Vec<(u32, PxRect)>, highlight: Option<u32>) -> OverlayScene {
@@ -351,5 +435,41 @@ mod tests {
         // 7680 x 4320 = 33 Mpx, under the cap.
         let s = scene(PxRect::new(0, 0, 7680, 4320), vec![], None);
         assert_eq!(render(&s).len(), 7680 * 4320);
+    }
+
+    #[test]
+    fn rounded_tiles_clear_their_corners_and_keep_their_middle() {
+        let zones = vec![(1, PxRect::new(0, 0, 100, 100))];
+        let mut s = scene(PxRect::new(0, 0, 100, 100), zones, Some(1));
+        s.gapped = true;
+        s.style = s.style.with_shape(10, 2, 1.0);
+        let buf = render(&s);
+        assert_eq!(
+            alpha(at(&buf, 100, 0, 0)),
+            0,
+            "the very corner is outside the arc"
+        );
+        assert_eq!(alpha(at(&buf, 100, 99, 99)), 0);
+        assert_eq!(
+            alpha(at(&buf, 100, 50, 0)),
+            255,
+            "the straight edge is border"
+        );
+        assert!(alpha(at(&buf, 100, 50, 50)) > 0, "the middle is filled");
+        // Square corners with radius 0.
+        s.style = s.style.with_shape(0, 2, 1.0);
+        assert_ne!(alpha(at(&render(&s), 100, 0, 0)), 0);
+    }
+
+    #[test]
+    fn the_shape_scales_with_the_monitor_and_is_clamped() {
+        let st = OverlayStyle::from_settings("#ff5b1f", 0.35).with_shape(10, 2, 1.5);
+        assert_eq!((st.radius, st.border), (15, 3));
+        let st = st.with_shape(99, 99, f64::NAN);
+        assert_eq!((st.radius, st.border), (16, 6));
+        assert_eq!(
+            OverlayStyle::from_settings("x", 0.5).color,
+            [0xff, 0x5b, 0x1f]
+        );
     }
 }

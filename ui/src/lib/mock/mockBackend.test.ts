@@ -63,9 +63,9 @@ describe('mock backend: settings', () => {
     await expect(b.saveSettings({ ...cur, highlight_color: 'blue' })).rejects.toBe(
       'invalid highlight_color "blue"',
     );
-    await expect(
-      b.saveSettings({ ...cur, modifier: 'meta' as unknown as 'shift' }),
-    ).rejects.toBe('invalid modifier "meta"');
+    await expect(b.saveSettings({ ...cur, modifier: 'meta' as unknown as 'shift' })).rejects.toBe(
+      'invalid modifier "meta"',
+    );
   });
 });
 
@@ -235,7 +235,9 @@ describe('mock backend: new settings', () => {
     async (m) => {
       const b = fresh();
       const cur = (await b.getState()).config.settings;
-      expect((await b.saveSettings({ ...cur, shortcut_modifier: m })).config.settings.shortcut_modifier).toBe(m);
+      expect(
+        (await b.saveSettings({ ...cur, shortcut_modifier: m })).config.settings.shortcut_modifier,
+      ).toBe(m);
     },
   );
 
@@ -301,7 +303,12 @@ describe('mock backend: new settings', () => {
     };
     const a = createMockBackend({ storage });
     const cur = (await a.getState()).config.settings;
-    await a.saveSettings({ ...cur, shortcut_modifier: 'win_ctrl', zone_gap_px: 20, linked_dividers: false });
+    await a.saveSettings({
+      ...cur,
+      shortcut_modifier: 'win_ctrl',
+      zone_gap_px: 20,
+      linked_dividers: false,
+    });
     const b = createMockBackend({ storage });
     expect((await b.getState()).config.settings).toMatchObject({
       shortcut_modifier: 'win_ctrl',
@@ -313,7 +320,14 @@ describe('mock backend: new settings', () => {
     const persisted = JSON.parse(m.get(STORAGE_KEY) ?? '{}') as {
       config: { settings: Record<string, unknown> };
     };
-    for (const k of ['keyboard_shortcuts', 'shortcut_modifier', 'restore_on_reconnect', 'linked_dividers', 'zone_gap_px', 'layout_switcher_shortcut']) {
+    for (const k of [
+      'keyboard_shortcuts',
+      'shortcut_modifier',
+      'restore_on_reconnect',
+      'linked_dividers',
+      'zone_gap_px',
+      'layout_switcher_shortcut',
+    ]) {
       delete persisted.config.settings[k];
     }
     m.set(STORAGE_KEY, JSON.stringify(persisted));
@@ -328,7 +342,7 @@ describe('mock backend: shortcuts and capabilities', () => {
   it('defaults to active shortcuts and full capabilities', async () => {
     const s = await fresh().getState();
     expect(s.shortcuts).toEqual({ active: true, failed: [] });
-    expect(s.capabilities).toEqual({ shortcuts: true, window_memory: true });
+    expect(s.capabilities).toEqual({ shortcuts: true, window_memory: true, auto_arrange: true });
   });
 
   it('shortcuts=failed reports the demo conflict and stays active', async () => {
@@ -351,7 +365,7 @@ describe('mock backend: shortcuts and capabilities', () => {
       capabilities: 'none',
       shortcuts: 'failed',
     }).getState();
-    expect(s.capabilities).toEqual({ shortcuts: false, window_memory: false });
+    expect(s.capabilities).toEqual({ shortcuts: false, window_memory: false, auto_arrange: false });
     expect(s.shortcuts).toEqual({ active: false, failed: [] });
   });
 
@@ -368,15 +382,17 @@ describe('mock backend: shortcuts and capabilities', () => {
   it('reads ?shortcuts= and ?capabilities= from the URL', async () => {
     vi.stubGlobal('location', { search: '?nopersist&shortcuts=failed&capabilities=none' });
     const s = await createMockBackend().getState();
-    expect(s.capabilities).toEqual({ shortcuts: false, window_memory: false });
+    expect(s.capabilities).toEqual({ shortcuts: false, window_memory: false, auto_arrange: false });
     vi.stubGlobal('location', { search: '?shortcuts=failed' });
-    expect((await createMockBackend({ persist: false }).getState()).shortcuts.failed).toHaveLength(1);
+    expect((await createMockBackend({ persist: false }).getState()).shortcuts.failed).toHaveLength(
+      1,
+    );
     vi.stubGlobal('location', { search: '?shortcuts=off' });
     expect((await createMockBackend({ persist: false }).getState()).shortcuts.active).toBe(false);
     vi.stubGlobal('location', { search: '?shortcuts=bogus&capabilities=bogus' });
     const d = await createMockBackend({ persist: false }).getState();
     expect(d.shortcuts).toEqual({ active: true, failed: [] });
-    expect(d.capabilities).toEqual({ shortcuts: true, window_memory: true });
+    expect(d.capabilities).toEqual({ shortcuts: true, window_memory: true, auto_arrange: true });
   });
 
   it('the demo hooks change them live, emit state-changed and reset restores the start', async () => {
@@ -440,7 +456,9 @@ describe('mock backend: layout save limits', () => {
     expect(s.config.monitors[0].layouts).toHaveLength(64);
     expect(s.config.monitors[0].layouts.find((l) => l.id === 'l10')?.name).toBe('Renamed');
     // The other monitor has its own allowance.
-    expect((await b.saveLayout('monitor-2', customLayout('free'))).config.monitors[1].layouts).toHaveLength(5);
+    expect(
+      (await b.saveLayout('monitor-2', customLayout('free'))).config.monitors[1].layouts,
+    ).toHaveLength(5);
   });
 });
 
@@ -599,9 +617,9 @@ describe('mock backend: import_layout', () => {
     for (const [text, message] of cases) {
       await expect(b.importLayout('monitor-1', text), message).rejects.toBe(message);
     }
-    await expect(
-      b.importLayout('nope', await b.exportLayout(customLayout('ok'))),
-    ).rejects.toBe('monitor nope not found');
+    await expect(b.importLayout('nope', await b.exportLayout(customLayout('ok')))).rejects.toBe(
+      'monitor nope not found',
+    );
     expect(await b.getState()).toEqual(before);
   });
 
@@ -611,7 +629,9 @@ describe('mock backend: import_layout', () => {
       const e: unknown = await b.importLayout('monitor-1', text).catch((err: unknown) => err);
       expect(typeof e).toBe('string');
     }
-    expect(typeof (await b.exportLayout({ id: 'e', name: 'e', zones: [] }).catch((e: unknown) => e))).toBe('string');
+    expect(
+      typeof (await b.exportLayout({ id: 'e', name: 'e', zones: [] }).catch((e: unknown) => e)),
+    ).toBe('string');
   });
 
   it('survives hostile input without changing anything', async () => {
@@ -651,7 +671,9 @@ describe('mock backend: import_layout', () => {
     const a = createMockBackend({ storage });
     await a.importLayout('monitor-2', await a.exportLayout(customLayout('kept', 'Kept')));
     const b = createMockBackend({ storage });
-    expect((await b.getState()).config.monitors[1].layouts.at(-1)).toEqual(customLayout('kept', 'Kept'));
+    expect((await b.getState()).config.monitors[1].layouts.at(-1)).toEqual(
+      customLayout('kept', 'Kept'),
+    );
   });
 
   it('returns a state that does not alias the imported object', async () => {

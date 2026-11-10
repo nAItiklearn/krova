@@ -21,8 +21,6 @@ use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 
-use krova_core::registry::KeyAction;
-use krova_core::ShortcutModifier;
 use windows::core::{HRESULT, PCWSTR};
 use windows::Win32::Foundation::{
     CloseHandle, ERROR_HOTKEY_ALREADY_REGISTERED, FALSE, HANDLE, HINSTANCE, HMODULE, HWND, LPARAM,
@@ -33,19 +31,24 @@ use windows::Win32::System::Threading::{CreateEventW, SetEvent, INFINITE};
 use windows::Win32::UI::Accessibility::{SetWinEventHook, UnhookWinEvent, HWINEVENTHOOK};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     RegisterHotKey, UnregisterHotKey, HOT_KEY_MODIFIERS, MOD_ALT, MOD_CONTROL, MOD_NOREPEAT,
-    MOD_SHIFT, MOD_WIN, VK_LEFT, VK_RIGHT, VK_SPACE, VK_UP,
+    MOD_SHIFT, MOD_WIN, VK_DOWN, VK_F1, VK_LEFT, VK_OEM_2, VK_OEM_4, VK_OEM_6, VK_OEM_COMMA,
+    VK_OEM_MINUS, VK_OEM_PERIOD, VK_OEM_PLUS, VK_RETURN, VK_RIGHT, VK_SPACE, VK_UP,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, MsgWaitForMultipleObjectsEx,
-    PeekMessageW, RegisterClassExW, TranslateMessage, EVENT_SYSTEM_MOVESIZEEND,
-    EVENT_SYSTEM_MOVESIZESTART, HMENU, MSG, MWMO_INPUTAVAILABLE, OBJID_WINDOW,
-    PBT_APMRESUMEAUTOMATIC, PBT_APMRESUMESUSPEND, PM_NOREMOVE, PM_REMOVE, QS_ALLINPUT,
-    SPI_SETWORKAREA, WINEVENT_OUTOFCONTEXT, WINEVENT_SKIPOWNPROCESS, WM_DISPLAYCHANGE, WM_HOTKEY,
-    WM_POWERBROADCAST, WM_QUIT, WM_SETTINGCHANGE, WNDCLASSEXW, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
-    WS_POPUP,
+    CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetAncestor,
+    MsgWaitForMultipleObjectsEx, PeekMessageW, RegisterClassExW, TranslateMessage,
+    EVENT_OBJECT_CLOAKED, EVENT_OBJECT_DESTROY, EVENT_OBJECT_HIDE, EVENT_OBJECT_SHOW,
+    EVENT_OBJECT_UNCLOAKED, EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_MINIMIZEEND,
+    EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MOVESIZEEND, EVENT_SYSTEM_MOVESIZESTART, GA_ROOT,
+    HMENU, MSG, MWMO_INPUTAVAILABLE, OBJID_WINDOW, PBT_APMRESUMEAUTOMATIC, PBT_APMRESUMESUSPEND,
+    PM_NOREMOVE, PM_REMOVE, QS_ALLINPUT, SPI_SETWORKAREA, WINEVENT_OUTOFCONTEXT,
+    WINEVENT_SKIPOWNPROCESS, WM_CLOSE, WM_DISPLAYCHANGE, WM_HOTKEY, WM_POWERBROADCAST, WM_QUIT,
+    WM_SETTINGCHANGE, WNDCLASSEXW, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_POPUP,
 };
 
-use crate::hotkeys::{action_for_id, refusal_message, HotkeyEvent, HotkeySpec, Key, Refusal};
+use crate::hotkeys::{
+    refusal_message, Chord, HotkeyEvent, HotkeySpec, Key, Refusal, ShortcutAction,
+};
 use crate::{EventSink, HotkeyHandle, PlatformError, WatchEvent, WatchHandle, WindowId};
 
 fn os_err(e: windows::core::Error) -> PlatformError {
@@ -119,13 +122,21 @@ fn dispatch(msg: &MSG) {
 // ------------------------------------------------------------- hotkeys
 
 /// The `RegisterHotKey` modifier bits for a chord (without `MOD_NOREPEAT`).
-pub fn modifier_bits(m: ShortcutModifier) -> u32 {
-    match m {
-        ShortcutModifier::CtrlAlt => MOD_CONTROL.0 | MOD_ALT.0,
-        ShortcutModifier::WinAlt => MOD_WIN.0 | MOD_ALT.0,
-        ShortcutModifier::CtrlAltShift => MOD_CONTROL.0 | MOD_ALT.0 | MOD_SHIFT.0,
-        ShortcutModifier::WinCtrl => MOD_WIN.0 | MOD_CONTROL.0,
+pub fn modifier_bits(chord: Chord) -> u32 {
+    let mut bits = 0;
+    if chord.ctrl {
+        bits |= MOD_CONTROL.0;
     }
+    if chord.alt {
+        bits |= MOD_ALT.0;
+    }
+    if chord.shift {
+        bits |= MOD_SHIFT.0;
+    }
+    if chord.win {
+        bits |= MOD_WIN.0;
+    }
+    bits
 }
 
 /// Virtual-key code of a shortcut's key.
@@ -134,25 +145,64 @@ pub fn virtual_key(key: Key) -> u32 {
         Key::Left => u32::from(VK_LEFT.0),
         Key::Right => u32::from(VK_RIGHT.0),
         Key::Up => u32::from(VK_UP.0),
-        // '1'..'9' on the main row have the virtual-key codes of their ASCII digits.
+        Key::Down => u32::from(VK_DOWN.0),
+        // '0'..'9' and 'A'..'Z' have the virtual-key codes of their ASCII characters.
         Key::Digit(n) => u32::from(b'0') + u32::from(n.min(9)),
+        Key::Letter(c) => u32::from(c.to_ascii_uppercase()),
+        Key::F(n) => u32::from(VK_F1.0) + u32::from(n.clamp(1, 12)) - 1,
         Key::Space => u32::from(VK_SPACE.0),
+        Key::Enter => u32::from(VK_RETURN.0),
+        Key::Slash => u32::from(VK_OEM_2.0),
+        Key::BracketLeft => u32::from(VK_OEM_4.0),
+        Key::BracketRight => u32::from(VK_OEM_6.0),
+        Key::Comma => u32::from(VK_OEM_COMMA.0),
+        Key::Period => u32::from(VK_OEM_PERIOD.0),
+        Key::Minus => u32::from(VK_OEM_MINUS.0),
+        Key::Equals => u32::from(VK_OEM_PLUS.0),
+    }
+}
+
+fn register(id: i32, chord: Chord) -> Result<(), Refusal> {
+    let mods = HOT_KEY_MODIFIERS(modifier_bits(chord) | MOD_NOREPEAT.0);
+    // SAFETY: a thread-bound hot key (no window); the caller unregisters it on
+    // this same thread.
+    unsafe { RegisterHotKey(HWND::default(), id, mods, virtual_key(chord.key)) }.map_err(|e| {
+        if e.code() == HRESULT::from_win32(ERROR_HOTKEY_ALREADY_REGISTERED.0) {
+            Refusal::InUse
+        } else {
+            Refusal::Other((e.code().0 & 0xFFFF) as u32)
+        }
+    })
+}
+
+/// Is `chord` free right now? Registers it on the calling thread and releases it
+/// again at once. `Ok(false)` when another program (or Krova) holds it.
+pub fn probe_hotkey(chord: Chord) -> Result<bool, PlatformError> {
+    const PROBE_ID: i32 = 0xBFFF;
+    match register(PROBE_ID, chord) {
+        Ok(()) => {
+            // SAFETY: releases the hot key registered just above on this thread.
+            let _ = unsafe { UnregisterHotKey(HWND::default(), PROBE_ID) };
+            Ok(true)
+        }
+        Err(Refusal::InUse) => Ok(false),
+        Err(Refusal::Other(code)) => Err(PlatformError::Os(format!(
+            "{chord} could not be checked (error {code})"
+        ))),
     }
 }
 
 struct HotkeyReport {
-    accepted: Vec<KeyAction>,
-    refused: Vec<(KeyAction, String)>,
+    accepted: Vec<ShortcutAction>,
+    refused: Vec<(ShortcutAction, String)>,
 }
 
 fn hotkey_thread(
     stop: usize,
-    spec: HotkeySpec,
+    spec: &HotkeySpec,
     sink: &EventSink<HotkeyEvent>,
     ready: &mpsc::Sender<HotkeyReport>,
 ) {
-    let mods = HOT_KEY_MODIFIERS(modifier_bits(spec.modifier) | MOD_NOREPEAT.0);
-
     // Touching the queue creates it, so a WM_HOTKEY posted right after
     // registration is not lost.
     let mut probe = MSG::default();
@@ -162,29 +212,23 @@ fn hotkey_thread(
     let mut registered = Vec::new();
     let mut accepted = Vec::new();
     let mut refused = Vec::new();
-    for def in spec.defs() {
-        // SAFETY: a thread-bound hot key (no window); unregistered below on this thread.
-        let result = unsafe { RegisterHotKey(HWND::default(), def.id, mods, virtual_key(def.key)) };
-        match result {
+    for (id, binding) in spec.ids() {
+        match register(id, binding.chord) {
             Ok(()) => {
-                registered.push(def.id);
-                accepted.push(def.action);
+                registered.push(id);
+                accepted.push(binding.action);
             }
-            Err(e) => {
-                let why = if e.code() == HRESULT::from_win32(ERROR_HOTKEY_ALREADY_REGISTERED.0) {
-                    Refusal::InUse
-                } else {
-                    Refusal::Other((e.code().0 & 0xFFFF) as u32)
-                };
-                refused.push((def.action, refusal_message(spec.modifier, def.key, why)));
-            }
+            Err(why) => refused.push((binding.action, refusal_message(binding.chord, why))),
         }
     }
     let _ = ready.send(HotkeyReport { accepted, refused });
 
     pump(stop, |msg| {
         if msg.message == WM_HOTKEY {
-            if let Some(action) = i32::try_from(msg.wParam.0).ok().and_then(action_for_id) {
+            if let Some(action) = i32::try_from(msg.wParam.0)
+                .ok()
+                .and_then(|id| spec.action_for_id(id))
+            {
                 sink(HotkeyEvent { action });
             }
         } else {
@@ -198,9 +242,8 @@ fn hotkey_thread(
     }
 }
 
-/// Register the requested shortcuts (the window-move group, `<mods>+Space`, or both)
-/// on a dedicated thread. Shortcuts the OS refuses are listed in the returned
-/// handle; the others work regardless.
+/// Register the requested shortcuts on a dedicated thread. Shortcuts the OS refuses
+/// are listed in the returned handle; the others work regardless.
 pub fn start_hotkeys(
     spec: HotkeySpec,
     sink: EventSink<HotkeyEvent>,
@@ -210,7 +253,7 @@ pub fn start_hotkeys(
     let (ready_tx, ready_rx) = mpsc::channel::<HotkeyReport>();
     let join = thread::Builder::new()
         .name("krova-hotkeys".into())
-        .spawn(move || hotkey_thread(raw, spec, &sink, &ready_tx))
+        .spawn(move || hotkey_thread(raw, &spec, &sink, &ready_tx))
         .map_err(|e| PlatformError::Os(e.to_string()))?;
 
     match ready_rx.recv_timeout(Duration::from_secs(2)) {
@@ -263,7 +306,7 @@ fn window_id(h: HWND) -> WindowId {
 }
 
 /// Called by Windows on the watcher thread (during `PeekMessageW`) for every
-/// move/size loop start and end, in any other process.
+/// window event in the hooked ranges, in any other process.
 unsafe extern "system" fn win_event_proc(
     _hook: HWINEVENTHOOK,
     event: u32,
@@ -280,8 +323,25 @@ unsafe extern "system" fn win_event_proc(
     match event {
         EVENT_SYSTEM_MOVESIZESTART => emit(WatchEvent::MoveSizeStart(window_id(hwnd))),
         EVENT_SYSTEM_MOVESIZEEND => emit(WatchEvent::MoveSizeEnd(window_id(hwnd))),
+        EVENT_SYSTEM_FOREGROUND => emit(WatchEvent::Foreground(window_id(hwnd))),
+        EVENT_SYSTEM_MINIMIZESTART => emit(WatchEvent::WindowMinimized(window_id(hwnd))),
+        EVENT_SYSTEM_MINIMIZEEND => emit(WatchEvent::WindowRestored(window_id(hwnd))),
+        // A destroyed handle cannot be asked whether it was top level; the engine
+        // ignores handles it does not track.
+        EVENT_OBJECT_DESTROY => emit(WatchEvent::WindowGone(window_id(hwnd))),
+        EVENT_OBJECT_HIDE if is_top_level(hwnd) => emit(WatchEvent::WindowGone(window_id(hwnd))),
+        EVENT_OBJECT_SHOW | EVENT_OBJECT_UNCLOAKED if is_top_level(hwnd) => {
+            emit(WatchEvent::WindowShown(window_id(hwnd)));
+        }
         _ => {}
     }
+}
+
+/// A top-level window (its own root), as opposed to a control inside one.
+fn is_top_level(hwnd: HWND) -> bool {
+    // SAFETY: GetAncestor is harmless on any handle; it returns null for a gone one.
+    let root = unsafe { GetAncestor(hwnd, GA_ROOT) };
+    root == hwnd
 }
 
 /// Window procedure of the hidden top-level window that receives the broadcast
@@ -292,6 +352,11 @@ unsafe extern "system" fn watch_wnd_proc(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
+    // Another program can post WM_CLOSE to any window it can enumerate; the default
+    // handling would destroy this one and Krova would stop hearing about displays.
+    if msg == WM_CLOSE {
+        return LRESULT(0);
+    }
     let display_may_have_changed = match msg {
         WM_DISPLAYCHANGE => true,
         WM_SETTINGCHANGE => wparam.0 == SPI_SETWORKAREA.0 as usize,
@@ -349,37 +414,57 @@ fn watch_thread(stop: usize, ready: &mpsc::Sender<Result<(), String>>) {
             return;
         }
     };
-    // SAFETY: out-of-context hook with a plain function callback; it is removed
-    // below, on this same thread, before the thread ends.
-    let hook = unsafe {
-        SetWinEventHook(
-            EVENT_SYSTEM_MOVESIZESTART,
-            EVENT_SYSTEM_MOVESIZEEND,
-            HMODULE::default(),
-            Some(win_event_proc),
-            0,
-            0,
-            WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
-        )
-    };
-    if hook.is_invalid() {
-        let _ = ready.send(Err("SetWinEventHook failed".into()));
-        // SAFETY: destroys the window created above, on its own thread.
-        let _ = unsafe { DestroyWindow(window) };
-        return;
+    // Three event ranges: the system events from "foreground changed" to "minimize
+    // ended" (move/size loops included), "destroyed / shown / hidden", and
+    // "cloaked / uncloaked". Everything else in a range is dropped by the callback.
+    let ranges = [
+        (EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_MINIMIZEEND),
+        (EVENT_OBJECT_DESTROY, EVENT_OBJECT_HIDE),
+        (EVENT_OBJECT_CLOAKED, EVENT_OBJECT_UNCLOAKED),
+    ];
+    let mut hooks = Vec::with_capacity(ranges.len());
+    for (min, max) in ranges {
+        // SAFETY: out-of-context hook with a plain function callback; it is removed
+        // below, on this same thread, before the thread ends.
+        let hook = unsafe {
+            SetWinEventHook(
+                min,
+                max,
+                HMODULE::default(),
+                Some(win_event_proc),
+                0,
+                0,
+                WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
+            )
+        };
+        if hook.is_invalid() {
+            let _ = ready.send(Err("SetWinEventHook failed".into()));
+            // SAFETY: removes what was created above, on its own thread.
+            unsafe {
+                for h in hooks {
+                    let _ = UnhookWinEvent(h);
+                }
+                let _ = DestroyWindow(window);
+            }
+            return;
+        }
+        hooks.push(hook);
     }
     let _ = ready.send(Ok(()));
 
     pump(stop, dispatch);
 
-    // SAFETY: removes the hook and window created above, on their own thread.
+    // SAFETY: removes the hooks and window created above, on their own thread.
     unsafe {
-        let _ = UnhookWinEvent(hook);
+        for h in hooks {
+            let _ = UnhookWinEvent(h);
+        }
         let _ = DestroyWindow(window);
     }
 }
 
-/// Watch for window move/size loops (any process but ours) and display changes.
+/// Watch for window move/size loops, windows shown, hidden, destroyed, minimized,
+/// restored and focused (any process but ours), and display changes.
 /// Only one watcher can run at a time.
 pub fn start_watcher(sink: EventSink<WatchEvent>) -> Result<WatchHandle, PlatformError> {
     {
@@ -452,30 +537,15 @@ mod tests {
 
     #[test]
     fn modifier_chords_map_to_the_right_bits() {
+        let bits = |s: &str| modifier_bits(s.parse::<Chord>().unwrap());
+        assert_eq!(bits("Ctrl+Alt+Left"), MOD_CONTROL.0 | MOD_ALT.0);
+        assert_eq!(bits("Win+Alt+3"), MOD_WIN.0 | MOD_ALT.0);
         assert_eq!(
-            modifier_bits(ShortcutModifier::CtrlAlt),
-            MOD_CONTROL.0 | MOD_ALT.0
-        );
-        assert_eq!(
-            modifier_bits(ShortcutModifier::WinAlt),
-            MOD_WIN.0 | MOD_ALT.0
-        );
-        assert_eq!(
-            modifier_bits(ShortcutModifier::CtrlAltShift),
+            bits("Ctrl+Alt+Shift+Up"),
             MOD_CONTROL.0 | MOD_ALT.0 | MOD_SHIFT.0
         );
-        assert_eq!(
-            modifier_bits(ShortcutModifier::WinCtrl),
-            MOD_WIN.0 | MOD_CONTROL.0
-        );
-        for m in [
-            ShortcutModifier::CtrlAlt,
-            ShortcutModifier::WinAlt,
-            ShortcutModifier::CtrlAltShift,
-            ShortcutModifier::WinCtrl,
-        ] {
-            assert_eq!(modifier_bits(m) & MOD_NOREPEAT.0, 0);
-        }
+        assert_eq!(bits("Win+Ctrl+Right"), MOD_WIN.0 | MOD_CONTROL.0);
+        assert_eq!(bits("Ctrl+Alt+Shift+Win+F1") & MOD_NOREPEAT.0, 0);
     }
 
     #[test]
@@ -486,12 +556,21 @@ mod tests {
         assert_eq!(virtual_key(Key::Digit(1)), 0x31);
         assert_eq!(virtual_key(Key::Digit(9)), 0x39);
         assert_eq!(virtual_key(Key::Space), 0x20);
+        assert_eq!(virtual_key(Key::Down), 0x28);
+        assert_eq!(virtual_key(Key::Letter('T')), 0x54);
+        assert_eq!(virtual_key(Key::F(1)), 0x70);
+        assert_eq!(virtual_key(Key::F(12)), 0x7B);
+        assert_eq!(virtual_key(Key::Enter), 0x0D);
+        assert_eq!(virtual_key(Key::Slash), 0xBF);
+        assert_eq!(virtual_key(Key::BracketLeft), 0xDB);
+        assert_eq!(virtual_key(Key::BracketRight), 0xDD);
     }
 
     #[test]
     fn the_watcher_starts_reports_nothing_idle_and_stops() {
         use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::Arc;
+        let _turn = take_turn();
         let seen = Arc::new(AtomicUsize::new(0));
         let counter = Arc::clone(&seen);
         let handle = start_watcher(Arc::new(move |_| {
@@ -506,25 +585,87 @@ mod tests {
         drop(again);
     }
 
+    /// The watcher's hidden window, found by class name (this process only has one).
+    fn find_watch_window() -> Option<HWND> {
+        use windows::Win32::UI::WindowsAndMessaging::FindWindowW;
+        let class: Vec<u16> = "KrovaDisplayWatch\0".encode_utf16().collect();
+        // SAFETY: the class name buffer is NUL-terminated and outlives the call.
+        unsafe { FindWindowW(PCWSTR(class.as_ptr()), PCWSTR::null()) }.ok()
+    }
+
+    #[test]
+    fn the_watcher_window_ignores_wm_close_from_other_programs() {
+        use std::sync::Arc;
+        use windows::Win32::UI::WindowsAndMessaging::{
+            IsWindow, SendMessageTimeoutW, SMTO_ABORTIFHUNG,
+        };
+        let _turn = take_turn();
+        let handle = start_watcher(Arc::new(|_| {})).expect("watcher starts");
+        let window = find_watch_window().expect("the watcher has a window");
+        for _ in 0..3 {
+            // SAFETY: a plain cross-thread send to a window this process owns; the
+            // watcher thread pumps messages, and the timeout bounds the wait.
+            let sent = unsafe {
+                SendMessageTimeoutW(
+                    window,
+                    WM_CLOSE,
+                    WPARAM(0),
+                    LPARAM(0),
+                    SMTO_ABORTIFHUNG,
+                    2000,
+                    None,
+                )
+            };
+            assert_ne!(sent.0, 0, "the window answered");
+        }
+        // SAFETY: IsWindow is harmless on any handle.
+        assert!(
+            unsafe { IsWindow(window) }.as_bool(),
+            "WM_CLOSE must not destroy the watcher's window"
+        );
+        drop(handle);
+        // A normal stop still removes it.
+        assert!(find_watch_window().is_none());
+    }
+
+    #[test]
+    fn a_window_has_an_owner_that_is_stable_and_names_this_process() {
+        use crate::Platform;
+        use std::sync::Arc;
+        let _turn = take_turn();
+        let handle = start_watcher(Arc::new(|_| {})).expect("watcher starts");
+        let window = find_watch_window().expect("the watcher has a window");
+        let platform = crate::win::WindowsPlatform::new();
+        let id = WindowId(window.0 as usize as u64);
+        let first = platform.window_owner(id).expect("own process is readable");
+        let second = platform.window_owner(id).expect("and again");
+        assert_eq!(first, second, "the owner does not change between readings");
+        assert_eq!(first.pid, std::process::id());
+        assert!(first.started > 0);
+        drop(handle);
+        assert_eq!(
+            platform.window_owner(id),
+            None,
+            "a destroyed window has no owner"
+        );
+        assert_eq!(platform.window_owner(WindowId(0)), None);
+    }
+
     #[test]
     fn hotkeys_register_and_unregister_cleanly() {
         use std::sync::Arc;
         let _turn = take_turn();
         // Whatever the OS refuses is reported, never an error; dropping stops the thread.
-        let spec = HotkeySpec {
-            modifier: ShortcutModifier::CtrlAltShift,
-            window_moves: true,
-            switcher: true,
-        };
-        let handle = start_hotkeys(spec, Arc::new(|_| {})).expect("thread starts");
+        let spec = default_spec();
+        let handle = start_hotkeys(spec.clone(), Arc::new(|_| {})).expect("thread starts");
         assert_eq!(
             handle.registered() + handle.failed().len(),
-            spec.defs().len()
+            spec.bindings.len()
         );
-        assert_eq!(spec.defs().len(), 13);
+        assert_eq!(spec.bindings.len(), 33);
         let refused_first = handle.failed().len();
         drop(handle);
-        // The same chord can be registered again right away: the first
+        // The same chords can be registered again right away: the first
         // registrations were released when the thread ended.
         let handle = start_hotkeys(spec, Arc::new(|_| {})).expect("thread starts again");
         assert_eq!(
@@ -535,68 +676,97 @@ mod tests {
         );
     }
 
-    #[test]
-    fn each_group_registers_on_its_own() {
-        use std::sync::Arc;
-        let _turn = take_turn();
-        let only = |window_moves, switcher| {
-            let spec = HotkeySpec {
-                modifier: ShortcutModifier::CtrlAltShift,
-                window_moves,
-                switcher,
-            };
-            let handle = start_hotkeys(spec, Arc::new(|_| {})).expect("thread starts");
-            let (moves, space) = (handle.window_moves(), handle.switcher());
-            // Whatever the OS refuses is reported; a group that was not asked for is empty.
-            assert_eq!(
-                moves.registered + moves.failed.len(),
-                usize::from(window_moves) * 12
-            );
-            assert_eq!(space.registered + space.failed.len(), usize::from(switcher));
-            drop(handle);
-        };
-        only(true, false);
-        only(false, true);
-        only(false, false);
+    fn default_spec() -> HotkeySpec {
+        use crate::hotkeys::HotkeyBinding;
+        HotkeySpec {
+            bindings: krova_core::shortcuts::ShortcutMap::new()
+                .effective()
+                .into_iter()
+                .filter_map(|(action, chord)| {
+                    Some(HotkeyBinding {
+                        action,
+                        chord: chord?,
+                    })
+                })
+                .collect(),
+        }
     }
 
-    /// Which `<mods>+Space` chords this PC's Windows lets a program register. Prints
-    /// a table (`-- --ignored --nocapture`); it asserts only for the default chord,
-    /// and is ignored because another running program may legitimately own it.
     #[test]
-    #[ignore = "depends on the programs running on this PC; run by hand"]
-    fn space_chords_probe() {
+    fn a_probe_releases_the_chord_and_sees_a_held_one() {
+        use crate::hotkeys::HotkeyBinding;
         use std::sync::Arc;
         let _turn = take_turn();
-        for modifier in [
-            ShortcutModifier::CtrlAlt,
-            ShortcutModifier::WinAlt,
-            ShortcutModifier::CtrlAltShift,
-            ShortcutModifier::WinCtrl,
-        ] {
-            let spec = HotkeySpec {
-                modifier,
-                window_moves: false,
-                switcher: true,
-            };
-            let handle = start_hotkeys(spec, Arc::new(|_| {})).expect("thread starts");
-            let report = handle.switcher();
-            println!(
-                "{:>15}+Space: {}",
-                modifier.label(),
-                if report.registered == 1 {
-                    "registered".to_owned()
+        // An unusual chord nobody holds.
+        let chord: Chord = "Ctrl+Alt+Shift+Win+F11".parse().unwrap();
+        let first = probe_hotkey(chord).expect("probe works");
+        if !first {
+            println!("SKIPPED: something on this PC holds {chord}");
+            return;
+        }
+        // The probe released it: probing again finds it free.
+        assert!(probe_hotkey(chord).unwrap());
+        // While Krova's own shortcut thread holds it, it is not free.
+        let spec = HotkeySpec {
+            bindings: vec![HotkeyBinding {
+                action: ShortcutAction::Focus,
+                chord,
+            }],
+        };
+        let handle = start_hotkeys(spec, Arc::new(|_| {})).expect("thread starts");
+        assert!(handle.is_registered(ShortcutAction::Focus));
+        assert!(!probe_hotkey(chord).unwrap());
+        drop(handle);
+        assert!(probe_hotkey(chord).unwrap());
+    }
+
+    /// Which of the default chords this PC's Windows lets a program register. Prints
+    /// a table (`-- --ignored --nocapture`); ignored because other running programs
+    /// (IDEs, graphics drivers) may legitimately own some of them.
+    #[test]
+    #[ignore = "depends on the programs running on this PC; run by hand"]
+    fn default_chords_probe() {
+        let _turn = take_turn();
+        for b in default_spec().bindings {
+            let free = probe_hotkey(b.chord).map_or("error".to_owned(), |f| {
+                if f {
+                    "free".to_owned()
                 } else {
-                    report.failed.join("; ")
+                    "in use".to_owned()
                 }
-            );
-            if modifier == ShortcutModifier::CtrlAltShift {
-                assert_eq!(
-                    report.registered, 1,
-                    "the default chord: {:?}",
-                    report.failed
-                );
+            });
+            println!("{:>24}: {free}", b.chord.to_string());
+        }
+    }
+
+    #[test]
+    #[ignore = "opens and closes Notepad; needs an interactive desktop session"]
+    fn the_watcher_reports_a_window_shown_focused_and_gone() {
+        use std::sync::mpsc;
+        use std::sync::Arc;
+        use std::time::Instant;
+        let _turn = take_turn();
+        let (tx, rx) = mpsc::channel();
+        let handle = start_watcher(Arc::new(move |e| {
+            let _ = tx.send(e);
+        }))
+        .expect("watcher starts");
+        let mut child = std::process::Command::new("notepad.exe")
+            .spawn()
+            .expect("notepad starts");
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let (mut shown, mut focused) = (false, false);
+        while Instant::now() < deadline && !(shown && focused) {
+            match rx.recv_timeout(Duration::from_millis(200)) {
+                Ok(WatchEvent::WindowShown(_)) => shown = true,
+                Ok(WatchEvent::Foreground(_)) => focused = true,
+                _ => {}
             }
         }
+        let _ = child.kill();
+        let _ = child.wait();
+        drop(handle);
+        assert!(shown, "a shown event arrived");
+        assert!(focused, "a foreground event arrived");
     }
 }

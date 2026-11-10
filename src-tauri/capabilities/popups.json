@@ -1,0 +1,15 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "popups",
+  "description": "The quick panel and the layout switcher / cheat sheet windows: core defaults plus emitting to a window and placing, showing, hiding and focusing themselves. App commands are our own (all of them are callable from these windows, as from main: there is no per-command app manifest yet, see SECURITY-REVIEW F-08); no fs, shell or http plugins are enabled.",
+  "windows": ["panel", "switcher"],
+  "permissions": [
+    "core:default",
+    "core:event:allow-emit-to",
+    "core:window:allow-set-size",
+    "core:window:allow-set-position",
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-focus"
+  ]
+}

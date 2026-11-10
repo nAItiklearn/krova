@@ -4,9 +4,13 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+use crate::app_rules::AppRules;
+use crate::arrange::ArrangeSettings;
 use crate::geometry::PxRect;
 use crate::monitor::{match_monitors, MonitorDescriptor};
-use crate::zone::{templates, Layout};
+use crate::presets::{MainSize, PresetFamily, PresetSpec, PresetVariant};
+use crate::shortcuts::ShortcutMap;
+use crate::zone::{has_hidden_char, strip_hidden, templates, Layout};
 
 pub const SCHEMA_VERSION: u32 = 1;
 
@@ -25,6 +29,10 @@ pub enum ConfigError {
     Json(#[from] serde_json::Error),
     #[error("config schema {found} is newer than supported {supported}")]
     TooNew { found: u32, supported: u32 },
+    /// What would be written is larger than a file Krova is willing to read back, so
+    /// the next start would set it aside as corrupt and lose it. Nothing is written.
+    #[error("the config is too large to save ({size} bytes; the limit is {limit})")]
+    TooLarge { size: u64, limit: u64 },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,6 +103,54 @@ impl ShortcutModifier {
 /// Largest gap (in pixels) between zones and around the screen edge.
 pub const MAX_ZONE_GAP_PX: i32 = 32;
 
+/// Default accent colour of every native overlay (zones, stack tabs, the notch).
+pub const DEFAULT_ACCENT: &str = "#ff5b1f";
+/// Largest corner radius, in logical pixels.
+pub const MAX_CORNER_RADIUS_PX: i32 = 16;
+/// Border width range of the zone overlay, in logical pixels.
+pub const MIN_BORDER_WIDTH_PX: i32 = 1;
+pub const MAX_BORDER_WIDTH_PX: i32 = 6;
+
+/// How Krova's native overlays look. `highlight_opacity` stays the opacity.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Appearance {
+    /// `#rrggbb`, lower case.
+    pub accent: String,
+    /// `0..=16`.
+    pub corner_radius_px: i32,
+    /// `1..=6`; the highlighted zone uses twice this.
+    pub border_width_px: i32,
+}
+
+impl Default for Appearance {
+    fn default() -> Self {
+        Self {
+            accent: DEFAULT_ACCENT.to_owned(),
+            corner_radius_px: 10,
+            border_width_px: 2,
+        }
+    }
+}
+
+impl Appearance {
+    pub fn sanitized(mut self) -> Self {
+        self.accent =
+            normalize_hex_color(&self.accent).unwrap_or_else(|| DEFAULT_ACCENT.to_owned());
+        self.corner_radius_px = self.corner_radius_px.clamp(0, MAX_CORNER_RADIUS_PX);
+        self.border_width_px = self
+            .border_width_px
+            .clamp(MIN_BORDER_WIDTH_PX, MAX_BORDER_WIDTH_PX);
+        self
+    }
+
+    /// The accent as RGB.
+    pub fn accent_rgb(&self) -> [u8; 3] {
+        let hex = normalize_hex_color(&self.accent).unwrap_or_else(|| DEFAULT_ACCENT.to_owned());
+        let byte = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).unwrap_or(0);
+        [byte(1), byte(3), byte(5)]
+    }
+}
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -119,6 +175,41 @@ pub struct Settings {
     /// `<shortcut_modifier>+Space` opens the layout switcher on the monitor under
     /// the cursor. Independent of `keyboard_shortcuts`.
     pub layout_switcher_shortcut: bool,
+    // --- wave3 ---
+    /// Focus dim (off by default).
+    pub focus: crate::focus::FocusSettings,
+    /// Calm desk options.
+    pub calm_desk: crate::focus::CalmDeskSettings,
+    /// While on, Krova's overlays show only zone shapes, never app names or icons.
+    pub share_safe: bool,
+    /// Window highlight (none by default).
+    pub highlight: crate::focus::HighlightSettings,
+    // --- end wave3 ---
+    // --- wave4 ---
+    /// Activate the window under the cursor once it rests (opt-in).
+    pub focus_follows_mouse: bool,
+    /// How long the cursor rests first, in ms (150..=800).
+    pub focus_follows_mouse_delay_ms: i32,
+    /// The activation modifier held over a title bar opens a small zone picker.
+    pub hover_picker: bool,
+    /// Language of the native strings: "system", "en", "es", "de", "ja", "zh-Hans".
+    pub language: String,
+    // --- end wave4 ---
+    // --- notch ---
+    /// The notch at a screen edge (see `crate::notch`). Lenient: a bad value
+    /// falls back to the defaults field by field.
+    pub notch: crate::notch::NotchSettings,
+    // --- notch ---
+    // --- corners ---
+    /// What each outer screen corner does when the cursor rests in it.
+    pub hot_corners: crate::corners::HotCornerSettings,
+    /// Per-program rules (by executable file name, never a title). A plain array.
+    pub app_rules: AppRules,
+    /// Changes to the default shortcut map (`action id -> chord | null`). Replaces
+    /// `shortcut_modifier`, which is kept only so an older file can be migrated.
+    pub shortcuts: ShortcutMap,
+    /// Accent, corner radius and border width of the native overlays.
+    pub appearance: Appearance,
 }
 
 /// `#rrggbb` (any case, optional `#`, surrounding spaces ignored) as lowercase `#rrggbb`.
@@ -142,8 +233,22 @@ impl Settings {
         };
         self.edge_size_px = self.edge_size_px.clamp(2, 64);
         self.zone_gap_px = self.zone_gap_px.clamp(0, MAX_ZONE_GAP_PX);
+        // --- wave4 ---
+        self.focus_follows_mouse_delay_ms =
+            crate::ffm::clamp_delay(self.focus_follows_mouse_delay_ms);
+        self.language = crate::i18n::sanitize_language(&self.language);
+        // --- end wave4 ---
+        // --- corners ---
+        self.hot_corners = self.hot_corners.sanitized();
         self.highlight_color =
             normalize_hex_color(&self.highlight_color).unwrap_or(defaults.highlight_color);
+        // --- wave3 ---
+        self.focus = self.focus.sanitized();
+        self.highlight = self.highlight.sanitized();
+        // --- end wave3 ---
+        self.app_rules = self.app_rules.sanitized();
+        self.shortcuts = self.shortcuts.sanitized();
+        self.appearance = self.appearance.sanitized();
         self
     }
 }
@@ -153,7 +258,7 @@ impl Default for Settings {
         Self {
             enabled: true,
             modifier: Modifier::Shift,
-            highlight_color: "#3b82f6".to_owned(),
+            highlight_color: DEFAULT_ACCENT.to_owned(),
             highlight_opacity: 0.35,
             move_mode: MoveMode::Animate,
             edge_snapping: false,
@@ -166,6 +271,26 @@ impl Default for Settings {
             linked_dividers: true,
             zone_gap_px: 0,
             layout_switcher_shortcut: true,
+            // --- wave3 ---
+            focus: crate::focus::FocusSettings::default(),
+            calm_desk: crate::focus::CalmDeskSettings::default(),
+            share_safe: false,
+            highlight: crate::focus::HighlightSettings::default(),
+            // --- end wave3 ---
+            // --- wave4 ---
+            focus_follows_mouse: false,
+            focus_follows_mouse_delay_ms: crate::ffm::DEFAULT_DELAY_MS,
+            hover_picker: false,
+            language: crate::i18n::SYSTEM.to_owned(),
+            // --- end wave4 ---
+            // --- notch ---
+            notch: crate::notch::NotchSettings::default(),
+            // --- notch ---
+            // --- corners ---
+            hot_corners: crate::corners::HotCornerSettings::default(),
+            app_rules: AppRules::default(),
+            shortcuts: ShortcutMap::default(),
+            appearance: Appearance::default(),
         }
     }
 }
@@ -179,6 +304,18 @@ pub struct MonitorProfile {
     pub last_rect: PxRect,
     pub layouts: Vec<Layout>,
     pub active_layout: String,
+    // --- wave4 ---
+    /// Edges kept free for third-party docks and bars (logical px, `edges.rs`).
+    #[serde(default)]
+    pub reserved: crate::edges::ReservedEdges,
+    // --- end wave4 ---
+    /// Auto-arrange on this monitor. On by default (missing in older files: on).
+    #[serde(default)]
+    pub auto_arrange: ArrangeSettings,
+    /// The first-run preset was offered to this profile (see
+    /// [`MonitorProfile::seed_preset`]); it is never offered again.
+    #[serde(default)]
+    pub preset_seeded: bool,
 }
 
 impl MonitorProfile {
@@ -191,7 +328,44 @@ impl MonitorProfile {
             last_rect: d.rect,
             layouts: templates(),
             active_layout: "halves".to_owned(),
+            // --- wave4 ---
+            reserved: crate::edges::ReservedEdges::default(),
+            // --- end wave4 ---
+            auto_arrange: ArrangeSettings::default(),
+            preset_seeded: false,
         }
+    }
+
+    /// The preset a monitor of this size starts with: main + side for three windows,
+    /// in the shape of the screen (landscape, ultrawide or portrait).
+    pub fn first_run_preset(width: i32, height: i32) -> PresetSpec {
+        PresetSpec::new(
+            PresetFamily::MainSide,
+            3,
+            PresetVariant::for_size(width, height),
+            MainSize::Sixty,
+        )
+    }
+
+    /// First run: a profile that still holds exactly the built-in layouts, with the
+    /// first one active, gets the preset that fits the monitor's shape added in front
+    /// and made active, so Krova tiles out of the box. Done once per profile; a
+    /// profile the user has already changed is only marked. Returns whether a layout
+    /// was added.
+    pub fn seed_preset(&mut self, width: i32, height: i32) -> bool {
+        if self.preset_seeded {
+            return false;
+        }
+        self.preset_seeded = true;
+        if self.layouts != templates() || self.active_layout != "halves" {
+            return false;
+        }
+        let Ok(layout) = Self::first_run_preset(width, height).layout() else {
+            return false;
+        };
+        self.active_layout = layout.id.clone();
+        self.layouts.insert(0, layout);
+        true
     }
 
     pub fn descriptor(&self) -> MonitorDescriptor {
@@ -208,7 +382,20 @@ impl MonitorProfile {
 
     /// Drop invalid layouts, reseed if none are left, repair a dangling active id.
     fn sanitize(&mut self) {
-        self.layouts.retain(|l| l.validate().is_ok());
+        // Invisible characters in a name are removed rather than costing the user
+        // the whole layout; a layout that stays invalid after that is dropped.
+        for l in &mut self.layouts {
+            if has_hidden_char(&l.id) || has_hidden_char(&l.name) {
+                l.id = strip_hidden(&l.id);
+                l.name = strip_hidden(&l.name);
+            }
+        }
+        let mut seen = std::collections::HashSet::new();
+        self.layouts
+            .retain(|l| l.validate().is_ok() && seen.insert(l.id.clone()));
+        if has_hidden_char(&self.active_layout) {
+            self.active_layout = strip_hidden(&self.active_layout);
+        }
         self.layouts.truncate(MAX_LAYOUTS_PER_MONITOR);
         if self.layouts.is_empty() {
             self.layouts = templates();
@@ -216,6 +403,9 @@ impl MonitorProfile {
         if self.active().is_none() {
             self.active_layout = self.layouts[0].id.clone();
         }
+        // --- wave4 ---
+        self.reserved = self.reserved.sanitized();
+        // --- end wave4 ---
     }
 }
 
@@ -225,6 +415,10 @@ pub struct Config {
     pub schema_version: u32,
     pub settings: Settings,
     pub monitors: Vec<MonitorProfile>,
+    // --- wave3 ---
+    /// Saved workspaces (programs by executable path, in zones). At most 32.
+    pub workspaces: Vec<crate::workspace::Workspace>,
+    // --- end wave3 ---
 }
 
 impl Default for Config {
@@ -233,6 +427,9 @@ impl Default for Config {
             schema_version: SCHEMA_VERSION,
             settings: Settings::default(),
             monitors: Vec::new(),
+            // --- wave3 ---
+            workspaces: Vec::new(),
+            // --- end wave3 ---
         }
     }
 }
@@ -265,17 +462,40 @@ impl Config {
                 supported: SCHEMA_VERSION,
             });
         }
+        // Before the shortcut map existed, one modifier applied to every shortcut.
+        let had_shortcut_map = value
+            .get("settings")
+            .and_then(|s| s.get("shortcuts"))
+            .is_some();
+        let value_had_appearance = value
+            .get("settings")
+            .and_then(|s| s.get("appearance"))
+            .is_some();
         let mut cfg: Config = match serde_json::from_value(value) {
             Ok(c) => c,
             Err(_) => return Self::quarantine(path),
         };
         // Migrations from older versions would run here, keyed on `found`.
+        // Before `appearance`, the zone overlay used `highlight_color`: a colour the
+        // user picked then (anything but the old blue default) becomes the accent.
+        let had_appearance = value_had_appearance;
+        if !had_appearance && !cfg.settings.highlight_color.eq_ignore_ascii_case("#3b82f6") {
+            if let Some(c) = normalize_hex_color(&cfg.settings.highlight_color) {
+                cfg.settings.appearance.accent = c;
+            }
+        }
+        if !had_shortcut_map {
+            cfg.settings.shortcuts = ShortcutMap::migrated_from(cfg.settings.shortcut_modifier);
+        }
         cfg.schema_version = SCHEMA_VERSION;
         cfg.settings = cfg.settings.sanitized();
         cfg.monitors.truncate(MAX_MONITORS);
         for m in &mut cfg.monitors {
             m.sanitize();
         }
+        // --- wave3 ---
+        crate::workspace::sanitize_workspaces(&mut cfg.workspaces);
+        // --- end wave3 ---
         Ok((cfg, LoadStatus::Loaded))
     }
 
@@ -291,6 +511,13 @@ impl Config {
         }
         let tmp = path.with_extension("json.tmp");
         let json = serde_json::to_vec_pretty(self)?;
+        // Never write what `load` would refuse to read: that would lose the config.
+        if json.len() as u64 > MAX_CONFIG_BYTES {
+            return Err(ConfigError::TooLarge {
+                size: json.len() as u64,
+                limit: MAX_CONFIG_BYTES,
+            });
+        }
         {
             let mut f = fs::File::create(&tmp)?;
             f.write_all(&json)?;
@@ -310,10 +537,12 @@ impl Config {
             .iter()
             .map(MonitorProfile::descriptor)
             .collect();
-        let matches = match_monitors(current, &stored);
+        let mut matches = match_monitors(current, &stored);
+        // Profiles in use right now: never evicted to make room for a new one.
+        let mut in_use: Vec<usize> = matches.iter().flatten().copied().collect();
         let mut out = Vec::with_capacity(current.len());
-        for (d, m) in current.iter().zip(matches) {
-            let idx = match m {
+        for (k, d) in current.iter().enumerate() {
+            let idx = match matches[k] {
                 Some(i) => {
                     let p = &mut self.monitors[i];
                     p.last_rect = d.rect;
@@ -326,9 +555,32 @@ impl Config {
                     i
                 }
                 None => {
+                    // At the cap, the oldest profile of a monitor that is not
+                    // connected makes room. With nothing to evict (more monitors
+                    // are connected than the cap allows) the rest get no profile.
+                    if self.monitors.len() >= MAX_MONITORS {
+                        let Some(evict) = (0..self.monitors.len()).find(|i| !in_use.contains(i))
+                        else {
+                            break;
+                        };
+                        self.monitors.remove(evict);
+                        // Every index above the removed profile moves down by one.
+                        for used in in_use.iter_mut().chain(out.iter_mut()) {
+                            if *used > evict {
+                                *used -= 1;
+                            }
+                        }
+                        for slot in matches.iter_mut().flatten() {
+                            if *slot > evict {
+                                *slot -= 1;
+                            }
+                        }
+                    }
                     let id = self.next_monitor_id();
                     self.monitors.push(MonitorProfile::from_descriptor(id, d));
-                    self.monitors.len() - 1
+                    let new = self.monitors.len() - 1;
+                    in_use.push(new);
+                    new
                 }
             };
             out.push(idx);
@@ -456,6 +708,16 @@ impl Config {
             return Err(ProfileError::NoSuchLayout(layout_id.to_owned()));
         }
         p.active_layout = layout_id.to_owned();
+        Ok(())
+    }
+
+    /// Replace a monitor's auto-arrange settings.
+    pub fn set_auto_arrange(
+        &mut self,
+        monitor_id: &str,
+        settings: ArrangeSettings,
+    ) -> Result<(), ProfileError> {
+        self.profile_mut(monitor_id)?.auto_arrange = settings;
         Ok(())
     }
 }
@@ -833,7 +1095,7 @@ mod hardening_tests {
         assert_eq!(st, LoadStatus::Loaded);
         assert_eq!(c.settings.highlight_opacity, 1.0);
         assert_eq!(c.settings.edge_size_px, 64);
-        assert_eq!(c.settings.highlight_color, "#3b82f6");
+        assert_eq!(c.settings.highlight_color, "#ff5b1f");
     }
 
     #[test]
@@ -995,8 +1257,15 @@ mod hardening_tests {
         let dir = tempfile::tempdir().unwrap();
         let p = dir.path().join("config.json");
         let mut c = Config::default();
-        for i in 0..MAX_MONITORS + 5 {
+        for i in 0..MAX_MONITORS {
             c.resolve_monitors(&[one_monitor(&format!("HW{i}"))]);
+        }
+        // `resolve_monitors` keeps to the cap itself, so an oversized file (written by
+        // hand or by another version) is built directly.
+        for i in 0..5 {
+            let mut extra = c.monitors[0].clone();
+            extra.id = format!("extra-{i}");
+            c.monitors.push(extra);
         }
         assert!(c.monitors.len() > MAX_MONITORS);
         for i in 0..MAX_LAYOUTS_PER_MONITOR + 5 {
@@ -1151,5 +1420,330 @@ mod tests {
         assert_eq!(ids.len(), 2);
         assert_ne!(ids[0], ids[1]);
         assert!(c.monitors[1].active().is_some());
+    }
+
+    #[test]
+    fn profiles_are_capped_and_the_oldest_disconnected_one_makes_room() {
+        let mut c = Config::default();
+        // Fill the cap with monitors one after the other (each unplugged later).
+        for n in 0..MAX_MONITORS {
+            c.resolve_monitors(&[desc(&format!("HW{n}"), 0)]);
+        }
+        assert_eq!(c.monitors.len(), MAX_MONITORS);
+        assert_eq!(c.monitors[0].hardware_id.as_deref(), Some("HW0"));
+
+        // A brand-new monitor: the oldest profile (HW0) is dropped, the newest stays.
+        let idx = c.resolve_monitors(&[desc("NEW", 0)]);
+        assert_eq!(c.monitors.len(), MAX_MONITORS, "never above the cap");
+        assert_eq!(idx.len(), 1);
+        assert_eq!(c.monitors[idx[0]].hardware_id.as_deref(), Some("NEW"));
+        assert!(c
+            .monitors
+            .iter()
+            .all(|m| m.hardware_id.as_deref() != Some("HW0")));
+        assert!(c
+            .monitors
+            .iter()
+            .any(|m| m.hardware_id.as_deref() == Some("HW1")));
+    }
+
+    #[test]
+    fn a_connected_monitor_is_never_evicted_to_make_room() {
+        let mut c = Config::default();
+        for n in 0..MAX_MONITORS {
+            c.resolve_monitors(&[desc(&format!("HW{n}"), 0)]);
+        }
+        // HW0 is the oldest, but it is connected right now together with a new one.
+        let idx = c.resolve_monitors(&[desc("HW0", 0), desc("NEW", 1920)]);
+        assert_eq!(c.monitors.len(), MAX_MONITORS);
+        assert_eq!(idx.len(), 2);
+        assert_eq!(c.monitors[idx[0]].hardware_id.as_deref(), Some("HW0"));
+        assert_eq!(c.monitors[idx[1]].hardware_id.as_deref(), Some("NEW"));
+        // HW1, the next oldest, was the one that left.
+        assert!(c
+            .monitors
+            .iter()
+            .all(|m| m.hardware_id.as_deref() != Some("HW1")));
+    }
+
+    #[test]
+    fn eviction_keeps_every_returned_index_pointing_at_the_right_profile() {
+        let mut c = Config::default();
+        for n in 0..MAX_MONITORS {
+            c.resolve_monitors(&[desc(&format!("HW{n}"), 0)]);
+        }
+        // Two matched monitors that sit after the evicted one, then a new monitor.
+        let idx = c.resolve_monitors(&[desc("HW10", 0), desc("HW20", 1920), desc("NEW", 3840)]);
+        let hw: Vec<_> = idx
+            .iter()
+            .map(|&i| c.monitors[i].hardware_id.clone().unwrap())
+            .collect();
+        assert_eq!(hw, ["HW10", "HW20", "NEW"]);
+        assert_eq!(c.monitors.len(), MAX_MONITORS);
+    }
+
+    #[test]
+    fn more_connected_monitors_than_the_cap_get_no_profile_instead_of_breaking_it() {
+        let mut c = Config::default();
+        let all: Vec<_> = (0..MAX_MONITORS + 5)
+            .map(|n| desc(&format!("HW{n}"), (n as i32) * 100))
+            .collect();
+        let idx = c.resolve_monitors(&all);
+        assert_eq!(c.monitors.len(), MAX_MONITORS);
+        assert_eq!(
+            idx.len(),
+            MAX_MONITORS,
+            "the rest are left without a profile"
+        );
+        for (n, &i) in idx.iter().enumerate() {
+            assert_eq!(
+                c.monitors[i].hardware_id.as_deref(),
+                Some(format!("HW{n}").as_str())
+            );
+        }
+    }
+
+    #[test]
+    fn saving_a_config_larger_than_the_load_cap_is_refused_and_writes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        let mut c = Config::default();
+        c.resolve_monitors(&[desc("A", 0)]);
+        c.save(&path).unwrap();
+        let before = std::fs::read(&path).unwrap();
+
+        // Pad the settings until the JSON is past the cap.
+        c.settings.highlight_color = "x".repeat(MAX_CONFIG_BYTES as usize + 10);
+        let err = c.save(&path).unwrap_err();
+        assert!(matches!(err, ConfigError::TooLarge { .. }), "{err}");
+        assert!(err.to_string().contains("too large"));
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            before,
+            "the old file is untouched"
+        );
+        assert!(!path.with_extension("json.tmp").exists());
+    }
+
+    #[test]
+    fn a_config_just_under_the_cap_still_round_trips() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        let mut c = Config::default();
+        c.resolve_monitors(&[desc("A", 0)]);
+        c.save(&path).unwrap();
+        let (loaded, status) = Config::load(&path).unwrap();
+        assert_eq!(status, LoadStatus::Loaded);
+        assert_eq!(loaded.monitors.len(), 1);
+        assert!(
+            std::fs::metadata(&path).unwrap().len() < MAX_CONFIG_BYTES / 100,
+            "a normal config is tiny next to the cap"
+        );
+    }
+
+    #[test]
+    fn invisible_characters_in_a_stored_layout_name_are_removed_on_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        let mut c = Config::default();
+        c.resolve_monitors(&[desc("A", 0)]);
+        c.monitors[0].layouts[0].name = "Ha\u{202E}lves\u{200B}".to_owned();
+        let json = serde_json::to_vec(&c).unwrap();
+        std::fs::write(&path, json).unwrap();
+        let (loaded, _) = Config::load(&path).unwrap();
+        let halves = loaded.monitors[0]
+            .layouts
+            .iter()
+            .find(|l| l.id == "halves")
+            .expect("the layout survives");
+        assert_eq!(halves.name, "Halves");
+    }
+
+    #[test]
+    fn a_fresh_profile_gets_the_preset_for_its_shape_once() {
+        let mut c = Config::default();
+        let idx = c.resolve_monitors(&[desc("A", 0)]);
+        let p = &mut c.monitors[idx[0]];
+        assert!(p.seed_preset(1920, 1080));
+        assert_eq!(p.active_layout, "main-side-3-60");
+        assert_eq!(p.layouts[0].id, "main-side-3-60");
+        assert_eq!(p.layouts.len(), templates().len() + 1);
+        assert!(p.active().is_some());
+        // Never twice, even if the user goes back to the old layouts.
+        assert!(!p.seed_preset(1920, 1080));
+        p.layouts = templates();
+        p.active_layout = "halves".into();
+        assert!(!p.seed_preset(1920, 1080));
+    }
+
+    #[test]
+    fn the_preset_follows_the_monitor_shape() {
+        for (w, h, id) in [
+            (3440, 1440, "main-side-3-ultrawide-60"),
+            (1080, 1920, "main-side-3-portrait-60"),
+        ] {
+            let mut c = Config::default();
+            let idx = c.resolve_monitors(&[desc("A", 0)]);
+            let p = &mut c.monitors[idx[0]];
+            assert!(p.seed_preset(w, h));
+            assert_eq!(p.active_layout, id);
+        }
+    }
+
+    #[test]
+    fn a_profile_the_user_changed_is_only_marked() {
+        let mut c = Config::default();
+        let idx = c.resolve_monitors(&[desc("A", 0)]);
+        let p = &mut c.monitors[idx[0]];
+        p.active_layout = "thirds".into();
+        assert!(!p.seed_preset(1920, 1080));
+        assert!(p.preset_seeded);
+        assert_eq!(p.layouts, templates());
+        assert_eq!(p.active_layout, "thirds");
+    }
+
+    #[test]
+    fn an_old_profile_loads_with_auto_arrange_on_and_unseeded() {
+        let json = r#"{"schema_version":1,"monitors":[{"id":"monitor-1","label":"x",
+            "hardware_id":null,"device_path":null,"last_rect":{"x":0,"y":0,"w":10,"h":10},
+            "layouts":[],"active_layout":"halves"}]}"#;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        std::fs::write(&path, json).unwrap();
+        let (c, _) = Config::load(&path).unwrap();
+        assert!(c.monitors[0].auto_arrange.enabled);
+        assert!(!c.monitors[0].preset_seeded);
+        assert!(c.settings.app_rules.is_empty());
+    }
+
+    #[test]
+    fn auto_arrange_can_be_set_per_monitor() {
+        let mut c = Config::default();
+        c.resolve_monitors(&[desc("A", 0), desc("B", 1920)]);
+        let off = ArrangeSettings {
+            enabled: false,
+            ..ArrangeSettings::default()
+        };
+        c.set_auto_arrange("monitor-2", off).unwrap();
+        assert!(c.monitors[0].auto_arrange.enabled);
+        assert!(!c.monitors[1].auto_arrange.enabled);
+        assert!(c.set_auto_arrange("monitor-9", off).is_err());
+    }
+
+    #[test]
+    fn app_rules_in_settings_are_sanitised() {
+        use crate::app_rules::{AppRule, RuleAction};
+        let json = r#"[{"exe":"a.exe","action":{"kind":"float"}},
+            {"exe":"A.EXE","action":{"kind":"never_touch"}},
+            {"exe":"dir/x.exe","action":{"kind":"float"}}]"#;
+        let rules: AppRules = serde_json::from_str(json).unwrap();
+        let s = Settings {
+            app_rules: rules,
+            ..Settings::default()
+        }
+        .sanitized();
+        assert_eq!(
+            s.app_rules.as_slice(),
+            &[AppRule::new("a.exe", RuleAction::Float)]
+        );
+    }
+
+    #[test]
+    fn an_old_win_alt_choice_becomes_shortcut_overrides_once() {
+        use crate::shortcuts::ShortcutAction;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        std::fs::write(
+            &path,
+            r#"{"schema_version":1,"settings":{"shortcut_modifier":"win_alt"},"monitors":[]}"#,
+        )
+        .unwrap();
+        let (c, _) = Config::load(&path).unwrap();
+        assert_eq!(
+            c.settings
+                .shortcuts
+                .chord(ShortcutAction::Zone(2))
+                .unwrap()
+                .to_string(),
+            "Win+Alt+2"
+        );
+        // Saved and loaded again, the map is the user's now: no second migration.
+        let mut c = c;
+        c.settings.shortcuts.reset();
+        c.save(&path).unwrap();
+        let (c, _) = Config::load(&path).unwrap();
+        assert!(c.settings.shortcuts.is_default());
+    }
+
+    #[test]
+    fn a_bad_shortcut_entry_does_not_cost_the_config() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        std::fs::write(
+            &path,
+            r#"{"schema_version":1,"settings":{"zone_gap_px":4,"shortcuts":{"pause":"Hyper+T","focus":null}},"monitors":[]}"#,
+        )
+        .unwrap();
+        let (c, status) = Config::load(&path).unwrap();
+        assert_eq!(status, LoadStatus::Loaded);
+        assert_eq!(c.settings.zone_gap_px, 4);
+        use crate::shortcuts::ShortcutAction;
+        assert_eq!(c.settings.shortcuts.chord(ShortcutAction::Focus), None);
+        assert!(c.settings.shortcuts.chord(ShortcutAction::Pause).is_some());
+    }
+
+    #[test]
+    fn appearance_defaults_and_limits() {
+        let a = Appearance::default();
+        assert_eq!(a.accent, "#ff5b1f");
+        assert_eq!((a.corner_radius_px, a.border_width_px), (10, 2));
+        assert_eq!(a.accent_rgb(), [0xff, 0x5b, 0x1f]);
+        assert_eq!(Settings::default().highlight_color, "#ff5b1f");
+        let wild = Appearance {
+            accent: "  #ABCDEF ".into(),
+            corner_radius_px: 99,
+            border_width_px: 0,
+        }
+        .sanitized();
+        assert_eq!(wild.accent, "#abcdef");
+        assert_eq!((wild.corner_radius_px, wild.border_width_px), (16, 1));
+        let bad = Appearance {
+            accent: "orange".into(),
+            corner_radius_px: -3,
+            border_width_px: 40,
+        }
+        .sanitized();
+        assert_eq!(bad.accent, "#ff5b1f");
+        assert_eq!((bad.corner_radius_px, bad.border_width_px), (0, 6));
+    }
+
+    #[test]
+    fn a_highlight_colour_picked_before_appearance_becomes_the_accent() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        std::fs::write(
+            &path,
+            r##"{"schema_version":1,"settings":{"highlight_color":"#22AA44"}}"##,
+        )
+        .unwrap();
+        let (c, _) = Config::load(&path).unwrap();
+        assert_eq!(c.settings.appearance.accent, "#22aa44");
+        // The old blue default is not a choice: the new accent applies.
+        std::fs::write(
+            &path,
+            r##"{"schema_version":1,"settings":{"highlight_color":"#3b82f6"}}"##,
+        )
+        .unwrap();
+        let (c, _) = Config::load(&path).unwrap();
+        assert_eq!(c.settings.appearance.accent, "#ff5b1f");
+        // Once an appearance is stored it wins.
+        std::fs::write(
+            &path,
+            r##"{"schema_version":1,"settings":{"highlight_color":"#22aa44","appearance":{"accent":"#0000ff"}}}"##,
+        )
+        .unwrap();
+        let (c, _) = Config::load(&path).unwrap();
+        assert_eq!(c.settings.appearance.accent, "#0000ff");
+        assert_eq!(c.settings.appearance.corner_radius_px, 10);
     }
 }

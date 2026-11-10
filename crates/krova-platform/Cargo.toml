@@ -18,13 +18,24 @@ version = "0.58"
 features = [
     "Win32_Foundation",
     "Win32_Graphics_Dwm",
+    # wave4: GetUserDefaultUILanguage (native string language)
+    "Win32_Globalization",
     "Win32_Graphics_Gdi",
     "Win32_Security",
+    # F-26: CreateFileW / GetFinalPathNameByHandleW / GetDriveTypeW (workspace launch)
+    "Win32_Storage_FileSystem",
+    # F-26: CoTaskMemFree after SHGetKnownFolderPath
+    "Win32_System_Com",
     "Win32_System_LibraryLoader",
     "Win32_System_Threading",
     "Win32_UI_Accessibility",
     "Win32_UI_HiDpi",
     "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_System_Registry", # wave3: needed by ShellExecuteExW
+    # wave3: ShellExecuteExW (workspace restore); wave4: SHQueryUserNotificationState
+    # (focus follows mouse), ShellExecuteW (updates)
+    # --- notch --- (SHQueryUserNotificationState: fullscreen detection)
+    "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ]
 
