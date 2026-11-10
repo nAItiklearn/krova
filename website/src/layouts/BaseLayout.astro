@@ -1,4 +1,5 @@
 ---
+import '@fontsource-variable/inter/wght.css';
 import '../styles/tokens.css';
 import '../styles/base.css';
 import '../styles/illustrations.css';
@@ -32,6 +33,7 @@ const csp = [
   "script-src 'self'",
   "style-src 'unsafe-inline'",
   "img-src 'self'",
+  "font-src 'self'",
   `connect-src 'self'${REPO_LINKS_ENABLED ? ' https://api.github.com' : ''}`,
   "frame-src 'self'",
   "base-uri 'none'",
@@ -48,8 +50,8 @@ const csp = [
     <title>{title}</title>
     <meta name="description" content={description} />
     <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" content="#fafafc" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#0b0c14" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
     <meta name="referrer" content="no-referrer" />
 
     <link rel="icon" href={url('/favicon.svg')} type="image/svg+xml" />
@@ -78,5 +80,16 @@ const csp = [
       <slot />
     </main>
     <Footer />
+    <script>
+      // Section heads rise in as they scroll into view (skipped with reduced motion).
+      if (!matchMedia('(prefers-reduced-motion: reduce)').matches && 'IntersectionObserver' in window) {
+        const els = document.querySelectorAll<HTMLElement>('.sec-head, [data-reveal]');
+        const io = new IntersectionObserver(
+          (es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }),
+          { rootMargin: '0px 0px -10% 0px' },
+        );
+        els.forEach((el) => { el.classList.add('reveal'); io.observe(el); });
+      }
+    </script>
   </body>
 </html>

@@ -1,0 +1,22 @@
+---
+import { shot } from '../lib/shots';
+
+/**
+ * One product screenshot, as a light and a dark file. Which one shows follows the site theme
+ * (see .shot-light / .shot-dark in styles/base.css). Size comes from the PNG itself.
+ *
+ * Both images are lazy: the one that is hidden by the theme (display: none) is never fetched, and the visible
+ * one loads as soon as it is near the viewport.
+ */
+interface Props {
+  /** File stem in public/screenshots, for example "editor" for editor-light.png / editor-dark.png. */
+  name: string;
+  alt: string;
+}
+
+const { name, alt } = Astro.props;
+const s = shot(name);
+---
+
+<img class="shot-light" src={s.light} width={s.width} height={s.height} alt={alt} loading="lazy" decoding="async" />
+<img class="shot-dark" src={s.dark} width={s.width} height={s.height} alt={alt} loading="lazy" decoding="async" />

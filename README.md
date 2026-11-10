@@ -13,8 +13,8 @@
 [![Release](https://img.shields.io/github/v/release/nAItiklearn/krova?label=release)](https://github.com/nAItiklearn/krova/releases/latest)
 [![CI](https://github.com/nAItiklearn/krova/actions/workflows/ci.yml/badge.svg)](https://github.com/nAItiklearn/krova/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/github/license/nAItiklearn/krova)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-4f46e5)](https://naitiklearn.github.io/krova/download/)
-[![Website](https://img.shields.io/badge/website-naitiklearn.github.io%2Fkrova-4f46e5)](https://naitiklearn.github.io/krova/)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-ff5b1f)](https://naitiklearn.github.io/krova/download/)
+[![Website](https://img.shields.io/badge/website-naitiklearn.github.io%2Fkrova-ff5b1f)](https://naitiklearn.github.io/krova/)
 
 **[Website](https://naitiklearn.github.io/krova/)** · **[Try it in your browser](https://naitiklearn.github.io/krova/demo/)** · **[Download](https://naitiklearn.github.io/krova/download/)** · **[Changelog](https://naitiklearn.github.io/krova/changelog/)**
 

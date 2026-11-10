@@ -1,0 +1,91 @@
+---
+import { glyphs } from '../data/glyphs';
+import type { GlyphName } from '../data/glyphs';
+
+/** A small flat diagram of one feature, from src/data/glyphs.ts. Decorative: the card's text says it all. */
+interface Props {
+  name: GlyphName;
+}
+
+const { name } = Astro.props;
+---
+
+<svg class="glyph" viewBox="0 0 64 40" width="64" height="40" aria-hidden="true" focusable="false" set:html={glyphs[name]} />
+
+<style>
+  .glyph {
+    width: 4.5rem;
+    height: auto;
+    overflow: visible;
+  }
+  .glyph :global(.fr) {
+    fill: var(--color-surface);
+    stroke: var(--color-border-strong);
+    stroke-width: 1.2;
+  }
+  .glyph :global(.z) {
+    fill: var(--accent-tint);
+    stroke: var(--color-border-strong);
+    stroke-width: 1;
+    stroke-dasharray: 3 2.5;
+  }
+  .glyph :global(.w) {
+    fill: var(--color-surface-3);
+    stroke: var(--color-border-strong);
+    stroke-width: 1;
+  }
+  .glyph :global(.a) {
+    fill: var(--accent-tint-strong);
+    stroke: var(--color-accent);
+    stroke-width: 1.5;
+  }
+  .glyph :global(.dm) {
+    fill: var(--color-text);
+    fill-opacity: 0.14;
+    stroke: none;
+  }
+  .glyph :global(.k) {
+    fill: var(--color-surface);
+    stroke: var(--color-border-strong);
+    stroke-width: 1.2;
+  }
+  .glyph :global(.k.a) {
+    fill: var(--accent-tint);
+    stroke: var(--color-accent);
+  }
+  .glyph :global(.l) {
+    fill: none;
+    stroke: var(--color-text-soft);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .glyph :global(.l.a) {
+    fill: none;
+    stroke: var(--color-accent);
+  }
+  .glyph :global(.a-fill) {
+    fill: var(--color-accent);
+    stroke: none;
+  }
+  .glyph :global(.thick) {
+    stroke-width: 3;
+  }
+  .glyph :global(.panel) {
+    fill: var(--color-surface);
+  }
+  .glyph :global(.cursor) {
+    fill: var(--color-text);
+    stroke: var(--color-surface);
+    stroke-width: 1;
+    stroke-linejoin: round;
+  }
+  .glyph :global(.t) {
+    fill: var(--color-text-muted);
+    stroke: none;
+    font: 600 11px var(--font-sans);
+  }
+  .glyph :global(.t.big) {
+    font-size: 19px;
+  }
+</style>

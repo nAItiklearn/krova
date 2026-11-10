@@ -1,0 +1,85 @@
+---
+import Icon from './Icon.astro';
+import { comingNext, statusLabel } from '../data/roadmap';
+import { url } from '../lib/url';
+---
+
+<section id="coming-next" class="section section--tight" aria-labelledby="next-title">
+  <div class="container">
+    <div class="band">
+      <div class="text">
+        <p class="eyebrow">Coming next</p>
+        <h2 id="next-title">Planned, not built yet.</h2>
+        <p class="muted">
+          Auto-arrange, stacks, a layout switcher, workspaces and more are on the roadmap. None of it is in v0.1, and the
+          order can change.
+        </p>
+        <a class="btn btn-secondary" href={url('/roadmap/')}>
+          See the roadmap
+          <Icon name="arrow" />
+        </a>
+      </div>
+      <ul class="chips">
+        {
+          comingNext.map((c) => (
+            <li>
+              <span class="name">{c.name}</span>
+              <span class={`status status--${c.status}`}>
+                {c.status === 'progress' && <span class="dot" aria-hidden="true" />}
+                {statusLabel[c.status]}
+              </span>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </div>
+</section>
+
+<style>
+  .band {
+    display: grid;
+    gap: var(--space-l);
+    align-items: center;
+    padding: var(--space-l) var(--space-m);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-l);
+    background: var(--color-surface);
+  }
+  h2 {
+    font-size: var(--text-xl);
+  }
+  .muted {
+    max-width: 32rem;
+    margin-top: var(--space-xs);
+    font-size: var(--text-sm);
+  }
+  .btn {
+    margin-top: var(--space-m);
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .chips li {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.35rem 0.4rem 0.35rem 0.85rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pill);
+    background: var(--color-surface-2);
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+
+  @media (min-width: 52rem) {
+    .band {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: var(--space-2xl);
+      padding: var(--space-xl);
+    }
+  }
+</style>

@@ -1,0 +1,244 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import RoadmapCard from '../components/RoadmapCard.astro';
+import SwitcherLoop from '../components/SwitcherLoop.astro';
+import Icon from '../components/Icon.astro';
+import { url } from '../lib/url';
+import { available, LAST_UPDATED, LAST_UPDATED_ISO, own, progress, statusLabel, waves } from '../data/roadmap';
+
+const title = 'Roadmap: what Krova can do today and what is planned';
+const description =
+  'What is in Krova v0.1.0 today, what is being built now, and what is planned next: auto-arrange, stacks, a layout switcher, workspaces and more. Planned means planned: none of it is in the app yet.';
+
+const groups = [available, progress, ...waves, own];
+const switcher = progress.items.find((i) => i.name === 'Layout switcher')!;
+const otherProgress = progress.items.filter((i) => i !== switcher);
+---
+
+<BaseLayout title={title} description={description}>
+  <div class="container">
+    <header class="page-head">
+      <p class="eyebrow">Roadmap</p>
+      <h1>What you can use, <span class="soft">and what is coming.</span></h1>
+      <p class="lead">
+        Krova v0.1.0 is an early preview for Windows. This page lists what is in it, what is being built now, and what is
+        planned. <strong>Planned means planned:</strong> none of those features is in the app you can download. The order can
+        change, and so can what ships.
+      </p>
+      <p class="meta">
+        Last updated <time datetime={LAST_UPDATED_ISO}>{LAST_UPDATED}</time> &middot; <a href={url('/changelog/')}>Changelog</a>
+      </p>
+    </header>
+
+    <div class="key" role="list" aria-label="What the labels mean">
+      <p role="listitem"><span class="status status--available"><Icon name="check" />{statusLabel.available}</span> in v0.1.0 today</p>
+      <p role="listitem"><span class="status status--progress"><span class="dot" aria-hidden="true" />{statusLabel.progress}</span> being built, not in the app</p>
+      <p role="listitem"><span class="status">{statusLabel.planned}</span> not started or not shipped, not in the app</p>
+    </div>
+
+    <nav class="jump" aria-label="On this page">
+      <ul>
+        {groups.map((g) => <li><a href={`#${g.id}`}>{g.title.replace(/^Wave (\d): .*/, 'Wave $1')}</a></li>)}
+      </ul>
+    </nav>
+
+    <section id={available.id} class="group" aria-labelledby={`${available.id}-title`}>
+      <header class="head">
+        <h2 id={`${available.id}-title`}>{available.title}</h2>
+        <p class="lead">{available.lead}</p>
+      </header>
+      <ul class="grid">
+        {available.items.map((item) => <RoadmapCard item={item} />)}
+      </ul>
+    </section>
+
+    <section id={progress.id} class="group" aria-labelledby={`${progress.id}-title`}>
+      <header class="head">
+        <h2 id={`${progress.id}-title`}>{progress.title}</h2>
+        <p class="lead">{progress.lead}</p>
+      </header>
+
+      <div class="feature">
+        <div class="demo">
+          <SwitcherLoop />
+        </div>
+        <div class="about">
+          <p class="status status--progress"><span class="dot" aria-hidden="true" />{statusLabel.progress}</p>
+          <h3>{switcher.name}</h3>
+          <p>{switcher.text}</p>
+          <p class="note-line">
+            The picture is a small copy of the design prototype, the same stack of cards and the same spring motion. It is
+            not the app.
+          </p>
+        </div>
+      </div>
+
+      <ul class="grid grid--two">
+        {otherProgress.map((item) => <RoadmapCard item={item} />)}
+      </ul>
+    </section>
+
+    {
+      waves.map((g) => (
+        <section id={g.id} class="group" aria-labelledby={`${g.id}-title`}>
+          <header class="head">
+            <h2 id={`${g.id}-title`}>{g.title}</h2>
+            <p class="lead">{g.lead}</p>
+          </header>
+          <ul class="grid">
+            {g.items.map((item) => <RoadmapCard item={item} />)}
+          </ul>
+        </section>
+      ))
+    }
+
+    <section id={own.id} class="group" aria-labelledby={`${own.id}-title`}>
+      <header class="head">
+        <h2 id={`${own.id}-title`}>{own.title}</h2>
+        <p class="lead">{own.lead}</p>
+      </header>
+      <ul class="grid">
+        {own.items.map((item) => <RoadmapCard item={item} />)}
+      </ul>
+    </section>
+
+    <aside class="foot note">
+      <p>
+        <strong>Free and open source, Windows first.</strong> macOS support comes after the macOS build has been tested on a
+        real Mac. Krova makes no network calls, and nothing on this list changes that: the app stays offline.
+      </p>
+    </aside>
+  </div>
+</BaseLayout>
+
+<style>
+  .page-head h1 .soft {
+    display: block;
+  }
+  .meta {
+    margin-top: var(--space-s);
+    font-size: var(--text-sm);
+    color: var(--color-text-soft);
+  }
+
+  /* ---- Legend ---- */
+  .key {
+    display: grid;
+    gap: var(--space-xs);
+    margin-top: var(--space-m);
+    padding: var(--space-s) var(--space-m);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-l);
+    background: var(--color-surface);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+  .key p {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  /* ---- Jump links ---- */
+  .jump {
+    margin-top: var(--space-l);
+  }
+  .jump ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  .jump a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.25rem;
+    padding: 0 0.85rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pill);
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    font-weight: 550;
+    text-decoration: none;
+  }
+  .jump a:hover {
+    border-color: var(--color-border-strong);
+    color: var(--color-text);
+  }
+
+  /* ---- Groups ---- */
+  .group {
+    padding-top: clamp(2.5rem, 1.5rem + 4vw, 4.5rem);
+    scroll-margin-top: 4rem;
+  }
+  .head {
+    max-width: 40rem;
+    margin-bottom: var(--space-l);
+  }
+  .head h2 {
+    font-size: var(--text-xl);
+  }
+  .head .lead {
+    margin-top: var(--space-xs);
+    font-size: var(--text-base);
+  }
+
+  .grid {
+    display: grid;
+    gap: var(--space-s);
+  }
+  .grid--two {
+    margin-top: var(--space-s);
+  }
+
+  /* ---- The layout switcher feature ---- */
+  .feature {
+    display: grid;
+    gap: var(--space-l);
+    align-items: center;
+    padding: var(--space-m);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-l);
+    background: var(--color-surface);
+  }
+  .about h3 {
+    margin-top: var(--space-s);
+    font-size: var(--text-lg);
+  }
+  .about p:not(.status) {
+    margin-top: var(--space-2xs);
+    max-width: 30rem;
+    color: var(--color-text-muted);
+  }
+  .about .status {
+    display: inline-flex;
+  }
+  .note-line {
+    font-size: var(--text-sm);
+  }
+
+  .foot {
+    margin-top: clamp(3rem, 2rem + 4vw, 5rem);
+    margin-bottom: clamp(3rem, 2rem + 4vw, 5rem);
+  }
+
+  @media (min-width: 40rem) {
+    .grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (min-width: 64rem) {
+    .grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .grid--two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .feature {
+      grid-template-columns: minmax(0, 26rem) minmax(0, 1fr);
+      gap: var(--space-2xl);
+      padding: var(--space-l);
+    }
+  }
+</style>

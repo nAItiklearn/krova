@@ -1,26 +1,28 @@
 ---
 import Icon from './Icon.astro';
 import { url } from '../lib/url';
-import { DOWNLOADS_ENABLED } from '../site';
+import { DOWNLOADS_ENABLED, MAC_RELEASED } from '../site';
 ---
 
 <section class="cta section" aria-labelledby="cta-title">
   <div class="container">
     <img src={url('/favicon.svg')} width="64" height="64" alt="" />
-    <h2 id="cta-title">Ready to try it? <span class="soft">It costs nothing.</span></h2>
+    <h2 id="cta-title">Every window, <span class="soft">in its place.</span></h2>
     <p class="muted">
       {
         DOWNLOADS_ENABLED
-          ? 'Windows 10/11 and macOS 13+. Free, MIT license, no account.'
+          ? MAC_RELEASED
+            ? 'Free. Windows and macOS.'
+            : 'Free. For Windows 10 and 11.'
           : 'The first release is not published yet. The download page says what to expect and how to get past the unsigned-installer warnings.'
       }
     </p>
     <div class="actions">
       <a class="btn btn-primary" href={url('/download/')}>
         <Icon name="download" />
-        Download
+        {MAC_RELEASED ? 'Download' : 'Download for Windows'}
       </a>
-      <a class="btn btn-secondary" href="#try">Try the editor first</a>
+      <a class="btn btn-secondary" href={url('/#live')}>Try it live</a>
     </div>
   </div>
 </section>
@@ -35,8 +37,8 @@ import { DOWNLOADS_ENABLED } from '../site';
     align-items: center;
   }
   img {
-    border-radius: 16px;
-    box-shadow: var(--shadow-2);
+    border-radius: var(--radius-l);
+    box-shadow: var(--shadow-1);
   }
   h2 {
     margin-top: var(--space-l);

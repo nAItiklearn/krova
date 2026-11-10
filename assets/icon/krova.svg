@@ -1,12 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#4f46e5"/>
-      <stop offset="1" stop-color="#0ea5e9"/>
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <rect x="96" y="96" width="150" height="320" rx="26" fill="#fff"/>
-  <rect x="266" y="96" width="150" height="148" rx="26" fill="#fff" fill-opacity=".85"/>
-  <rect x="266" y="268" width="150" height="148" rx="26" fill="#fff" fill-opacity=".6"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-labelledby="krova-title">
+  <title id="krova-title">Krova</title>
+  <!--
+    Krova app icon, master (use at 48 px and up; below that use the pixel-snapped cuts in small/).
+    Palette: ink #141413, off-white #f4f1ea, ember #ff5b1f. Construction: see README.md.
+    A screen-sized rounded square (88..424) is sliced into four zones with a 20 gap:
+    120 x 336 | 196 x 196 over 104 x 120 + 72 x 120. Outer corners 52, inner corners 8.
+  -->
+  <rect width="512" height="512" rx="112" fill="#141413"/>
+  <g fill="#f4f1ea">
+    <path d="M140 88H200A8 8 0 0 1 208 96V416A8 8 0 0 1 200 424H140A52 52 0 0 1 88 372V140A52 52 0 0 1 140 88Z"/>
+    <path d="M236 88H372A52 52 0 0 1 424 140V276A8 8 0 0 1 416 284H236A8 8 0 0 1 228 276V96A8 8 0 0 1 236 88Z"/>
+    <path d="M236 304H324A8 8 0 0 1 332 312V416A8 8 0 0 1 324 424H236A8 8 0 0 1 228 416V312A8 8 0 0 1 236 304Z"/>
+  </g>
+  <path fill="#ff5b1f" d="M360 304H416A8 8 0 0 1 424 312V372A52 52 0 0 1 372 424H360A8 8 0 0 1 352 416V312A8 8 0 0 1 360 304Z"/>
 </svg>

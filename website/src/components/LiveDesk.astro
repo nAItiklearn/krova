@@ -1,0 +1,1007 @@
+---
+/**
+ * The hero's live desktop: a laptop whose lid opens, with a small Windows desktop inside where
+ * windows arrange themselves into zones. Plays a short sequence, then hands control to the visitor
+ * (layout buttons, open and close a window). Pure HTML/CSS plus one inline module, no images.
+ * The windows and their contents are drawn placeholders for real apps, not Krova's own UI.
+ */
+interface Props {
+  id?: string;
+  /** "story" plays the opening sequence; "static" starts with three windows already arranged. */
+  mode?: 'story' | 'static';
+  /** Show the layout and open/close buttons under the laptop. */
+  controls?: boolean;
+  label?: string;
+}
+const { id = 'live', mode = 'story', controls = true, label = 'Live demo: windows arranging themselves' } = Astro.props;
+const apps = [
+  { key: 'web', title: 'Field notes — Browser' },
+  { key: 'notes', title: 'Notes' },
+  { key: 'term', title: 'Terminal' },
+  { key: 'mail', title: 'Mail' },
+];
+---
+
+<section class="desk-wrap hl-active" id={id} data-mode={mode} data-gap="0.9" aria-label={label}>
+  <div class="laptop">
+    <div class="lid">
+      <div class="screen" data-screen>
+        <div class="wall" aria-hidden="true"></div>
+        <div class="zones" data-zones aria-hidden="true"></div>
+
+        {
+          apps.map((a) => (
+            <div class="w" data-win={a.key} aria-hidden="true">
+              <div class="bar">
+                <span class={`ico ico-${a.key}`} />
+                <span class="t">{a.title}</span>
+                <span class="ctl">
+                  <i />
+                  <i />
+                  <i />
+                </span>
+              </div>
+              <div class={`body body-${a.key}`}>
+                {a.key === 'web' && (
+                  <Fragment>
+                    <div class="url">fieldnotes.example/lisbon-in-spring</div>
+                    <div class="kicker">TRAVEL · 6 MIN READ</div>
+                    <div class="h">Lisbon in spring, slowly</div>
+                    <div class="hero-img" />
+                    <div class="ln" />
+                    <div class="ln" />
+                    <div class="ln s" />
+                  </Fragment>
+                )}
+                {a.key === 'notes' && (
+                  <Fragment>
+                    <div class="h">Release checklist</div>
+                    <div class="todo done">Record the demo</div>
+                    <div class="todo done">Write the changelog</div>
+                    <div class="todo">Test two monitors</div>
+                    <div class="todo">Ship 0.2</div>
+                  </Fragment>
+                )}
+                {a.key === 'term' && (
+                  <Fragment>
+                    <div>
+                      <b>~/krova</b> $ cargo test
+                    </div>
+                    <div class="dim">   Compiling krova-core v0.2.0</div>
+                    <div class="dim">    Finished test in 4.1s</div>
+                    <div class="ok">test result: ok. 350 passed</div>
+                    <div>
+                      <b>~/krova</b> $ <span class="caret" />
+                    </div>
+                  </Fragment>
+                )}
+                {a.key === 'mail' && (
+                  <Fragment>
+                    <div class="mrow">
+                      <span class="av" />
+                      <span class="ml" />
+                    </div>
+                    <div class="mrow">
+                      <span class="av a2" />
+                      <span class="ml" />
+                    </div>
+                    <div class="mrow">
+                      <span class="av a3" />
+                      <span class="ml" />
+                    </div>
+                  </Fragment>
+                )}
+              </div>
+            </div>
+          ))
+        }
+
+        <div class="toast" data-toast aria-hidden="true"><span class="mk"></span> <span data-toast-text>Auto-arrange on</span></div>
+
+        <div class="taskbar" aria-hidden="true">
+          <div class="tb-apps">
+            <span class="tb-start"><i></i><i></i><i></i><i></i></span>
+            <span class="tb-search">Search</span>
+            {apps.map((a) => <span class={`tb-app ico-${a.key}`} data-tb={a.key} />)}
+          </div>
+          <div class="tb-tray">
+            <span class="tb-krova" data-tray><i></i><i></i><i></i></span>
+            <span class="tb-time">9:41</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="base" aria-hidden="true"><span class="notch"></span></div>
+  </div>
+
+  {controls && (<Fragment>
+  <div class="controls" role="group" aria-label="Try it">
+    <div class="seg" role="radiogroup" aria-label="Layout">
+      <button type="button" role="radio" aria-checked="true" data-layout="side">Main + side</button>
+      <button type="button" role="radio" aria-checked="false" data-layout="columns">Columns</button>
+      <button type="button" role="radio" aria-checked="false" data-layout="grid">Grid</button>
+    </div>
+    <div class="acts">
+      <button type="button" class="pillbtn" data-open>Open a window</button>
+      <button type="button" class="pillbtn" data-close>Close one</button>
+    </div>
+  </div>
+  <p class="cap visually-hidden" data-cap aria-live="polite">Open a window and Krova gives it a zone. Close one and the rest fill in.</p>
+  </Fragment>)}
+</section>
+
+<style>
+  .desk-wrap {
+    --hl: #ff5b1f;
+    max-width: 64rem;
+    margin: 0 auto;
+    padding-inline: var(--gutter);
+  }
+
+  /* ---- Laptop ---- */
+  .laptop {
+    perspective: 2400px;
+  }
+  .lid {
+    position: relative;
+    margin: 0 auto;
+    width: 88%;
+    padding: 1.1% 1.1% 1.4%;
+    border-radius: 18px 18px 6px 6px;
+    background: linear-gradient(180deg, #2a2a2c, #161617);
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+      0 40px 80px -30px rgba(40, 20, 10, 0.45);
+    transform-origin: 50% 100%;
+    animation: lid-open 1.6s cubic-bezier(0.2, 0.75, 0.2, 1) 0.25s backwards;
+  }
+  @keyframes lid-open {
+    from {
+      transform: rotateX(-84deg);
+    }
+    to {
+      transform: rotateX(0);
+    }
+  }
+  .screen {
+    position: relative;
+    aspect-ratio: 16 / 10;
+    border-radius: 8px;
+    overflow: hidden;
+    container-type: inline-size;
+    background: #000;
+    font-family: 'Segoe UI Variable Text', 'Segoe UI', var(--font-sans);
+  }
+  .screen::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: #000;
+    pointer-events: none;
+    animation: wake 0.9s ease-out 1.25s both;
+    z-index: 50;
+  }
+  @keyframes wake {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+  .base {
+    position: relative;
+    height: clamp(10px, 1.6vw, 18px);
+    margin: 0 auto;
+    width: 100%;
+    border-radius: 2px 2px 14px 14px;
+    background: linear-gradient(180deg, #d6d4d0 0%, #a9a7a3 60%, #8a8884 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.7),
+      0 18px 30px -16px rgba(40, 20, 10, 0.5);
+  }
+  .notch {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: 14%;
+    height: 38%;
+    transform: translateX(-50%);
+    border-radius: 0 0 8px 8px;
+    background: rgba(0, 0, 0, 0.14);
+  }
+
+  /* ---- Desktop ---- */
+  .wall {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(70% 60% at 18% 8%, #ffb48a 0%, transparent 60%),
+      radial-gradient(60% 70% at 92% 96%, #c7b6f2 0%, transparent 62%),
+      radial-gradient(50% 50% at 60% 40%, #ffe3cf 0%, transparent 70%),
+      linear-gradient(150deg, #f7d9c4, #efe4ef 55%, #dcd3f1);
+  }
+  .zones :global(.z) {
+    position: absolute;
+    border-radius: 1.1cqw;
+    border: 0.18cqw dashed rgba(20, 20, 19, 0.3);
+    background: rgba(255, 255, 255, 0.2);
+    opacity: 0;
+    transition: opacity 0.35s ease;
+  }
+  .zones:global(.show) :global(.z) {
+    opacity: 1;
+  }
+  .zones :global(.z.hit) {
+    border-style: solid;
+    border-color: #ff5b1f;
+    background: rgba(255, 91, 31, 0.16);
+  }
+
+  .w {
+    position: absolute;
+    left: 0;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    border-radius: 0.9cqw;
+    background: #fff;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 0.08cqw rgba(0, 0, 0, 0.14),
+      0 1.6cqw 3.4cqw -0.8cqw rgba(30, 20, 10, 0.35);
+    will-change: transform, width, height, opacity;
+    opacity: 0;
+    font-size: 1.05cqw;
+    color: #1b1b1a;
+    transition: box-shadow 0.3s ease;
+  }
+  /* Highlight styles (set by the Customise panel): none, active border, all borders, glow. */
+  .hl-active .w:global(.focus),
+  .hl-all .w {
+    box-shadow:
+      0 0 0 0.16cqw var(--hl),
+      0 1.8cqw 3.8cqw -0.8cqw rgba(30, 20, 10, 0.4);
+  }
+  .hl-glow .w:global(.focus) {
+    box-shadow:
+      0 0 0 0.12cqw var(--hl),
+      0 0 2.6cqw 0.3cqw color-mix(in srgb, var(--hl) 55%, transparent),
+      0 1.8cqw 3.8cqw -0.8cqw rgba(30, 20, 10, 0.4);
+  }
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: 0.6cqw;
+    height: 2.5cqw;
+    padding: 0 0 0 0.9cqw;
+    background: #f4f2ef;
+    border-bottom: 0.08cqw solid rgba(0, 0, 0, 0.07);
+    flex: none;
+  }
+  .bar .t {
+    font-size: 0.95cqw;
+    color: #4b4a47;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+  }
+  .ctl {
+    display: flex;
+    height: 100%;
+  }
+  .ctl i {
+    width: 3.2cqw;
+    height: 100%;
+    position: relative;
+  }
+  .ctl i::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 0.9cqw;
+    height: 0.9cqw;
+    transform: translate(-50%, -50%);
+  }
+  .ctl i:nth-child(1)::before {
+    height: 0;
+    border-top: 0.1cqw solid #555;
+  }
+  .ctl i:nth-child(2)::before {
+    border: 0.1cqw solid #555;
+    border-radius: 0.15cqw;
+  }
+  .ctl i:nth-child(3)::before {
+    background:
+      linear-gradient(45deg, transparent 45%, #555 45%, #555 55%, transparent 55%),
+      linear-gradient(-45deg, transparent 45%, #555 45%, #555 55%, transparent 55%);
+  }
+  .ico {
+    width: 1.2cqw;
+    height: 1.2cqw;
+    border-radius: 0.3cqw;
+    flex: none;
+  }
+  .ico-web {
+    background: linear-gradient(135deg, #ff8a5c, #ff5b1f);
+  }
+  .ico-notes {
+    background: linear-gradient(135deg, #ffd56b, #f5b301);
+  }
+  .ico-term {
+    background: #1b1b1a;
+  }
+  .ico-mail {
+    background: linear-gradient(135deg, #a3d9b8, #3f9e6b);
+  }
+  .body {
+    flex: 1;
+    padding: 1.2cqw 1.4cqw;
+    overflow: hidden;
+    min-height: 0;
+  }
+  .body .h {
+    font-weight: 650;
+    font-size: 1.6cqw;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.9cqw;
+    white-space: nowrap;
+  }
+  .url {
+    font-size: 0.85cqw;
+    color: #6b6a66;
+    background: #efedea;
+    border-radius: 999px;
+    padding: 0.35cqw 1cqw;
+    margin: -0.2cqw 0 1.2cqw;
+    width: fit-content;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .kicker {
+    font-size: 0.8cqw;
+    letter-spacing: 0.08em;
+    color: #d9480f;
+    font-weight: 650;
+    margin-bottom: 0.4cqw;
+  }
+  .hero-img {
+    height: 9cqw;
+    border-radius: 0.6cqw;
+    margin-bottom: 1cqw;
+    background:
+      radial-gradient(80% 90% at 20% 20%, #ffcf9e, transparent 60%),
+      linear-gradient(120deg, #f08a5d, #b8405e 60%, #6a2c70);
+  }
+  .ln {
+    height: 0.7cqw;
+    border-radius: 999px;
+    background: #e9e6e1;
+    margin-bottom: 0.6cqw;
+  }
+  .ln.s {
+    width: 60%;
+  }
+  .body-notes {
+    background: #fffdf6;
+  }
+  .todo {
+    display: flex;
+    align-items: center;
+    gap: 0.7cqw;
+    padding: 0.45cqw 0;
+    font-size: 1.05cqw;
+    white-space: nowrap;
+  }
+  .todo::before {
+    content: '';
+    width: 1cqw;
+    height: 1cqw;
+    border-radius: 50%;
+    border: 0.12cqw solid #b9b4aa;
+    flex: none;
+  }
+  .todo.done {
+    color: #9a968e;
+    text-decoration: line-through;
+  }
+  .todo.done::before {
+    background: #f5b301;
+    border-color: #f5b301;
+  }
+  .body-term {
+    background: #141413;
+    color: #d8d6d0;
+    font-family: 'Cascadia Mono', var(--font-mono);
+    font-size: 0.95cqw;
+    line-height: 1.75;
+    white-space: nowrap;
+  }
+  .body-term b {
+    color: #ff8a5c;
+    font-weight: 600;
+  }
+  .body-term .dim {
+    color: #8a877f;
+  }
+  .body-term .ok {
+    color: #6fd08c;
+  }
+  .caret {
+    display: inline-block;
+    width: 0.6cqw;
+    height: 1.1cqw;
+    vertical-align: -0.15cqw;
+    background: #d8d6d0;
+    animation: blink 1.1s step-end infinite;
+  }
+  @keyframes blink {
+    50% {
+      opacity: 0;
+    }
+  }
+  .mrow {
+    display: flex;
+    align-items: center;
+    gap: 0.8cqw;
+    padding: 0.7cqw 0;
+    border-bottom: 0.08cqw solid #efedea;
+  }
+  .av {
+    width: 2cqw;
+    height: 2cqw;
+    border-radius: 50%;
+    background: #ffb48a;
+    flex: none;
+  }
+  .av.a2 {
+    background: #c7b6f2;
+  }
+  .av.a3 {
+    background: #a8d8b9;
+  }
+  .ml {
+    height: 0.7cqw;
+    flex: 1;
+    border-radius: 999px;
+    background: #e9e6e1;
+  }
+
+  .toast {
+    position: absolute;
+    right: 1.4cqw;
+    bottom: 6.4cqw;
+    display: flex;
+    align-items: center;
+    gap: 0.6cqw;
+    padding: 0.7cqw 1.2cqw;
+    border-radius: 999px;
+    background: rgba(20, 20, 19, 0.86);
+    backdrop-filter: blur(12px);
+    color: #fff;
+    font-size: 1.05cqw;
+    font-weight: 550;
+    opacity: 0;
+    transform: translateY(1cqw) scale(0.96);
+    transition:
+      opacity 0.35s ease,
+      transform 0.45s cubic-bezier(0.32, 0.72, 0, 1);
+    z-index: 30;
+  }
+  .toast:global(.on) {
+    opacity: 1;
+    transform: none;
+  }
+  .toast .mk {
+    width: 0.8cqw;
+    height: 0.8cqw;
+    border-radius: 50%;
+    background: #ff5b1f;
+    box-shadow: 0 0 0 0.3cqw rgba(255, 91, 31, 0.3);
+  }
+
+  .taskbar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 5cqw;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(246, 243, 240, 0.78);
+    backdrop-filter: blur(20px) saturate(1.4);
+    border-top: 0.08cqw solid rgba(255, 255, 255, 0.6);
+    z-index: 20;
+  }
+  .tb-apps {
+    display: flex;
+    align-items: center;
+    gap: 0.9cqw;
+  }
+  .tb-start {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.25cqw;
+    width: 2cqw;
+    height: 2cqw;
+    padding: 0.2cqw;
+  }
+  .tb-start i {
+    border-radius: 50%;
+    background: #3b3a37;
+  }
+  .tb-search {
+    font-size: 1cqw;
+    color: #6b6a66;
+    background: rgba(255, 255, 255, 0.8);
+    border: 0.08cqw solid rgba(0, 0, 0, 0.08);
+    border-radius: 999px;
+    padding: 0.5cqw 4cqw 0.5cqw 1.2cqw;
+  }
+  .tb-app {
+    position: relative;
+    width: 2.4cqw;
+    height: 2.4cqw;
+    border-radius: 0.55cqw;
+    transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .tb-app::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: -0.8cqw;
+    width: 0;
+    height: 0.3cqw;
+    border-radius: 999px;
+    background: #6b6a66;
+    transform: translateX(-50%);
+    transition: width 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .tb-app:global(.run)::after {
+    width: 0.9cqw;
+  }
+  .tb-app:global(.pop) {
+    transform: translateY(-0.5cqw);
+  }
+  .tb-tray {
+    position: absolute;
+    right: 1.4cqw;
+    display: flex;
+    align-items: center;
+    gap: 1.2cqw;
+    font-size: 1cqw;
+    color: #3b3a37;
+  }
+  .tb-krova {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 0.18cqw;
+    width: 1.8cqw;
+    height: 1.8cqw;
+    padding: 0.3cqw;
+    border-radius: 0.45cqw;
+    transition: background 0.3s;
+  }
+  .tb-krova i {
+    border-radius: 0.15cqw;
+    background: #3b3a37;
+  }
+  .tb-krova i:first-child {
+    grid-row: span 2;
+    background: #ff5b1f;
+  }
+  .tb-krova:global(.ping) {
+    background: rgba(255, 91, 31, 0.18);
+  }
+
+  /* ---- Controls under the laptop ---- */
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-top: 2rem;
+  }
+  .seg {
+    display: inline-flex;
+    padding: 4px;
+    border-radius: 999px;
+    background: var(--color-surface-3);
+  }
+  .seg button,
+  .pillbtn {
+    font: inherit;
+    font-size: var(--text-sm);
+    font-weight: 550;
+    border: 0;
+    cursor: pointer;
+    border-radius: 999px;
+    padding: 0.5rem 1rem;
+    color: var(--color-text-muted);
+    background: transparent;
+    transition:
+      background 0.2s,
+      color 0.2s,
+      box-shadow 0.2s;
+  }
+  .seg button[aria-checked='true'] {
+    background: var(--color-surface);
+    color: var(--color-text);
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.08),
+      0 0 0 1px var(--color-border);
+  }
+  .acts {
+    display: inline-flex;
+    gap: 0.5rem;
+  }
+  .pillbtn {
+    background: var(--color-surface);
+    color: var(--color-text);
+    box-shadow: 0 0 0 1px var(--color-border);
+  }
+  .pillbtn:hover {
+    box-shadow: 0 0 0 1px var(--color-border-strong);
+  }
+  .pillbtn:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .seg button:focus-visible,
+  .pillbtn:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+  .cap {
+    margin-top: 0.9rem;
+    text-align: center;
+    color: var(--color-text-soft);
+    font-size: var(--text-sm);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :global(:root:not([data-theme])) .base {
+      background: linear-gradient(180deg, #3a3a3c 0%, #262628 60%, #1a1a1b 100%);
+    }
+  }
+  :global(:root[data-theme='dark']) .base {
+    background: linear-gradient(180deg, #3a3a3c 0%, #262628 60%, #1a1a1b 100%);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lid,
+    .screen::after {
+      animation: none;
+    }
+    .screen::after {
+      opacity: 0;
+    }
+  }
+</style>
+
+<script>
+  // Damped spring with fixed substeps (the same model as the app's layout switcher prototype).
+  const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  class Spring {
+    value: number;
+    target: number;
+    vel = 0;
+    k: number;
+    c: number;
+    constructor(v: number, k = 230, zeta = 0.82) {
+      this.value = this.target = v;
+      this.k = k;
+      this.c = 2 * Math.sqrt(k) * zeta;
+    }
+    set(t: number) {
+      this.target = t;
+      if (REDUCED) this.jump(t);
+    }
+    jump(v: number) {
+      this.value = this.target = v;
+      this.vel = 0;
+    }
+    step(dt: number) {
+      const h = 1 / 240;
+      for (let t = 0; t < dt; t += h) {
+        const a = -this.k * (this.value - this.target) - this.c * this.vel;
+        this.vel += a * h;
+        this.value += this.vel * h;
+      }
+    }
+    get settled() {
+      return Math.abs(this.value - this.target) < 0.01 && Math.abs(this.vel) < 0.02;
+    }
+  }
+
+  type Rect = [number, number, number, number]; // x, y, w, h in % of the work area
+  type LayoutKind = 'side' | 'columns' | 'grid';
+
+  const AREA_H = 92; // the work area: the screen minus the taskbar, in % of its height
+
+
+  function zonesFor(kind: LayoutKind, n: number): Rect[] {
+    if (n <= 1) return [[0, 0, 100, 100]];
+    if (kind === 'columns') return Array.from({ length: n }, (_, i) => [(i * 100) / n, 0, 100 / n, 100] as Rect);
+    if (kind === 'grid') {
+      if (n === 2) return [[0, 0, 50, 100], [50, 0, 50, 100]];
+      if (n === 3) return [[0, 0, 50, 50], [50, 0, 50, 50], [0, 50, 100, 50]];
+      return [[0, 0, 50, 50], [50, 0, 50, 50], [0, 50, 50, 50], [50, 50, 50, 50]];
+    }
+    const side = n - 1;
+    return [[0, 0, 60, 100] as Rect].concat(
+      Array.from({ length: side }, (_, i) => [60, (i * 100) / side, 40, 100 / side] as Rect),
+    );
+  }
+
+  function init(root: HTMLElement) {
+    const screen = root.querySelector<HTMLElement>('[data-screen]')!;
+    const zonesEl = root.querySelector<HTMLElement>('[data-zones]')!;
+    const toast = root.querySelector<HTMLElement>('[data-toast]')!;
+    const toastText = root.querySelector<HTMLElement>('[data-toast-text]')!;
+    const tray = root.querySelector<HTMLElement>('[data-tray]')!;
+    const cap = root.querySelector<HTMLElement>('[data-cap]');
+    const segBtns = [...root.querySelectorAll<HTMLButtonElement>('[data-layout]')];
+    const openBtn = root.querySelector<HTMLButtonElement>('[data-open]');
+    const closeBtn = root.querySelector<HTMLButtonElement>('[data-close]');
+    let G = parseFloat(root.dataset.gap ?? '0.9');
+
+    const order = ['web', 'notes', 'term', 'mail'];
+    const names: Record<string, string> = { web: 'the browser', notes: 'Notes', term: 'the terminal', mail: 'Mail' };
+    const wins = new Map(
+      order.map((k) => [
+        k,
+        {
+          el: root.querySelector<HTMLElement>(`[data-win="${k}"]`)!,
+          tb: root.querySelector<HTMLElement>(`[data-tb="${k}"]`)!,
+          x: new Spring(32),
+          y: new Spring(26),
+          w: new Spring(36),
+          h: new Spring(40),
+          a: new Spring(0, 260, 1),
+          s: new Spring(0.92, 260, 0.75),
+        },
+      ]),
+    );
+    let open: string[] = [];
+    let kind: LayoutKind = 'side';
+    let focusKey: string | null = null;
+
+    function inset(rect: Rect): Rect {
+      const [x, y, w, h] = rect;
+      return [x + G / 2, (y * AREA_H) / 100 + G / 2, w - G, (h * AREA_H) / 100 - G];
+    }
+    function drawZones(n: number) {
+      zonesEl.innerHTML = '';
+      zonesFor(kind, Math.max(1, n)).forEach((r) => {
+        const z = document.createElement('div');
+        z.className = 'z';
+        const [x, y, w, h] = inset(r);
+        Object.assign(z.style, { left: x + '%', top: y + '%', width: w + '%', height: h + '%' });
+        zonesEl.appendChild(z);
+      });
+    }
+    function flashZones(ms: number, hit = -1) {
+      zonesEl.classList.add('show');
+      if (hit >= 0) (zonesEl.children[hit] as HTMLElement | undefined)?.classList.add('hit');
+      setTimeout(() => zonesEl.classList.remove('show'), ms);
+    }
+    function layout() {
+      const zs = zonesFor(kind, open.length);
+      open.forEach((k, i) => {
+        const [x, y, w, h] = inset(zs[i]);
+        const s = wins.get(k)!;
+        s.x.set(x);
+        s.y.set(y);
+        s.w.set(w);
+        s.h.set(h);
+      });
+      kick();
+    }
+    function setFocus(k: string | null) {
+      focusKey = k;
+      wins.forEach((s, key) => s.el.classList.toggle('focus', key === k));
+    }
+
+    let toastTimer = 0;
+    function say(text: string) {
+      toastText.textContent = text;
+      toast.classList.add('on');
+      tray.classList.add('ping');
+      clearTimeout(toastTimer);
+      toastTimer = window.setTimeout(() => {
+        toast.classList.remove('on');
+        tray.classList.remove('ping');
+      }, 1700);
+    }
+
+    function openWin(k: string) {
+      const s = wins.get(k)!;
+      s.x.jump(32);
+      s.y.jump(24);
+      s.w.jump(36);
+      s.h.jump(42);
+      s.a.jump(0);
+      s.s.jump(0.9);
+      s.a.set(1);
+      s.s.set(1);
+      s.el.style.zIndex = String(10 + open.length);
+      open.push(k);
+      s.tb.classList.add('run', 'pop');
+      setTimeout(() => s.tb.classList.remove('pop'), 260);
+      drawZones(open.length);
+      flashZones(700, open.length - 1);
+      kick();
+      setTimeout(layout, REDUCED ? 0 : 180);
+      setFocus(k);
+      sync();
+    }
+    function closeWin(k: string) {
+      const s = wins.get(k)!;
+      s.a.set(0);
+      s.s.set(0.94);
+      open = open.filter((o) => o !== k);
+      s.tb.classList.remove('run');
+      setFocus(open[open.length - 1] ?? null);
+      kick();
+      setTimeout(layout, REDUCED ? 0 : 140);
+      sync();
+    }
+    function setKind(next: LayoutKind) {
+      kind = next;
+      segBtns.forEach((b) => b.setAttribute('aria-checked', String(b.dataset.layout === next)));
+      drawZones(open.length);
+      flashZones(550);
+      layout();
+      say(next === 'side' ? 'Main + side' : next === 'columns' ? 'Columns' : 'Grid');
+    }
+    function sync() {
+      if (openBtn) openBtn.disabled = open.length >= order.length;
+      if (closeBtn) closeBtn.disabled = open.length === 0;
+    }
+    // The Customise panel talks to the desk through events on its root.
+    root.addEventListener('krova:gap', (e) => {
+      G = (e as CustomEvent<number>).detail;
+      drawZones(open.length);
+      layout();
+    });
+    root.addEventListener('krova:layout', (e) => setKind((e as CustomEvent<LayoutKind>).detail));
+
+    // Render loop: runs only while a spring is moving.
+    let raf = 0;
+    let last = 0;
+    function kick() {
+      if (!raf) {
+        last = performance.now();
+        raf = requestAnimationFrame(frame);
+      }
+    }
+    function frame(now: number) {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      let moving = false;
+      const W = screen.clientWidth;
+      const H = screen.clientHeight;
+      wins.forEach((s) => {
+        for (const sp of [s.x, s.y, s.w, s.h, s.a, s.s]) {
+          sp.step(dt);
+          moving ||= !sp.settled;
+        }
+        s.el.style.width = (s.w.value * W) / 100 + 'px';
+        s.el.style.height = (s.h.value * H) / 100 + 'px';
+        s.el.style.transform = `translate3d(${(s.x.value * W) / 100}px, ${(s.y.value * H) / 100}px, 0) scale(${s.s.value})`;
+        s.el.style.opacity = String(Math.max(0, Math.min(1, s.a.value)));
+      });
+      raf = moving ? requestAnimationFrame(frame) : 0;
+    }
+    new ResizeObserver(kick).observe(screen);
+
+    // Any visitor input stops the autoplay.
+    let auto = true;
+    const takeOver = () => {
+      auto = false;
+    };
+    segBtns.forEach((b) =>
+      b.addEventListener('click', () => {
+        takeOver();
+        setKind(b.dataset.layout as LayoutKind);
+      }),
+    );
+    root.querySelector('.seg')?.addEventListener('keydown', (e) => {
+      const ke = e as KeyboardEvent;
+      if (ke.key !== 'ArrowRight' && ke.key !== 'ArrowLeft') return;
+      ke.preventDefault();
+      const i = segBtns.findIndex((b) => b.getAttribute('aria-checked') === 'true');
+      const n = segBtns[(i + (ke.key === 'ArrowRight' ? 1 : segBtns.length - 1)) % segBtns.length];
+      n.focus();
+      n.click();
+    });
+    openBtn?.addEventListener('click', () => {
+      takeOver();
+      const k = order.find((o) => !open.includes(o));
+      if (k) {
+        openWin(k);
+        if (cap) cap.textContent = `Opened ${names[k]}. It went to the next free zone.`;
+      }
+    });
+    closeBtn?.addEventListener('click', () => {
+      takeOver();
+      const k = focusKey ?? open[open.length - 1];
+      if (k) {
+        closeWin(k);
+        if (cap) cap.textContent = 'Closed a window. The others filled the space.';
+      }
+    });
+    screen.addEventListener('pointerdown', (e) => {
+      const w = (e.target as HTMLElement).closest<HTMLElement>('[data-win]');
+      if (w) {
+        takeOver();
+        setFocus(w.dataset.win!);
+      }
+    });
+
+    // Autoplay: a short story, then it is the visitor's turn.
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, REDUCED ? Math.min(ms, 200) : ms));
+    async function story() {
+      await wait(2300); // the lid opens and the screen wakes
+      if (!auto) return;
+      say('Auto-arrange on');
+      for (const k of ['web', 'notes', 'term']) {
+        await wait(900);
+        if (!auto) return;
+        openWin(k);
+      }
+      await wait(1900);
+      if (!auto) return;
+      setKind('columns');
+      await wait(2000);
+      if (!auto) return;
+      closeWin('notes');
+      await wait(1700);
+      if (!auto) return;
+      openWin('notes');
+      await wait(1800);
+      if (!auto) return;
+      setKind('side');
+    }
+    sync();
+    if (root.dataset.mode === 'static') {
+      // already arranged: no zone flashes, no toast
+      ['web', 'notes', 'term'].forEach((k) => {
+        const s = wins.get(k)!;
+        s.a.jump(1);
+        s.s.jump(1);
+        s.el.style.zIndex = String(10 + open.length);
+        s.tb.classList.add('run');
+        open.push(k);
+      });
+      setFocus('web');
+      const zs = zonesFor(kind, open.length);
+      open.forEach((k, i) => {
+        const [x, y, w, h] = inset(zs[i]);
+        const s = wins.get(k)!;
+        s.x.jump(x); s.y.jump(y); s.w.jump(w); s.h.jump(h);
+      });
+      kick();
+      sync();
+      return;
+    }
+    const io = new IntersectionObserver(
+      (es) => {
+        if (es.some((e) => e.isIntersecting)) {
+          io.disconnect();
+          story();
+        }
+      },
+      { threshold: 0.25 },
+    );
+    io.observe(root);
+  }
+
+  document.querySelectorAll<HTMLElement>('.desk-wrap').forEach(init);
+</script>

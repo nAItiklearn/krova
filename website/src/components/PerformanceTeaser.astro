@@ -4,77 +4,59 @@ import { url } from '../lib/url';
 import Icon from './Icon.astro';
 
 /**
- * Headline numbers for the home page, derived from docs/measurements/idle-*.txt at build time
- * (same loader as the Performance page). One card per measured state; with a single run the cards
- * are: private memory, Krova's own process, CPU.
+ * The home-page performance strip. Every number comes from docs/measurements/idle-*.txt, parsed at build time
+ * (same loader as the Performance page): one cell per measured state of the current build, with private memory
+ * as the headline. Runs of an earlier build stay on the Performance page; they are not shown here.
  */
-const runs = loadMeasurements().map((m) => ({ m, s: idleStats(m) }));
-const n = runs.length;
-const head = runs[0];
+const all = loadMeasurements();
+const current = all.filter((m) => !isEarlierBuild(m.date));
+const runs = (current.length > 0 ? current : all).map((m) => ({ m, s: idleStats(m) }));
+const widest = Math.max(...runs.map(({ s }) => s.privateMedian));
+
 const one = (x: number) => x.toFixed(1);
 const two = (x: number) => x.toFixed(2);
+const memory = (x: number) => (x >= 100 ? String(Math.round(x)) : one(x));
 const plural = (k: number, a: string, b: string) => `${k} ${k === 1 ? a : b}`;
-const shortDate = (iso: string) =>
-  iso
-    ? new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
-    : '';
-// Sentences are built here, not in the markup: whitespace between adjacent {expressions} would put a space before a comma.
-const measured = (iso: string) =>
-  shortDate(iso) ? ` Measured ${shortDate(iso)}${isEarlierBuild(iso) ? ', earlier build' : ''}.` : '';
-const privateText = `private memory of everything Krova started (${plural(head.m.processCount, 'process', 'processes')}${
-  head.m.processCount > 1 ? ', including the web view' : ''
-}), ${head.m.label.toLowerCase()}`;
-const afterText =
-  (n === 1
-    ? `One run on one Windows PC (${head.m.label.toLowerCase()}${isEarlierBuild(head.m.date) ? `, an earlier build, ${shortDate(head.m.date)}` : ''}), with nothing being dragged. `
-    : 'One run for each state, on Windows, with nothing being dragged. ') +
-  'Drag latency, use while dragging, and macOS are not measured yet. These numbers will change.';
+// Built here, not in the markup: whitespace between adjacent {expressions} would put a space before a comma.
+const detail = (procs: number, cpu: number) =>
+  `Private memory, ${plural(procs, 'process', 'processes')}${procs > 1 ? ', including the embedded web view' : ''}. Average CPU ${two(cpu)}% of one core.`;
+// Width of the bar under each number, relative to the largest one. Never thinner than a visible sliver.
+const bar = (x: number) => `${Math.max(1.5, (x / widest) * 100).toFixed(1)}%`;
 ---
 
 <section id="performance" class="section" aria-labelledby="perf-title">
   <div class="container">
     <header class="sec-head">
       <p class="eyebrow">Performance</p>
-      <h2 id="perf-title">
-        Measured, not claimed. <span class="soft">{n === 1 ? 'One idle run so far.' : `${n} idle runs so far, one per state.`}</span>
-      </h2>
+      <h2 id="perf-title">Measured, not claimed. <span class="soft">Idle runs of the v0.1.0 installer.</span></h2>
     </header>
 
-    {
-      n === 1 ? (
-        <ul class="stats">
-          <li class="card">
-            <p class="big">{one(head.s.privateMedian)} <span>MB</span></p>
-            <p>{privateText}</p>
+    <ul class="strip">
+      {
+        runs.map(({ m, s }) => (
+          <li class="cell">
+            <p class="state">{m.label}</p>
+            <p class="big">
+              {memory(s.privateMedian)} <span>MB</span>
+            </p>
+            <span class="track" aria-hidden="true">
+              <i style={`width:${bar(s.privateMedian)}`} />
+            </span>
+            <p class="detail">{detail(m.processCount, s.cpuMean)}</p>
           </li>
-          <li class="card">
-            <p class="big">{one(head.s.appWs)} <span>MB</span></p>
-            <p>memory used by Krova&rsquo;s own process alone (working set)</p>
-          </li>
-          <li class="card">
-            <p class="big">{two(head.s.cpuMean)} <span>%</span></p>
-            <p>average CPU over {head.s.durationS} seconds, as a share of one core</p>
-          </li>
-        </ul>
-      ) : (
-        <ul class="stats stats--runs">
-          {runs.map(({ m, s }) => (
-            <li class="card">
-              <p class="big">{one(s.privateMedian)} <span>MB</span></p>
-              <p>
-                <strong>{m.label}.</strong> Private memory, {plural(m.processCount, 'process', 'processes')}. Average CPU {two(s.cpuMean)} % of one
-                core.{measured(m.date)}
-              </p>
-            </li>
-          ))}
-        </ul>
-      )
-    }
+        ))
+      }
+      <li class="cell cell--open">
+        <p class="state">Not measured yet</p>
+        <p class="big big--text">Drag latency</p>
+        <p class="detail">Resource use while dragging, and macOS. These numbers will change.</p>
+      </li>
+    </ul>
 
     <div class="after">
-      <p>{afterText}</p>
+      <p>One run each, 60 seconds idle with nothing being dragged, on one Windows PC. Not a benchmark against other tools.</p>
       <a class="btn btn-secondary" href={url('/performance/')}>
-        See the charts and the method
+        Charts and method
         <Icon name="arrow" />
       </a>
     </div>
@@ -82,34 +64,71 @@ const afterText =
 </section>
 
 <style>
-  .stats {
+  .strip {
     display: grid;
-    gap: var(--space-m);
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-l);
+    background: var(--color-surface);
   }
-  .card {
-    padding: var(--space-m);
-    border-radius: var(--radius-xl);
+
+  .cell {
+    padding: var(--space-l) var(--space-m);
+    border-top: 1px solid var(--color-border);
+  }
+  .cell:first-child {
+    border-top: 0;
+  }
+
+  .state {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--color-text-muted);
   }
   .big {
-    font-size: var(--text-2xl);
+    margin-top: var(--space-xs);
+    font-size: clamp(2.5rem, 1.6rem + 3.4vw, 4rem);
     font-weight: 700;
-    letter-spacing: var(--tracking-tight);
+    letter-spacing: -0.04em;
     line-height: 1;
     font-variant-numeric: tabular-nums;
   }
   .big span {
-    font-size: 0.45em;
+    font-size: 0.4em;
     letter-spacing: 0;
     color: var(--color-text-soft);
   }
-  .card p:last-child {
-    margin-top: var(--space-xs);
+  .big--text {
+    font-size: clamp(1.5rem, 1.1rem + 1.6vw, 2.25rem);
+    letter-spacing: -0.03em;
+    color: var(--color-text-soft);
+  }
+
+  .track {
+    display: block;
+    height: 0.375rem;
+    margin-top: var(--space-s);
+    border-radius: var(--radius-pill);
+    background: var(--color-surface-3);
+  }
+  .track i {
+    display: block;
+    height: 100%;
+    border-radius: var(--radius-pill);
+    background: var(--color-accent);
+  }
+
+  .detail {
+    margin-top: var(--space-s);
+    max-width: 24rem;
     font-size: var(--text-sm);
+    line-height: 1.5;
     color: var(--color-text-muted);
   }
-  .card p:last-child strong {
-    color: var(--color-text);
+  .big--text + .detail {
+    margin-top: var(--space-s);
   }
+
   .after {
     display: grid;
     justify-items: center;
@@ -120,12 +139,18 @@ const afterText =
     font-size: var(--text-sm);
     color: var(--color-text-muted);
   }
-  @media (min-width: 48rem) {
-    .stats {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+
+  @media (min-width: 52rem) {
+    .strip {
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(0, 1fr);
     }
-    .stats--runs {
-      grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    .cell {
+      border-top: 0;
+      border-left: 1px solid var(--color-border);
+    }
+    .cell:first-child {
+      border-left: 0;
     }
   }
 </style>

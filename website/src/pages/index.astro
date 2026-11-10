@@ -1,30 +1,24 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Hero from '../components/Hero.astro';
-import HowItWorks from '../components/HowItWorks.astro';
-import Features from '../components/Features.astro';
+import FeatureTabs from '../components/FeatureTabs.astro';
 import Customize from '../components/Customize.astro';
-import TryEditor from '../components/TryEditor.astro';
-import Compare from '../components/Compare.astro';
-import PerformanceTeaser from '../components/PerformanceTeaser.astro';
-import OpenSource from '../components/OpenSource.astro';
 import Faq from '../components/Faq.astro';
 import FinalCta from '../components/FinalCta.astro';
+import { MAC_RELEASED } from '../site';
 
-const title = 'Krova: free, offline window zone manager for Windows and macOS';
-const description =
-  'Draw zones on each monitor, hold Shift while dragging a window, release over a zone to snap. On Windows, also keyboard shortcuts and windows that return to their zones. Free, MIT, offline, for Windows 10/11 and macOS 13+.';
+const title = MAC_RELEASED
+  ? 'Krova: free, offline window zone manager for Windows and macOS'
+  : 'Krova: free, offline window zone manager for Windows';
+const description = MAC_RELEASED
+  ? 'Draw zones on each monitor, hold Shift while dragging a window, release over a zone to snap. Keyboard shortcuts and windows that return to their zones on Windows. Free, MIT, offline, for Windows 10/11 and macOS 13+.'
+  : 'Draw zones on each monitor, hold Shift while dragging a window, release over a zone to snap. Keyboard shortcuts and windows that return to their zones. Free, MIT, offline, for Windows 10/11. An early preview; macOS comes after testing on a real Mac.';
 ---
 
 <BaseLayout title={title} description={description}>
   <Hero />
-  <HowItWorks />
-  <Features />
+  <FeatureTabs />
   <Customize />
-  <TryEditor />
-  <Compare />
-  <PerformanceTeaser />
-  <OpenSource />
   <Faq />
   <FinalCta />
 </BaseLayout>

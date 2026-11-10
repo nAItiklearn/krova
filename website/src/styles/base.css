@@ -26,6 +26,7 @@ body {
   line-height: var(--leading-body);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  font-feature-settings: 'ss01', 'cv11';
   overflow-x: clip;
 }
 
@@ -211,8 +212,8 @@ hr {
 
 /* ---- Section heads: mono eyebrow, short headline with a muted second half ---- */
 .sec-head {
-  max-width: 48rem;
-  margin: 0 auto var(--space-xl);
+  max-width: 68rem;
+  margin: 0 auto clamp(2.25rem, 1.5rem + 3vw, 3.75rem);
   text-align: center;
 }
 
@@ -224,16 +225,19 @@ hr {
 .eyebrow {
   margin-bottom: var(--space-s);
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  font-size: 0.8rem;
   font-weight: 500;
-  letter-spacing: var(--tracking-mono);
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--color-text-soft);
+  color: var(--color-text-muted);
 }
 
 .sec-head h2,
 .h2 {
-  font-size: var(--text-2xl);
+  font-size: clamp(2.2rem, 1.2rem + 3.6vw, 4rem);
+  font-weight: 740;
+  letter-spacing: -0.048em;
+  line-height: 1.02;
 }
 
 .soft {
@@ -243,6 +247,9 @@ hr {
 /* Section headlines: a dark first line and a muted second line. */
 .sec-head h2 .soft {
   display: block;
+}
+.sec-head h2 {
+  text-wrap: balance;
 }
 
 .sec-head .lead {
@@ -295,7 +302,7 @@ hr {
 .btn-primary {
   background: var(--color-accent);
   color: var(--color-on-accent);
-  box-shadow: 0 1px 2px rgba(79, 70, 229, 0.35), 0 8px 20px rgba(79, 70, 229, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 1px 2px rgba(15, 16, 32, 0.25);
 }
 
 .btn-primary:hover {
@@ -566,4 +573,95 @@ hr {
   .pill {
     border-color: CanvasText;
   }
+}
+
+
+/* ---- Screenshots come as a light and a dark file; the one that matches the site theme is shown ---- */
+.shot-dark {
+  display: none;
+}
+:root[data-theme='dark'] .shot-light {
+  display: none;
+}
+:root[data-theme='dark'] .shot-dark {
+  display: block;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .shot-light {
+    display: none;
+  }
+  :root:not([data-theme]) .shot-dark {
+    display: block;
+  }
+}
+
+/* ---- A cropped screenshot inside a card: neutral edge, square-cut like a piece of the real window ---- */
+.crop {
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+  overflow: hidden;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-m);
+  background: var(--color-surface);
+  line-height: 0;
+}
+.crop img {
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: var(--crop-h, none);
+}
+
+/* ---- Roadmap status label: Available now / In progress / Planned ---- */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.12rem 0.6rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.status .icon {
+  width: 0.8rem;
+  height: 0.8rem;
+  stroke-width: 2.4;
+}
+.status--available {
+  border-color: transparent;
+  background: var(--accent-tint-strong);
+  color: var(--color-accent-text);
+}
+.status--progress {
+  border-color: var(--color-warn-border);
+  background: var(--color-warn-bg);
+  color: var(--color-text);
+}
+.status .dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--color-warn);
+}
+
+/* ---- Scroll reveal (class added by BaseLayout's script, so no-JS pages stay visible) ---- */
+.reveal {
+  opacity: 0;
+  filter: blur(6px);
+  transform: translateY(16px);
+  transition:
+    opacity 0.8s cubic-bezier(0.2, 0.8, 0.2, 1),
+    filter 0.8s cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.reveal.in {
+  opacity: 1;
+  filter: none;
+  transform: none;
 }

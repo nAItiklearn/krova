@@ -1,7 +1,7 @@
 ---
 import { url } from '../lib/url';
 import { footerColumns } from '../data/nav';
-import { COPYRIGHT_HOLDER, REPO_LINKS_ENABLED, REPO_URL, VERSION_LABEL } from '../site';
+import { COPYRIGHT_HOLDER, MAC_RELEASED, REPO_LINKS_ENABLED, REPO_URL, VERSION_LABEL } from '../site';
 
 const home = url('/');
 ---
@@ -14,7 +14,10 @@ const home = url('/');
           <img src={url('/favicon.svg')} width="28" height="28" alt="" />
           <span>Krova</span>
         </a>
-        <p>Free, offline window zone manager for Windows 10/11 and macOS 13+. Hold a key, drag a window, drop it in a zone.</p>
+        <p>
+          Free, offline window zone manager for {MAC_RELEASED ? 'Windows 10/11 and macOS 13+' : 'Windows 10/11'}. Hold a key, drag
+          a window, drop it in a zone.
+        </p>
         <div class="theme" data-theme-set-group hidden role="group" aria-label="Theme">
           <span class="theme-label">Theme</span>
           <div class="seg">
@@ -32,7 +35,14 @@ const home = url('/');
             <ul>
               {col.links.map((l) => (
                 <li>
-                  <a href={url(l.href)}>{l.label}</a>
+                  {l.external ? (
+                    <a href={l.href} target="_blank" rel="noopener">
+                      {l.label}
+                      <span class="visually-hidden"> (opens in a new tab)</span>
+                    </a>
+                  ) : (
+                    <a href={url(l.href)}>{l.label}</a>
+                  )}
                 </li>
               ))}
             </ul>
@@ -64,7 +74,7 @@ const home = url('/');
     margin-top: auto;
     padding-block: var(--space-2xl) var(--space-l);
     border-top: 1px solid var(--color-border);
-    background: var(--color-surface-2);
+    background: var(--color-bg);
   }
 
   .grid {
@@ -75,7 +85,7 @@ const home = url('/');
 
   .about {
     grid-column: 1 / -1;
-    max-width: 24rem;
+    max-width: 22rem;
   }
 
   .brand {
@@ -115,7 +125,7 @@ const home = url('/');
     padding: 3px;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-pill);
-    background: var(--color-surface-3);
+    background: var(--color-surface-2);
   }
   .seg button {
     min-height: 2.25rem;
@@ -135,7 +145,7 @@ const home = url('/');
   .seg button[aria-pressed='true'] {
     background: var(--color-surface);
     color: var(--color-text);
-    box-shadow: var(--shadow-1);
+    box-shadow: 0 0 0 1px var(--color-border), var(--shadow-1);
   }
 
   .col h2 {
@@ -181,7 +191,7 @@ const home = url('/');
 
   @media (min-width: 64rem) {
     .grid {
-      grid-template-columns: 1.6fr repeat(4, minmax(0, 1fr));
+      grid-template-columns: 1.5fr repeat(4, minmax(0, 1fr));
     }
     .about {
       grid-column: auto;

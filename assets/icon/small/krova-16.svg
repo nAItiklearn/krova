@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <!-- Krova at 16 px: every edge on a whole pixel, 1 px gaps. Also used at 2x (32 px). -->
+  <rect width="16" height="16" rx="3.5" fill="#141413"/>
+  <g fill="#f4f1ea">
+    <path d="M4 2H6V14H4A2 2 0 0 1 2 12V4A2 2 0 0 1 4 2Z"/>
+    <path d="M7 2H12A2 2 0 0 1 14 4V9H7V2Z"/>
+    <path d="M7 10H10V14H7V10Z"/>
+  </g>
+  <path fill="#ff5b1f" d="M11 10H14V12A2 2 0 0 1 12 14H11V10Z"/>
+</svg>
