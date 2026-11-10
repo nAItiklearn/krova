@@ -2,6 +2,8 @@
 //! edge-snap rules and config persistence.
 #![forbid(unsafe_code)]
 
+pub mod app_rules;
+pub mod arrange;
 pub mod config;
 pub mod edge;
 pub mod edit;
@@ -9,8 +11,11 @@ pub mod geometry;
 pub mod layout_io;
 pub mod linked;
 pub mod monitor;
+pub mod presets;
 pub mod registry;
 pub mod snap;
+pub mod stack;
+pub mod swap;
 pub mod window;
 pub mod zone;
 
