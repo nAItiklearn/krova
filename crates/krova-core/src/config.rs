@@ -119,6 +119,11 @@ pub struct Settings {
     /// `<shortcut_modifier>+Space` opens the layout switcher on the monitor under
     /// the cursor. Independent of `keyboard_shortcuts`.
     pub layout_switcher_shortcut: bool,
+    // --- notch ---
+    /// The notch at a screen edge (see `crate::notch`). Lenient: a bad value
+    /// falls back to the defaults field by field.
+    pub notch: crate::notch::NotchSettings,
+    // --- notch ---
 }
 
 /// `#rrggbb` (any case, optional `#`, surrounding spaces ignored) as lowercase `#rrggbb`.
@@ -166,6 +171,9 @@ impl Default for Settings {
             linked_dividers: true,
             zone_gap_px: 0,
             layout_switcher_shortcut: true,
+            // --- notch ---
+            notch: crate::notch::NotchSettings::default(),
+            // --- notch ---
         }
     }
 }
