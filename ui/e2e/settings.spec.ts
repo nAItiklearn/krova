@@ -1,11 +1,15 @@
-// Settings view: every control, autosave with the Saved indicator, colour
-// validation, theme switching.
+// Settings, now spread over the sidebar sections (Arrange, Appearance, Privacy):
+// every control, autosave with the Saved indicator, colour validation, theme
+// switching.
 
-import { expect, openSettings, test } from './fixtures';
+import { expect, gotoSection, openArrange, openSection, test, type Section } from './fixtures';
 import type { Page } from '@playwright/test';
 
-const LIGHT_BG = 'rgb(244, 245, 248)'; // --bg #f4f5f8
-const DARK_BG = 'rgb(14, 17, 22)'; // --bg #0e1116
+const LIGHT_BG = 'rgb(246, 245, 242)'; // --bg #f6f5f2
+const DARK_BG = 'rgb(17, 17, 16)'; // --bg #111110
+const COLOR_ERROR = /Use a colou?r like #[0-9a-f]{6}/;
+
+const openAppearance = (page: Page, query?: string) => openSection(page, 'appearance', query);
 
 const indicator = (page: Page) => page.getByTestId('save-indicator');
 
@@ -15,48 +19,58 @@ async function expectSaved(page: Page): Promise<void> {
 }
 
 test.describe('defaults', () => {
-  test('every control shows its default value', async ({ page }) => {
-    await openSettings(page);
+  test('every Arrange control shows its default value', async ({ page }) => {
+    await openArrange(page);
 
-    await expect(page.getByRole('heading', { name: 'Settings', level: 2 })).toBeVisible();
-    await expect(page.getByText('Changes are saved automatically.')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Arrange', level: 2 })).toBeVisible();
 
     await expect(page.getByTestId('setting-enabled')).toBeChecked();
-    await expect(page.getByTestId('setting-launch_at_login')).not.toBeChecked();
     await expect(page.getByTestId('setting-modifier-shift')).toBeChecked();
     await expect(page.getByTestId('setting-move_mode-animate')).toBeChecked();
     await expect(page.getByTestId('setting-edge_snapping')).not.toBeChecked();
     await expect(page.getByTestId('setting-edge_size_px')).toBeDisabled();
     await expect(page.getByTestId('setting-edge_size_px')).toHaveValue('8');
-    await expect(page.getByTestId('setting-highlight_color')).toHaveValue('#3b82f6');
-    await expect(page.getByTestId('setting-highlight_color-picker')).toHaveValue('#3b82f6');
-    await expect(page.getByTestId('setting-highlight_opacity')).toHaveValue('0.35');
-    await expect(page.getByText('35%', { exact: true })).toBeVisible();
-    await expect(page.getByTestId('setting-theme-system')).toBeChecked();
 
     // Nothing has been changed, so nothing is being saved.
     await expect(indicator(page)).toHaveAttribute('data-state', 'idle');
     await expect(indicator(page)).toHaveText('');
   });
 
+  test('Launch at login is off by default (Privacy)', async ({ page }) => {
+    await openSection(page, 'privacy');
+    await expect(page.getByTestId('setting-launch_at_login')).not.toBeChecked();
+  });
+
+  test('every Appearance control shows its default value', async ({ page }) => {
+    await openAppearance(page);
+    const view = page.getByTestId('view-appearance');
+    await expect(page.getByTestId('setting-highlight_color')).toHaveValue('#ff5b1f');
+    await expect(page.getByTestId('setting-highlight_color-picker')).toHaveValue('#ff5b1f');
+    await expect(page.getByTestId('setting-highlight_opacity')).toHaveValue('0.35');
+    await expect(view.getByText('35%', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('setting-theme-system')).toBeChecked();
+  });
+
   test('switches expose the switch role and a name', async ({ page }) => {
-    await openSettings(page);
+    await openArrange(page);
     await expect(page.getByRole('switch', { name: 'Enable Krova' })).toBeChecked();
-    await expect(page.getByRole('switch', { name: 'Launch at login' })).not.toBeChecked();
     await expect(page.getByRole('switch', { name: 'Edge snapping' })).not.toBeChecked();
-    await expect(page.getByRole('radiogroup')).toHaveCount(3);
+    await expect(page.getByRole('radiogroup', { name: 'Activation modifier' })).toBeVisible();
+    await expect(page.getByRole('radiogroup', { name: 'Move behavior' })).toBeVisible();
+    await gotoSection(page, 'privacy');
+    await expect(page.getByRole('switch', { name: 'Launch at login' })).not.toBeChecked();
   });
 });
 
 test.describe('each setting saves automatically', () => {
-  const switches = [
-    { testId: 'setting-enabled', name: 'Enable Krova', initial: true },
-    { testId: 'setting-launch_at_login', name: 'Launch at login', initial: false },
-    { testId: 'setting-edge_snapping', name: 'Edge snapping', initial: false },
+  const switches: { testId: string; name: string; initial: boolean; section: Section }[] = [
+    { testId: 'setting-enabled', name: 'Enable Krova', initial: true, section: 'arrange' },
+    { testId: 'setting-launch_at_login', name: 'Launch at login', initial: false, section: 'privacy' },
+    { testId: 'setting-edge_snapping', name: 'Edge snapping', initial: false, section: 'arrange' },
   ];
   for (const s of switches) {
     test(`toggling "${s.name}" shows the Saved indicator`, async ({ page }) => {
-      await openSettings(page);
+      await openSection(page, s.section);
       const sw = page.getByRole('switch', { name: s.name });
       await expect(sw).toHaveAttribute('data-testid', s.testId);
 
@@ -75,7 +89,7 @@ test.describe('each setting saves automatically', () => {
 
   for (const modifier of ['ctrl', 'alt', 'super', 'shift']) {
     test(`activation modifier: ${modifier}`, async ({ page }) => {
-      await openSettings(page);
+      await openArrange(page);
       // Start from a different value than the one under test.
       const other = modifier === 'ctrl' ? 'alt' : 'ctrl';
       await page.getByTestId(`setting-modifier-${other}`).check();
@@ -89,7 +103,7 @@ test.describe('each setting saves automatically', () => {
   }
 
   test('move behaviour: instant, then animate again', async ({ page }) => {
-    await openSettings(page);
+    await openArrange(page);
 
     await page.getByTestId('setting-move_mode-instant').check();
     await expect(page.getByTestId('setting-move_mode-instant')).toBeChecked();
@@ -103,15 +117,15 @@ test.describe('each setting saves automatically', () => {
   });
 
   test('the modifier description follows the choice', async ({ page }) => {
-    await openSettings(page);
-    const description = page.locator('#set-modifier-desc');
+    await openArrange(page);
+    const description = page.locator('#set-modifier-l-d');
     await expect(description).toContainText('Hold Shift while dragging');
     await page.getByTestId('setting-modifier-ctrl').check();
     await expect(description).toContainText(/Hold (Ctrl|Control) while dragging/);
   });
 
   test('edge size is only available with edge snapping on', async ({ page }) => {
-    await openSettings(page);
+    await openArrange(page);
     const size = page.getByTestId('setting-edge_size_px');
     await expect(size).toBeDisabled();
 
@@ -129,16 +143,16 @@ test.describe('each setting saves automatically', () => {
   });
 
   test('highlight opacity', async ({ page }) => {
-    await openSettings(page);
+    await openAppearance(page);
     const opacity = page.getByTestId('setting-highlight_opacity');
     await opacity.fill('0.8');
-    await expect(page.getByText('80%', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('view-appearance').getByText('80%', { exact: true })).toBeVisible();
     await expectSaved(page);
     await expect(opacity).toHaveValue('0.8');
   });
 
   test('highlight colour from the colour picker updates the hex field', async ({ page }) => {
-    await openSettings(page);
+    await openAppearance(page);
     await page.getByTestId('setting-highlight_color-picker').fill('#00ff7f');
     await expectSaved(page);
     await expect(page.getByTestId('setting-highlight_color')).toHaveValue('#00ff7f');
@@ -151,7 +165,7 @@ test.describe('each setting saves automatically', () => {
   test('highlight colour typed as hex is saved, lower-cased, and "#" is optional', async ({
     page,
   }) => {
-    await openSettings(page);
+    await openAppearance(page);
     const hex = page.getByTestId('setting-highlight_color');
 
     await hex.fill('#12AB9F');
@@ -167,7 +181,7 @@ test.describe('each setting saves automatically', () => {
 
   test('the Saved indicator goes away again after a moment', async ({ page }) => {
     await page.clock.install();
-    await openSettings(page);
+    await openSection(page, 'privacy');
     await page.getByRole('switch', { name: 'Launch at login' }).check();
 
     await page.clock.fastForward(400); // past the 300 ms autosave delay
@@ -179,14 +193,14 @@ test.describe('each setting saves automatically', () => {
   });
 
   test('rapid changes are saved together with the last value', async ({ page }) => {
-    await openSettings(page);
+    await openAppearance(page);
     const opacity = page.getByTestId('setting-highlight_opacity');
     await opacity.fill('0.1');
     await opacity.fill('0.2');
     await opacity.fill('0.9');
     await expectSaved(page);
     await expect(opacity).toHaveValue('0.9');
-    await expect(page.getByText('90%', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('view-appearance').getByText('90%', { exact: true })).toBeVisible();
   });
 });
 
@@ -194,22 +208,22 @@ test.describe('highlight colour validation', () => {
   const bad = ['', 'zzz', '#12345', '#gggggg', '3b82f', '#12 456'];
   for (const value of bad) {
     test(`flags "${value}" as invalid and does not save it`, async ({ page }) => {
-      await openSettings(page);
+      await openAppearance(page);
       const hex = page.getByTestId('setting-highlight_color');
       await hex.fill(value);
 
       await expect(hex).toHaveAttribute('aria-invalid', 'true');
       await expect(hex).toHaveAttribute('aria-describedby', 'set-color-err');
-      await expect(page.getByText('Use a color like #3b82f6')).toBeVisible();
-      await expect(hex).toHaveAccessibleDescription('Use a color like #3b82f6');
+      await expect(page.locator('#set-color-err')).toHaveText(COLOR_ERROR);
+      await expect(hex).toHaveAccessibleDescription(COLOR_ERROR);
       // The picker still holds the last good colour.
-      await expect(page.getByTestId('setting-highlight_color-picker')).toHaveValue('#3b82f6');
+      await expect(page.getByTestId('setting-highlight_color-picker')).toHaveValue('#ff5b1f');
       await expect(indicator(page)).not.toHaveAttribute('data-state', 'saved');
     });
   }
 
   test('becomes valid again as soon as a good colour is typed', async ({ page }) => {
-    await openSettings(page);
+    await openAppearance(page);
     const hex = page.getByTestId('setting-highlight_color');
 
     await hex.fill('#12');
@@ -218,7 +232,7 @@ test.describe('highlight colour validation', () => {
     await hex.fill('#123456');
     await expect(hex).toHaveAttribute('aria-invalid', 'false');
     await expect(hex).not.toHaveAttribute('aria-describedby', /.+/);
-    await expect(page.getByText('Use a color like #3b82f6')).toHaveCount(0);
+    await expect(page.locator('#set-color-err')).toHaveCount(0);
     await expectSaved(page);
     await expect(page.getByTestId('setting-highlight_color-picker')).toHaveValue('#123456');
   });
@@ -226,7 +240,7 @@ test.describe('highlight colour validation', () => {
   test('an invalid value typed after a good one leaves the saved colour alone', async ({
     page,
   }) => {
-    await openSettings(page);
+    await openAppearance(page);
     const hex = page.getByTestId('setting-highlight_color');
     await hex.fill('#00aa00');
     await expectSaved(page);
@@ -239,14 +253,16 @@ test.describe('highlight colour validation', () => {
 
 test.describe('persistence', () => {
   test('every setting is stored: all of them are still set after a reload', async ({ page }) => {
-    await openSettings(page, '?reset');
+    await openArrange(page, '?reset');
 
     await page.getByRole('switch', { name: 'Enable Krova' }).uncheck();
-    await page.getByRole('switch', { name: 'Launch at login' }).check();
     await page.getByTestId('setting-modifier-alt').check();
     await page.getByTestId('setting-move_mode-instant').check();
     await page.getByRole('switch', { name: 'Edge snapping' }).check();
     await page.getByTestId('setting-edge_size_px').fill('30');
+    await gotoSection(page, 'privacy');
+    await page.getByRole('switch', { name: 'Launch at login' }).check();
+    await gotoSection(page, 'appearance');
     await page.getByTestId('setting-highlight_color').fill('#ff0000');
     await page.getByTestId('setting-highlight_opacity').fill('0.6');
     await page.getByTestId('setting-theme-dark').check();
@@ -254,13 +270,15 @@ test.describe('persistence', () => {
 
     // A plain visit (no ?reset) reads what the demo persisted.
     await page.goto('/');
-    await page.getByTestId('nav-settings').click();
+    await gotoSection(page, 'arrange');
     await expect(page.getByTestId('setting-enabled')).not.toBeChecked();
-    await expect(page.getByTestId('setting-launch_at_login')).toBeChecked();
     await expect(page.getByTestId('setting-modifier-alt')).toBeChecked();
     await expect(page.getByTestId('setting-move_mode-instant')).toBeChecked();
     await expect(page.getByTestId('setting-edge_snapping')).toBeChecked();
     await expect(page.getByTestId('setting-edge_size_px')).toHaveValue('30');
+    await gotoSection(page, 'privacy');
+    await expect(page.getByTestId('setting-launch_at_login')).toBeChecked();
+    await gotoSection(page, 'appearance');
     await expect(page.getByTestId('setting-highlight_color')).toHaveValue('#ff0000');
     await expect(page.getByTestId('setting-highlight_opacity')).toHaveValue('0.6');
     await expect(page.getByTestId('setting-theme-dark')).toBeChecked();
@@ -268,19 +286,18 @@ test.describe('persistence', () => {
   });
 
   test('settings stay put when switching to the editor and back', async ({ page }) => {
-    await openSettings(page);
+    await openArrange(page);
     await page.getByTestId('setting-modifier-super').check();
     await expectSaved(page);
-    await page.getByTestId('nav-editor').click();
-    await expect(page.getByTestId('canvas')).toBeVisible();
-    await page.getByTestId('nav-settings').click();
+    await gotoSection(page, 'layouts');
+    await gotoSection(page, 'arrange');
     await expect(page.getByTestId('setting-modifier-super')).toBeChecked();
   });
 });
 
 test.describe('keyboard', () => {
   test('Space toggles a switch', async ({ page }) => {
-    await openSettings(page);
+    await openSection(page, 'privacy');
     const sw = page.getByRole('switch', { name: 'Launch at login' });
     await sw.focus();
     await page.keyboard.press('Space');
@@ -289,7 +306,7 @@ test.describe('keyboard', () => {
   });
 
   test('arrow keys move through a radio group and save', async ({ page }) => {
-    await openSettings(page);
+    await openArrange(page);
     await page.getByTestId('setting-modifier-shift').focus();
     await page.keyboard.press('ArrowRight');
     await expect(page.getByTestId('setting-modifier-ctrl')).toBeChecked();
@@ -298,13 +315,13 @@ test.describe('keyboard', () => {
   });
 
   test('range sliders respond to the arrow keys', async ({ page }) => {
-    await openSettings(page);
+    await openAppearance(page);
     const opacity = page.getByTestId('setting-highlight_opacity');
     await opacity.focus();
     await page.keyboard.press('ArrowRight');
     await expect(opacity).toHaveValue('0.36');
     await expectSaved(page);
-    await expect(page.getByText('36%', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('view-appearance').getByText('36%', { exact: true })).toBeVisible();
   });
 });
 
@@ -313,7 +330,7 @@ test.describe('theme', () => {
     page,
   }) => {
     await page.emulateMedia({ colorScheme: 'light' });
-    await openSettings(page);
+    await openAppearance(page);
     const html = page.locator('html');
     const body = page.locator('body');
 
@@ -342,7 +359,7 @@ test.describe('theme', () => {
       const effective = choice === 'system' ? os : choice;
       test(`OS prefers ${os}, theme "${choice}" renders ${effective}`, async ({ page }) => {
         await page.emulateMedia({ colorScheme: os });
-        await openSettings(page);
+        await openAppearance(page);
         await page.getByTestId(`setting-theme-${choice}`).check();
 
         await expect(page.locator('body')).toHaveCSS(
@@ -360,7 +377,7 @@ test.describe('theme', () => {
 
   test('"System" follows the operating system while the app is open', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'light' });
-    await openSettings(page);
+    await openAppearance(page);
     await expect(page.locator('body')).toHaveCSS('background-color', LIGHT_BG);
 
     await page.emulateMedia({ colorScheme: 'dark' });
@@ -372,11 +389,10 @@ test.describe('theme', () => {
 
   test('the theme also applies to the editor', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'light' });
-    await openSettings(page);
+    await openAppearance(page);
     await page.getByTestId('setting-theme-dark').check();
-    await page.getByTestId('nav-editor').click();
-    await expect(page.getByTestId('canvas')).toBeVisible();
+    await gotoSection(page, 'layouts');
     await expect(page.locator('body')).toHaveCSS('background-color', DARK_BG);
-    await expect(page.getByTestId('canvas')).toHaveCSS('background-color', 'rgb(10, 13, 18)'); // --canvas-bg #0a0d12
+    await expect(page.getByTestId('canvas')).toHaveCSS('background-color', 'rgb(13, 13, 12)'); // --canvas-bg #0d0d0c
   });
 });

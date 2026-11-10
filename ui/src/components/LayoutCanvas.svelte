@@ -620,8 +620,8 @@
     top: 8px;
     padding: 1px 7px;
     border-radius: 999px;
-    background: var(--preview);
-    color: var(--surface);
+    background: var(--ink);
+    color: var(--on-ink);
     font: 600 0.78rem/1.5 var(--mono);
     white-space: nowrap;
   }

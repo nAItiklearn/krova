@@ -233,7 +233,7 @@
     padding: 1px 8px;
     border-radius: 999px;
     border: 1px solid var(--accent);
-    color: var(--accent);
+    color: var(--accent-ink);
     font-size: 0.78rem;
     font-weight: 600;
   }

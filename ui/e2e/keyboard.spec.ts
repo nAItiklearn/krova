@@ -1,20 +1,24 @@
 // Keyboard-only operation: Tab order, visible focus, a complete edit without a mouse.
 
 import type { Locator } from '@playwright/test';
-import { demo, editorUi, expect, focusRingVisible, openApp, tabTo, test } from './fixtures';
+import { demo, editorUi, expect, focusRingVisible, openApp, openHome, tabTo, test } from './fixtures';
 
 test.describe('Tab order and visible focus', () => {
   test('the editor is reached in reading order and every stop shows a focus ring', async ({
     page,
   }) => {
-    await openApp(page);
+    // Open Layouts with the tray-menu hook so the keyboard focus stays at the page start.
+    await openHome(page);
+    await demo(page, 'navigate', 'editor');
     const ui = editorUi(page);
+    await expect(ui.canvas).toBeVisible();
 
     // Disabled buttons (Delete zone, Undo, Revert, Save, "Active layout") are skipped, and
-    // only the selected monitor tab and the first segment of each divider are tab stops.
+    // only the current sidebar button, the selected monitor tab and the first segment of
+    // each divider are tab stops.
     const stops: Array<[string, Locator]> = [
-      ['Editor nav', page.getByTestId('nav-editor')],
-      ['Settings nav', page.getByTestId('nav-settings')],
+      ['Arranging switch', page.locator('#st-toggle')],
+      ['Layouts nav (current section)', page.getByTestId('nav-layouts')],
       ['demo Reset', page.getByRole('button', { name: 'Reset' })],
       ['selected monitor tab', ui.tabs.nth(0)],
       ['Select tool', ui.toolSelect],
@@ -82,38 +86,41 @@ test.describe('Tab order and visible focus', () => {
     await expect(ui.deleteZone).toBeFocused();
   });
 
-  test('the Settings view is reached in order and every control shows a focus ring', async ({
+  test('the Arrange view is reached in order and every control shows a focus ring', async ({
     page,
   }) => {
-    // Switch view with the tray-menu hook so the keyboard focus stays at the page start.
-    await openApp(page);
-    await demo(page, 'navigate', 'settings');
+    // Switch section with the navigate hook so the keyboard focus stays at the page start.
+    await openHome(page);
+    await demo(page, 'navigate', 'arrange');
     await expect(page.getByTestId('setting-enabled')).toBeVisible();
 
     const stops: Array<[string, string]> = [
-      ['Editor nav', 'nav-editor'],
-      ['Settings nav', 'nav-settings'],
+      ['Arrange new windows', 'arrange-enabled'],
+      ['Which zone (checked radio)', 'arrange-policy-next_free'],
+      ['Fill gaps', 'arrange-fill_gaps'],
+      ['Stack when full', 'arrange-stack_when_full'],
       ['Enable Krova', 'setting-enabled'],
-      ['Launch at login', 'setting-launch_at_login'],
       ['Activation modifier (checked radio)', 'setting-modifier-shift'],
       ['Move behavior (checked radio)', 'setting-move_mode-animate'],
       ['Edge snapping', 'setting-edge_snapping'],
       // The disabled edge-size slider is skipped.
-      ['Colour picker', 'setting-highlight_color-picker'],
-      ['Hex colour', 'setting-highlight_color'],
-      ['Highlight opacity', 'setting-highlight_opacity'],
-      ['Theme (checked radio)', 'setting-theme-system'],
+      ['Restore windows on reconnect', 'setting-restore_on_reconnect'],
+      ['Linked dividers', 'setting-linked_dividers'],
+      ['Space between zones', 'setting-zone_gap_px'],
+      ['Focus follows mouse', 'setting-focus_follows_mouse'],
     ];
 
-    // The demo "Reset" button sits between the nav and the content.
+    // The sidebar comes first (the Arranging switch, the current section), then the demo
+    // "Reset" button.
     await page.keyboard.press('Tab');
-    await expect(page.getByTestId(stops[0][1])).toBeFocused();
+    await expect(page.locator('#st-toggle')).toBeFocused();
     await page.keyboard.press('Tab');
-    await expect(page.getByTestId(stops[1][1])).toBeFocused();
+    await expect(page.getByTestId('nav-arrange')).toBeFocused();
+    expect(await focusRingVisible(page)).toBe(true);
     await page.keyboard.press('Tab');
     await expect(page.getByRole('button', { name: 'Reset' })).toBeFocused();
 
-    for (const [label, testId] of stops.slice(2)) {
+    for (const [label, testId] of stops) {
       await page.keyboard.press('Tab');
       await expect(page.getByTestId(testId), `Tab stop: ${label}`).toBeFocused();
       expect(await focusRingVisible(page), `visible focus ring on: ${label}`).toBe(true);

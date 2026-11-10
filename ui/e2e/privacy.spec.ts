@@ -4,7 +4,16 @@
 // local dev server (see the `guard` fixture in fixtures.ts). The tests here make
 // that explicit, exercise the whole app while watching, and check the guard itself.
 
-import { demo, editorUi, expect, isAllowedUrl, openApp, test } from './fixtures';
+import {
+  SECTIONS,
+  demo,
+  editorUi,
+  expect,
+  gotoSection,
+  isAllowedUrl,
+  openApp,
+  test,
+} from './fixtures';
 
 const BASE = 'http://localhost:1420';
 
@@ -36,13 +45,19 @@ test.describe('network traffic', () => {
     await ui.setActive.click();
     await expect(ui.status).toContainText('is now the active layout');
 
-    // Settings: change every kind of control, wait until it is saved.
-    await page.getByTestId('nav-settings').click();
+    // Settings: visit every section, change every kind of control, wait until it is saved.
+    for (const section of SECTIONS) await gotoSection(page, section);
+    await gotoSection(page, 'privacy');
     await page.getByRole('switch', { name: 'Launch at login' }).check();
+    await expect(page.getByTestId('save-indicator')).toContainText('Saved');
+    await gotoSection(page, 'arrange');
     await page.getByTestId('setting-modifier-ctrl').check();
+    await page.getByTestId('app-rule-input').fill('Notepad.exe');
+    await page.getByTestId('app-rule-add').click();
+    await expect(page.getByTestId('save-indicator')).toContainText('Saved');
+    await gotoSection(page, 'appearance');
     await page.getByTestId('setting-highlight_color').fill('#ff00aa');
     await page.getByTestId('setting-theme-dark').check();
-    await expect(page.getByTestId('save-indicator')).toContainText('Saved');
 
     // Permission banner and demo hooks.
     await page.getByTestId('permission-recheck').click();

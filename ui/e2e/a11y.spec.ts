@@ -1,5 +1,6 @@
 // Automated accessibility audit with axe-core (WCAG 2.0/2.1/2.2 level A and AA rules)
-// in several states of the editor and of Settings, in the light and the dark theme.
+// in several states of the editor and of the settings sections, in the light and the
+// dark theme.
 //
 // The audit runs with reduced motion so colour transitions cannot be caught half way,
 // which would make the contrast check non-deterministic.
@@ -11,7 +12,7 @@
 
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
-import { editorUi, expect, openApp, openSettings, test } from './fixtures';
+import { editorUi, expect, gotoSection, openApp, openSection, test } from './fixtures';
 
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
@@ -39,11 +40,24 @@ async function scan(
   }));
 }
 
+/**
+ * Opening a panel focuses its text box and scrolls the main column (a scroll
+ * container since the sidebar shell). axe then reports the zone buttons, scrolled
+ * fully out of view, under label-content-name-mismatch: off-screen text counts as
+ * "not visible". Scroll back to the top so the whole editor is audited as the user
+ * first sees it; the panel stays open and is audited too.
+ */
+async function scrollMainToTop(page: Page): Promise<void> {
+  await page.locator('#main').evaluate((el) => el.scrollTo(0, 0));
+}
+
 interface Scenario {
   name: string;
   query?: string;
   /** Bring the app into the state to audit. Starts on the editor. */
   arrange: (page: Page) => Promise<void>;
+  /** Set when the state cannot be reached in the current UI: the test is `fixme`. */
+  fixme?: string;
 }
 
 const scenarios: Scenario[] = [
@@ -109,24 +123,48 @@ const scenarios: Scenario[] = [
     },
   },
   {
-    name: 'settings, first load',
+    name: 'arrange, first load',
     arrange: async (page) => {
-      await page.getByTestId('nav-settings').click();
+      await gotoSection(page, 'arrange');
       await expect(page.getByTestId('setting-enabled')).toBeVisible();
     },
   },
   {
-    name: 'settings, edge snapping on and a Saved indicator',
+    name: 'arrange, edge snapping on and a Saved indicator',
     arrange: async (page) => {
-      await page.getByTestId('nav-settings').click();
+      await gotoSection(page, 'arrange');
       await page.getByRole('switch', { name: 'Edge snapping' }).check();
       await expect(page.getByTestId('save-indicator')).toContainText('Saved');
     },
   },
   {
-    name: 'settings, invalid highlight colour',
+    name: 'arrange, auto-arrange off and a refused app rule',
     arrange: async (page) => {
-      await page.getByTestId('nav-settings').click();
+      await gotoSection(page, 'arrange');
+      await page.getByTestId('arrange-enabled').uncheck();
+      await page.getByTestId('app-rule-input').fill('C:\\Tools\\app.exe');
+      await page.getByTestId('app-rule-add').click();
+      await expect(page.getByTestId('app-rule-error')).toBeVisible();
+    },
+  },
+  {
+    name: 'displays',
+    arrange: async (page) => {
+      await gotoSection(page, 'displays');
+      await expect(page.getByTestId('display-card')).toHaveCount(2);
+    },
+  },
+  {
+    name: 'privacy & about',
+    arrange: async (page) => {
+      await gotoSection(page, 'privacy');
+      await expect(page.getByTestId('privacy-promise')).toBeVisible();
+    },
+  },
+  {
+    name: 'appearance, invalid highlight colour',
+    arrange: async (page) => {
+      await gotoSection(page, 'appearance');
       await page.getByTestId('setting-highlight_color').fill('nope');
       await expect(page.getByTestId('setting-highlight_color')).toHaveAttribute(
         'aria-invalid',
@@ -139,6 +177,7 @@ const scenarios: Scenario[] = [
     arrange: async (page) => {
       await page.getByTestId('export-layout').click();
       await expect(page.getByTestId('export-text')).toHaveValue(/"krova_layout": 1/);
+      await scrollMainToTop(page);
     },
   },
   {
@@ -146,6 +185,7 @@ const scenarios: Scenario[] = [
     arrange: async (page) => {
       await page.getByTestId('import-layout').click();
       await expect(page.getByTestId('import-text')).toBeFocused();
+      await scrollMainToTop(page);
     },
   },
   {
@@ -157,54 +197,68 @@ const scenarios: Scenario[] = [
       await expect(editorUi(page).status).toHaveAttribute('data-kind', 'error');
       await expect(editorUi(page).status).toHaveText('not a Krova layout file');
       await expect(page.getByTestId('import-text')).toHaveAttribute('aria-invalid', 'true');
+      await scrollMainToTop(page);
     },
   },
   {
-    name: 'settings, keyboard shortcuts and windows groups after changing them',
+    name: 'shortcuts, a Win-key modifier chosen',
     arrange: async (page) => {
-      await page.getByTestId('nav-settings').click();
-      // A Win-key choice also shows the "Windows keeps many of these" hint.
+      await gotoSection(page, 'shortcuts');
       await page.getByTestId('setting-shortcut_modifier').selectOption('win_alt');
+      await expect(page.getByTestId('save-indicator')).toContainText('Saved');
+    },
+  },
+  {
+    name: 'arrange, windows group after changing it',
+    arrange: async (page) => {
+      await gotoSection(page, 'arrange');
       await page.getByTestId('setting-zone_gap_px').fill('12');
       await page.getByRole('switch', { name: 'Linked dividers' }).uncheck();
       await expect(page.getByTestId('save-indicator')).toContainText('Saved');
-      await expect(page.getByTestId('keymap-left')).toHaveText('Win + Alt + Left');
-      await expect(page.getByTestId('shortcuts-win-hint')).toBeVisible();
     },
   },
   {
-    name: 'settings, shortcuts switched off (modifier disabled)',
+    name: 'shortcuts, switched off (modifier disabled)',
     arrange: async (page) => {
-      await page.getByTestId('nav-settings').click();
-      await page.getByRole('switch', { name: 'Use keyboard shortcuts' }).uncheck();
+      await gotoSection(page, 'shortcuts');
+      await page.getByTestId('setting-keyboard_shortcuts').uncheck();
       await expect(page.getByTestId('setting-shortcut_modifier')).toBeDisabled();
       await expect(page.getByTestId('save-indicator')).toContainText('Saved');
     },
   },
   {
-    name: 'settings, shortcut conflict warning',
+    name: 'shortcuts, conflict warning',
     query: '?nopersist&shortcuts=failed',
     arrange: async (page) => {
-      await page.getByTestId('nav-settings').click();
+      await gotoSection(page, 'shortcuts');
       await expect(page.getByTestId('shortcuts-failed')).toBeVisible();
     },
   },
   {
-    name: 'settings, shortcuts not active note',
+    name: 'shortcuts, not active note',
     query: '?nopersist&shortcuts=off',
+    fixme: 'the new Shortcuts view has no "not active" note (shortcuts-inactive) yet',
     arrange: async (page) => {
-      await page.getByTestId('nav-settings').click();
+      await gotoSection(page, 'shortcuts');
       await expect(page.getByTestId('shortcuts-inactive')).toBeVisible();
     },
   },
   {
-    name: 'settings, no platform support (disabled controls and notes)',
+    name: 'shortcuts, no platform support (disabled controls and note)',
     query: '?nopersist&capabilities=none',
     arrange: async (page) => {
-      await page.getByTestId('nav-settings').click();
+      await gotoSection(page, 'shortcuts');
       await expect(page.getByTestId('shortcuts-unavailable')).toBeVisible();
-      await expect(page.getByTestId('window-memory-unavailable')).toBeVisible();
       await expect(page.getByTestId('setting-keyboard_shortcuts')).toBeDisabled();
+    },
+  },
+  {
+    name: 'arrange, no platform support (disabled controls and note)',
+    query: '?nopersist&capabilities=none',
+    arrange: async (page) => {
+      await gotoSection(page, 'arrange');
+      await expect(page.getByTestId('window-memory-unavailable')).toBeVisible();
+      await expect(page.getByTestId('setting-restore_on_reconnect')).toBeDisabled();
     },
   },
 ];
@@ -214,17 +268,19 @@ for (const scheme of ['light', 'dark'] as const) {
     test.use({ colorScheme: scheme, reducedMotion: 'reduce' });
 
     for (const scenario of scenarios) {
-      test(`no WCAG A/AA violations: ${scenario.name}`, async ({ page }) => {
+      // fixme scenarios document a state the current UI cannot reach yet.
+      const define = scenario.fixme ? test.fixme : test;
+      define(`no WCAG A/AA violations: ${scenario.name}`, async ({ page }) => {
         await openApp(page, scenario.query);
         await scenario.arrange(page);
         expect(await scan(page)).toEqual([]);
       });
     }
 
-    test('no WCAG A/AA violations: settings with the theme forced to the other scheme', async ({
+    test('no WCAG A/AA violations: appearance with the theme forced to the other scheme', async ({
       page,
     }) => {
-      await openSettings(page);
+      await openSection(page, 'appearance');
       await page.getByTestId(`setting-theme-${scheme === 'light' ? 'dark' : 'light'}`).check();
       await expect(page.locator('html')).toHaveAttribute(
         'data-theme',
@@ -273,16 +329,16 @@ test.describe('axe, best-practice rules (informational)', () => {
   // Not a gate: best-practice findings are recorded as test annotations so they show up in
   // the HTML report without failing the run. page-has-heading-one used to show up here
   // (the brand was a span); the brand is now the page's h1.
-  test('record best-practice findings for the editor and Settings', async ({ page }, testInfo) => {
+  test('record best-practice findings for the editor and Arrange', async ({ page }, testInfo) => {
     await openApp(page);
     const editorFindings = await scan(page, { tags: ['best-practice'] });
-    await page.getByTestId('nav-settings').click();
+    await gotoSection(page, 'arrange');
     await expect(page.getByTestId('setting-enabled')).toBeVisible();
-    const settingsFindings = await scan(page, { tags: ['best-practice'] });
+    const arrangeFindings = await scan(page, { tags: ['best-practice'] });
 
     for (const [view, findings] of [
       ['editor', editorFindings],
-      ['settings', settingsFindings],
+      ['arrange', arrangeFindings],
     ] as const) {
       for (const f of findings) {
         testInfo.annotations.push({

@@ -5,7 +5,7 @@
 // (data-testid="status"); the pasted text and the panel stay where they are.
 
 import type { Page } from '@playwright/test';
-import { editorUi, expect, openApp, tabTo, test } from './fixtures';
+import { editorUi, expect, gotoSection, openApp, tabTo, test } from './fixtures';
 
 const exportButton = (page: Page) => page.getByTestId('export-layout');
 const importButton = (page: Page) => page.getByTestId('import-layout');
@@ -555,7 +555,7 @@ test.describe('persistence', () => {
     await expect(ui.status).toContainText('Imported "Pasted layout"');
 
     await page.goto('/');
-    await expect(ui.canvas).toBeVisible();
+    await gotoSection(page, 'layouts');
     await expect(ui.layoutItems).toHaveCount(5);
     await expect(ui.layoutItem('Pasted layout')).toHaveAttribute('data-layout-id', 'pasted');
   });

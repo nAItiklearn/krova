@@ -107,18 +107,61 @@ export const test = base.extend<Fixtures>({
 // Opening the app and driving the demo hooks
 // ---------------------------------------------------------------------------
 
-/** Load the demo and wait until the editor is on screen. */
-export async function openApp(page: Page, query: string = NOPERSIST): Promise<void> {
-  await page.goto(`/${query}`);
-  await expect(page.getByTestId('demo-badge')).toBeVisible();
-  await expect(page.getByTestId('canvas')).toBeVisible();
+/** The sidebar sections (src/lib/app.svelte.ts `Section`). */
+export type Section =
+  | 'overview'
+  | 'layouts'
+  | 'arrange'
+  | 'shortcuts'
+  | 'appearance'
+  | 'corners'
+  | 'displays'
+  | 'privacy';
+
+export const SECTIONS: Section[] = [
+  'overview',
+  'layouts',
+  'arrange',
+  'shortcuts',
+  'corners',
+  'appearance',
+  'displays',
+  'privacy',
+];
+
+/** What is on screen when a section is open: the editor canvas for Layouts, the page otherwise. */
+export function sectionContent(page: Page, section: Section): Locator {
+  return section === 'layouts' ? page.getByTestId('canvas') : page.getByTestId(`view-${section}`);
 }
 
-/** Open the Settings view through the real navigation button. */
-export async function openSettings(page: Page, query: string = NOPERSIST): Promise<void> {
-  await openApp(page, query);
-  await page.getByTestId('nav-settings').click();
-  await expect(page.getByTestId('settings')).toBeVisible();
+/** Load the demo and wait until the first screen (the Overview) is up. */
+export async function openHome(page: Page, query: string = NOPERSIST): Promise<void> {
+  await page.goto(`/${query}`);
+  await expect(page.getByTestId('demo-badge')).toBeVisible();
+  await expect(page.getByTestId('view-overview')).toBeVisible();
+}
+
+/** Open a section through its sidebar button. */
+export async function gotoSection(page: Page, section: Section): Promise<void> {
+  await page.getByTestId(`nav-${section}`).click();
+  await expect(page.getByTestId(`nav-${section}`)).toHaveAttribute('aria-current', 'page');
+  await expect(sectionContent(page, section)).toBeVisible();
+}
+
+/** Load the demo and open a section. */
+export async function openSection(page: Page, section: Section, query: string = NOPERSIST): Promise<void> {
+  await openHome(page, query);
+  await gotoSection(page, section);
+}
+
+/** Load the demo and wait until the editor (Layouts) is on screen. */
+export async function openApp(page: Page, query: string = NOPERSIST): Promise<void> {
+  await openSection(page, 'layouts', query);
+}
+
+/** Open Arrange (snapping, windows, app rules) and wait for its first setting. */
+export async function openArrange(page: Page, query: string = NOPERSIST): Promise<void> {
+  await openSection(page, 'arrange', query);
   await expect(page.getByTestId('setting-enabled')).toBeVisible();
 }
 
@@ -245,7 +288,8 @@ export async function tabTo(
 /**
  * Does the focused element draw a visible focus indicator? The app draws it on
  * the element itself, or on a part of it: the face of a zone, the ::before grip
- * of a divider, the label span that follows a visually hidden radio input.
+ * of a divider, the track that follows a visually hidden switch; text fields and
+ * selects use a box-shadow ring instead of an outline.
  */
 export function focusRingVisible(page: Page): Promise<boolean> {
   return page.evaluate(() => {
@@ -255,6 +299,19 @@ export function focusRingVisible(page: Page): Promise<boolean> {
       style.outlineColor !== 'rgba(0, 0, 0, 0)';
     const el = document.activeElement;
     if (!el || el === document.body) return false;
+    // Text fields and selects draw their ring as a box-shadow: it must change on focus.
+    if (el.matches('input[type="text"], select, textarea')) {
+      // The ring fades in (a short transition): read the end state.
+      const settle = (): void => el.getAnimations().forEach((a) => a.finish());
+      settle();
+      const focused = getComputedStyle(el).boxShadow;
+      (el as HTMLElement).blur();
+      settle();
+      const blurred = getComputedStyle(el).boxShadow;
+      (el as HTMLElement).focus();
+      settle();
+      if (focused !== 'none' && focused !== blurred) return true;
+    }
     const candidates: Array<CSSStyleDeclaration | undefined> = [
       getComputedStyle(el),
       getComputedStyle(el, '::before'),
