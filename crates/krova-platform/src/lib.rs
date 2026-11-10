@@ -30,6 +30,9 @@ pub mod win_overlay;
 pub mod desk;
 #[cfg(windows)]
 pub mod win_desk;
+// F-29: overlays excluded from screen capture while share-safe is on.
+#[cfg(windows)]
+pub(crate) mod win_capture;
 #[cfg(windows)]
 pub mod win_visuals;
 // --- end wave3 ---

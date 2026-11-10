@@ -136,8 +136,19 @@ static SHARE_SAFE: AtomicBool = AtomicBool::new(false);
 /// Mirror of the `share_safe` setting for native overlays, set by the app whenever
 /// the settings change. While true, no Krova overlay draws an app name, an icon or
 /// window contents: only zone shapes.
+///
+/// On Windows, switching it also sets `WDA_EXCLUDEFROMCAPTURE` on every native
+/// overlay (and `WDA_NONE` when it goes off), so a screen share never shows them.
+/// That is defence in depth: any overlay that draws app names, icons or window
+/// contents must still check [`share_safe`] and draw only zone shapes.
 pub fn set_share_safe(on: bool) {
-    SHARE_SAFE.store(on, Ordering::Relaxed);
+    let was = SHARE_SAFE.swap(on, Ordering::Relaxed);
+    #[cfg(windows)]
+    if was != on {
+        crate::win_capture::apply_all(on);
+    }
+    #[cfg(not(windows))]
+    let _ = was;
 }
 
 /// See [`set_share_safe`].

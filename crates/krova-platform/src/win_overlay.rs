@@ -135,7 +135,10 @@ fn create_window() -> windows::core::Result<HWND> {
 
 fn run(scene: SharedScene, ready: mpsc::Sender<Result<u32, String>>) {
     let hwnd = match create_window() {
-        Ok(h) => h,
+        Ok(h) => {
+            crate::win_capture::register_overlay(h);
+            h
+        }
         Err(e) => {
             let _ = ready.send(Err(e.to_string()));
             return;
@@ -167,6 +170,7 @@ fn run(scene: SharedScene, ready: mpsc::Sender<Result<u32, String>>) {
             DispatchMessageW(&msg);
         }
     }
+    crate::win_capture::unregister_overlay(hwnd);
     let _ = unsafe { DestroyWindow(hwnd) };
 }
 

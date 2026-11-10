@@ -219,6 +219,7 @@ fn overlay_window(topmost: bool) -> Option<HWND> {
         )
     }
     .ok()
+    .inspect(|&h| crate::win_capture::register_overlay(h))
 }
 
 fn set_fill(h: HWND, colour: COLORREF, alpha: u8) {
@@ -250,6 +251,7 @@ fn hide(h: HWND) {
 }
 
 fn destroy(h: HWND) {
+    crate::win_capture::unregister_overlay(h);
     // SAFETY: our own window, on its own thread.
     let _ = unsafe { DestroyWindow(h) };
 }
