@@ -9,7 +9,7 @@ import { ISSUES_URL, REPO_LINKS_ENABLED } from '../site';
   <div class="container wrap">
     <header class="head">
       <p class="eyebrow">FAQ</p>
-      <h2 id="faq-title">Frequently asked <span class="soft">questions</span></h2>
+      <h2 id="faq-title">Questions</h2>
       <p class="muted">
         Something else? Check <a href={url('/support/')}>Troubleshooting</a>{
           REPO_LINKS_ENABLED ? (
@@ -23,8 +23,8 @@ import { ISSUES_URL, REPO_LINKS_ENABLED } from '../site';
 
     <div class="groups">
       {
-        faq.map((g) => (
-          <div class="group card">
+        faq.map((g, gi) => ({ ...g, items: g.items.slice(0, gi === 0 ? 4 : 2) })).map((g) => (
+          <div class="group">
             <h3>{g.title}</h3>
             <div class="items">
               {g.items.map((it) => (
@@ -46,83 +46,60 @@ import { ISSUES_URL, REPO_LINKS_ENABLED } from '../site';
 
 <style>
   .wrap {
-    display: grid;
-    gap: var(--space-xl);
-    align-items: start;
+    max-width: 46rem;
   }
-
+  .head {
+    text-align: center;
+    margin-bottom: clamp(2rem, 1.5rem + 2vw, 3rem);
+  }
   .head h2 {
-    font-size: var(--text-2xl);
+    font-size: clamp(2.2rem, 1.2rem + 3.6vw, 4rem);
+    font-weight: 740;
+    letter-spacing: -0.048em;
   }
   .head .muted {
-    margin-top: var(--space-s);
-    max-width: 24rem;
+    margin: var(--space-s) auto 0;
+    max-width: 30rem;
     font-size: var(--text-sm);
   }
-
-  .groups {
-    display: grid;
-    gap: var(--space-s);
-  }
-
-  .group {
-    padding: var(--space-s);
-    border-radius: var(--radius-xl);
+  .group + .group {
+    margin-top: var(--space-l);
   }
   .group h3 {
-    padding: 0.4rem 0.6rem 0.8rem;
-    font-size: var(--text-sm);
+    margin-bottom: 0.25rem;
+    font-size: 0.78rem;
     font-weight: 600;
-    letter-spacing: 0;
+    letter-spacing: 0.02em;
     color: var(--color-text-soft);
   }
-
-  .items {
-    display: grid;
-    gap: 0.4rem;
-  }
-
   details {
-    border-radius: var(--radius-m);
-    background: var(--color-surface-2);
-    transition: background-color var(--dur-fast) var(--ease-out);
+    border-bottom: 1px solid var(--color-border);
   }
-  details[open] {
-    background: var(--color-surface-3);
-  }
-
   summary {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: var(--space-s);
-    min-height: 3.25rem;
-    padding: 0.7rem 0.9rem;
-    border-radius: var(--radius-m);
-    font-size: var(--text-base);
-    font-weight: 600;
-    line-height: 1.35;
+    padding: 1.05rem 0;
+    font-size: var(--text-md);
+    font-weight: 560;
+    letter-spacing: -0.01em;
     cursor: pointer;
     list-style: none;
+    transition: color 0.2s ease;
+  }
+  summary:hover {
+    color: var(--color-accent-text);
   }
   summary::-webkit-details-marker {
     display: none;
   }
-  summary:focus-visible {
-    outline-offset: 0;
-  }
-
-  /* plus / minus drawn with two bars */
+  /* plus that turns into a minus */
   summary i {
     position: relative;
     flex: none;
-    width: 1.75rem;
-    height: 1.75rem;
-    border-radius: 50%;
-    background: var(--color-surface-3);
-  }
-  details[open] summary i {
-    background: var(--color-surface);
+    width: 1.1rem;
+    height: 1.1rem;
   }
   summary i::before,
   summary i::after {
@@ -130,12 +107,12 @@ import { ISSUES_URL, REPO_LINKS_ENABLED } from '../site';
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 0.65rem;
-    height: 2px;
+    width: 0.8rem;
+    height: 1.5px;
     border-radius: 1px;
-    background: var(--color-text);
+    background: currentColor;
     transform: translate(-50%, -50%);
-    transition: transform var(--dur) var(--ease-out);
+    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
   }
   summary i::after {
     transform: translate(-50%, -50%) rotate(90deg);
@@ -143,26 +120,21 @@ import { ISSUES_URL, REPO_LINKS_ENABLED } from '../site';
   details[open] summary i::after {
     transform: translate(-50%, -50%) rotate(0deg);
   }
-
   details p {
-    padding: 0 0.9rem 1rem;
+    padding: 0 0 1.15rem;
     max-width: 60ch;
-    font-size: var(--text-sm);
+    font-size: var(--text-base);
     line-height: 1.6;
     color: var(--color-text-muted);
+    animation: faq-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  @keyframes faq-in {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
   }
   details p :global(a) {
     text-decoration: underline;
-  }
-
-  @media (min-width: 60rem) {
-    .wrap {
-      grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr);
-      gap: var(--space-2xl);
-    }
-    .head {
-      position: sticky;
-      top: 6rem;
-    }
   }
 </style>

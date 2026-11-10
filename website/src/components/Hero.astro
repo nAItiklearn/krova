@@ -2,7 +2,7 @@
 import Icon from './Icon.astro';
 import LiveDesk from './LiveDesk.astro';
 import { url } from '../lib/url';
-import { MAC_RELEASED, REPO_LINKS_ENABLED, REPO_URL, VERSION_LABEL } from '../site';
+import { MAC_RELEASED } from '../site';
 
 const platforms = MAC_RELEASED ? 'Windows 10/11 and macOS 13+' : 'Windows 10 and 11';
 const buttonLabel = MAC_RELEASED ? 'Download' : 'Download for Windows';
@@ -31,7 +31,7 @@ const buttonLabel = MAC_RELEASED ? 'Download' : 'Download for Windows';
     </h1>
 
     <p class="lead rise" style="--d: 0.6s">
-      Draw your zones, or let Krova arrange windows as they open. Free, open source and offline, made for Windows.
+      Draw your zones, or let Krova arrange windows as they open.
     </p>
 
     <div class="actions rise" style="--d: 0.72s">
@@ -40,18 +40,8 @@ const buttonLabel = MAC_RELEASED ? 'Download' : 'Download for Windows';
         <span class="cta-arrow"><Icon name="arrow" /></span>
       </a>
       <a class="ghost" href="#live">Try it live <Icon name="chevron" /></a>
-      {
-        REPO_LINKS_ENABLED && (
-          <a class="ghost" href={REPO_URL}>
-            Source on GitHub
-          </a>
-        )
-      }
     </div>
-    <p class="fine rise" style="--d: 0.8s">
-      Free forever <span>·</span> MIT <span>·</span> {platforms} <span>·</span> No account, no network <span>·</span>
-      {VERSION_LABEL} early preview
-    </p>
+    <p class="fine rise" style="--d: 0.8s">Free and open source <span>·</span> {platforms}</p>
   </div>
 
   <div class="desk rise-late">

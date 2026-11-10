@@ -63,17 +63,13 @@ export const guidePath = (slug: string): string => `/guides/${slug}/`;
 
 /** Header links before the Guides dropdown. */
 export const navBeforeGuides: readonly NavLink[] = [
-  { label: 'Try it live', href: '/#live' },
   { label: 'Features', href: '/#features' },
-  { label: 'Compare', href: '/#compare' },
-  { label: 'Performance', href: '/performance/' },
 ];
 
 /** Header links after the Guides dropdown. */
 export const navAfterGuides: readonly NavLink[] = [
   { label: 'Roadmap', href: '/roadmap/' },
   { label: 'Changelog', href: '/changelog/' },
-  { label: 'FAQ', href: '/#faq' },
 ];
 
 export interface FooterColumn {
@@ -87,7 +83,7 @@ export const footerColumns: readonly FooterColumn[] = [
     links: [
       { label: 'Try it live', href: '/#live' },
       { label: 'Features', href: '/#features' },
-      { label: 'Compare', href: '/#compare' },
+      { label: 'Compare', href: '/compare/' },
       { label: 'Performance', href: '/performance/' },
       { label: 'Download', href: '/download/' },
     ],

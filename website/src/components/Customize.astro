@@ -244,7 +244,7 @@ const colours = [
     );
     arrowKeys(sw);
 
-    const gap = wrap.querySelector<HTMLInputElement>('[data-gap]')!;
+    const gap = wrap.querySelector<HTMLInputElement>('input[data-gap]')!;
     const out = wrap.querySelector<HTMLOutputElement>('[data-gap-out]')!;
     const send = () => {
       out.value = `${gap.value} px`;
