@@ -11,6 +11,9 @@ mod desktop_reconnect_tests;
 mod desktop_tests;
 mod engine;
 mod model;
+// --- notch ---
+mod notch;
+// --- notch ---
 mod tray;
 mod ui_window;
 
@@ -46,8 +49,15 @@ pub fn run() {
             commands::edit_remove_zone,
             commands::edit_move_divider,
             ui_window::take_pending_view,
+            // --- notch ---
+            notch::hide_panel,
+            notch::panel_anchor,
+            // --- notch ---
         ])
         .on_window_event(|window, event| match event {
+            // --- notch --- (the quick panel hides instead of closing; see notch.rs)
+            _ if notch::on_window_event(window, event) => {}
+            // --- notch ---
             // The tray keeps the app alive. By default closing the window destroys
             // it so the embedded browser exits; `show` rebuilds it on demand.
             WindowEvent::CloseRequested { api, .. } if !ui_window::DESTROY_ON_CLOSE => {
@@ -119,5 +129,8 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let initial = commands::build_state(&shared);
     tray::build(app.handle(), &initial)?;
     engine::start(&shared);
+    // --- notch ---
+    notch::start(app.handle());
+    // --- notch ---
     Ok(())
 }

@@ -80,6 +80,10 @@ pub struct ShortcutStatus {
 pub struct CapabilitiesState {
     pub shortcuts: bool,
     pub window_memory: bool,
+    // --- notch ---
+    /// This build can show the notch (Windows).
+    pub notch: bool,
+    // --- notch ---
 }
 
 impl From<Capabilities> for CapabilitiesState {
@@ -87,6 +91,9 @@ impl From<Capabilities> for CapabilitiesState {
         Self {
             shortcuts: c.shortcuts,
             window_memory: c.window_memory,
+            // --- notch ---
+            notch: krova_platform::notch::SUPPORTED,
+            // --- notch ---
         }
     }
 }

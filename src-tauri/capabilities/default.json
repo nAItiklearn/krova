@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Main window: listen to app events only. App commands are our own; no fs, shell or http plugins are enabled.",
-  "windows": ["main"],
+  "description": "Main window and the notch's quick panel: listen to app events only. App commands are our own; no fs, shell or http plugins are enabled.",
+  "windows": ["main", "panel"],
   "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
 }
