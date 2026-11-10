@@ -347,7 +347,7 @@
     gap: 10px;
     width: min(260px, 40vw);
   }
-  .slide.off {
+  .slide.off input {
     opacity: 0.55;
   }
   input[type='range'] {

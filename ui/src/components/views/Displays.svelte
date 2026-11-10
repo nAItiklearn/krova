@@ -111,7 +111,7 @@
   }
   dt {
     font-size: 0.78rem;
-    color: var(--text-soft);
+    color: var(--text-muted);
   }
   dd {
     margin: 1px 0 0;
