@@ -201,11 +201,12 @@ const scenarios: Scenario[] = [
     },
   },
   {
-    name: 'shortcuts, a Win-key modifier chosen',
+    name: 'shortcuts, a refused chord with suggestions',
     arrange: async (page) => {
       await gotoSection(page, 'shortcuts');
-      await page.getByTestId('setting-shortcut_modifier').selectOption('win_alt');
-      await expect(page.getByTestId('save-indicator')).toContainText('Saved');
+      await page.getByTestId('shortcut-pause').click();
+      await page.keyboard.press('Control+Alt+KeyF');
+      await expect(page.getByTestId('shortcut-conflict-pause')).toBeVisible();
     },
   },
   {
@@ -218,11 +219,10 @@ const scenarios: Scenario[] = [
     },
   },
   {
-    name: 'shortcuts, switched off (modifier disabled)',
+    name: 'shortcuts, switched off',
     arrange: async (page) => {
       await gotoSection(page, 'shortcuts');
       await page.getByTestId('setting-keyboard_shortcuts').uncheck();
-      await expect(page.getByTestId('setting-shortcut_modifier')).toBeDisabled();
       await expect(page.getByTestId('save-indicator')).toContainText('Saved');
     },
   },

@@ -20,161 +20,83 @@ const restoreSwitch = (page: Page) =>
 const linkedSwitch = (page: Page) => page.getByRole('switch', { name: 'Linked dividers' });
 const gapSlider = (page: Page) => page.getByRole('slider', { name: 'Space between zones (px)' });
 
-// In the order of the select: the default first, the Win-key choices last.
-const MODIFIER_CHOICES = [
-  { value: 'ctrl_alt_shift', label: 'Ctrl + Alt + Shift', winKey: false },
-  { value: 'ctrl_alt', label: 'Ctrl + Alt', winKey: false },
-  { value: 'win_alt', label: 'Win + Alt', winKey: true },
-  { value: 'win_ctrl', label: 'Win + Ctrl', winKey: true },
-] as const;
+const sheetButton = (page: Page, id: string) => page.getByTestId(`shortcut-${id}`);
 
-/** A key-combination label that matches with or without spaces around "+". */
-const loose = (label: string): RegExp =>
-  new RegExp(`^\\s*${label.split(' + ').join('\\s*\\+\\s*')}\\s*$`);
-
-/** The four rows of the key map for a modifier label like "Ctrl + Alt". */
-async function expectKeymap(page: Page, mods: string): Promise<void> {
-  await expect(page.getByTestId('keymap-left')).toHaveText(`${mods} + Left`);
-  await expect(page.getByTestId('keymap-right')).toHaveText(`${mods} + Right`);
-  await expect(page.getByTestId('keymap-number')).toHaveText(`${mods} + 1 to 9`);
-  await expect(page.getByTestId('keymap-up')).toHaveText(`${mods} + Up`);
-}
-
-test.describe('Keyboard shortcuts group: defaults', () => {
-  test('shows the switch and the four modifier choices', async ({ page }) => {
+test.describe('Shortcut sheet: the backend actions', () => {
+  test('shows the default chords from the backend, families as modifiers', async ({ page }) => {
     await openShortcuts(page);
+    await expect(sheetButton(page, 'move').locator('kbd')).toHaveText(['Ctrl', 'Alt']);
+    await expect(sheetButton(page, 'swap').locator('kbd')).toHaveText(['Ctrl', 'Alt', 'Shift']);
+    await expect(sheetButton(page, 'pause').locator('kbd')).toHaveText(['Ctrl', 'Alt', 'T']);
+    await expect(sheetButton(page, 'switcher').locator('kbd')).toHaveText(['Ctrl', 'Alt', 'Space']);
+    // No backend action runs calm desk yet, so it has no row.
+    await expect(sheetButton(page, 'calm_desk')).toHaveCount(0);
+    await expect(page.getByTestId('shortcuts-reset')).toBeDisabled();
+    // The v0.1 modifier choice is replaced by the sheet.
+    await expect(modifierSelect(page)).toHaveCount(0);
+    await expect(page.getByTestId('shortcuts-keymap')).toHaveCount(0);
+  });
 
+  test('recording a free chord saves it, Reset all brings the default back', async ({ page }) => {
+    await openShortcuts(page);
+    await sheetButton(page, 'pause').click();
+    await page.keyboard.press('Control+Alt+KeyP');
+    await expect(sheetButton(page, 'pause').locator('kbd')).toHaveText(['Ctrl', 'Alt', 'P']);
+    await expect(page.getByTestId('shortcuts-reset')).toBeEnabled();
+    await page.getByTestId('shortcuts-reset').click();
+    await expect(sheetButton(page, 'pause').locator('kbd')).toHaveText(['Ctrl', 'Alt', 'T']);
+  });
+
+  test('a family is rebound as a whole', async ({ page }) => {
+    await openShortcuts(page);
+    await sheetButton(page, 'move').click();
+    await page.keyboard.press('Control+Shift+ArrowLeft');
+    await expect(sheetButton(page, 'move').locator('kbd')).toHaveText(['Ctrl', 'Shift']);
+  });
+
+  test('a chord another action has is refused with free suggestions', async ({ page }) => {
+    await openShortcuts(page);
+    await sheetButton(page, 'pause').click();
+    await page.keyboard.press('Control+Alt+KeyF');
+    const notice = page.getByTestId('shortcut-conflict-pause');
+    await expect(notice).toContainText('Ctrl+Alt+F is already Focus');
+    // Still the old chord: nothing was saved.
+    await expect(sheetButton(page, 'pause').locator('kbd')).toHaveText(['Ctrl', 'Alt', 'T']);
+    const chip = page.getByTestId('view-shortcuts').locator('.conflict .chip').first();
+    const suggestion = (await chip.textContent())!.trim();
+    await chip.click();
+    await expect(notice).toHaveCount(0);
+    await expect(sheetButton(page, 'pause').locator('kbd')).toHaveText(suggestion.split('+'));
+  });
+
+  test('Backspace turns a shortcut off', async ({ page }) => {
+    await openShortcuts(page);
+    await sheetButton(page, 'focus').click();
+    await page.keyboard.press('Backspace');
+    await expect(sheetButton(page, 'focus')).toContainText('Off');
+  });
+});
+
+test.describe('Keyboard shortcuts group', () => {
+  test('shows the switch and no warnings by default', async ({ page }) => {
+    await openShortcuts(page);
     await expect(page.getByTestId('settings-shortcuts')).toBeVisible();
     await expect(shortcutsSwitch(page)).toBeChecked();
     await expect(shortcutsSwitch(page)).toBeEnabled();
     await expect(shortcutsSwitch(page)).toHaveRole('switch');
     await expect(shortcutsSwitch(page)).toHaveAccessibleName(/.+/);
-
-    const select = modifierSelect(page);
-    await expect(select).toHaveAttribute('data-testid', 'setting-shortcut_modifier');
-    await expect(select).toBeEnabled();
-    // Windows refuses most Win-key chords, so the default is Ctrl + Alt + Shift.
-    await expect(select).toHaveValue('ctrl_alt_shift');
-    // "Ctrl + Alt" or "Ctrl+Alt": the spacing is up to the view.
-    await expect(select.locator('option')).toHaveText(MODIFIER_CHOICES.map((c) => loose(c.label)));
-    await expect(select.locator('option')).toHaveCount(4);
-    for (const c of MODIFIER_CHOICES) {
-      await expect(select.locator(`option[value="${c.value}"]`)).toHaveText(loose(c.label));
-    }
     await expect(page.getByTestId('shortcuts-win-hint')).toHaveCount(0);
-
-    // Nothing to warn about.
     await expect(page.getByTestId('shortcuts-failed')).toHaveCount(0);
     await expect(page.getByTestId('shortcuts-inactive')).toHaveCount(0);
     await expect(page.getByTestId('shortcuts-unavailable')).toHaveCount(0);
   });
 
-  test('shows the key map for the default modifier', async ({ page }) => {
-    await openShortcuts(page);
-    await expectKeymap(page, 'Ctrl + Alt + Shift');
-    await expect(page.getByTestId('keymap-left').locator('kbd')).toHaveText([
-      'Ctrl',
-      'Alt',
-      'Shift',
-      'Left',
-    ]);
-    await expect(page.getByTestId('keymap-number').locator('kbd')).toHaveText([
-      'Ctrl',
-      'Alt',
-      'Shift',
-      '1',
-      '9',
-    ]);
-    await expect(page.getByTestId('shortcuts-keymap')).toContainText(
-      'Move the focused window to the previous zone',
-    );
-    await expect(page.getByTestId('shortcuts-keymap')).toContainText(
-      'Send the focused window to the next monitor, keeping its zone number',
-    );
-
-  });
-
-  test('the key map is a real description list with key caps', async ({ page }) => {
-    await openShortcuts(page);
-    const keymap = page.getByTestId('shortcuts-keymap');
-    await expect(keymap).toHaveJSProperty('tagName', 'DL');
-    await expect(keymap.locator('dt')).toHaveCount(4);
-    await expect(keymap.locator('dd')).toHaveCount(4);
-    await expect(keymap.locator('kbd').first()).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'What the keys do', level: 4 })).toBeVisible();
-  });
-});
-
-test.describe('Keyboard shortcuts group: changing it', () => {
-  test('the switch saves, and the modifier choice is only available while it is on', async ({
-    page,
-  }) => {
+  test('the switch saves', async ({ page }) => {
     await openShortcuts(page);
     await shortcutsSwitch(page).uncheck();
     await expectSaved(page);
     await expect(shortcutsSwitch(page)).not.toBeChecked();
-    await expect(modifierSelect(page)).toBeDisabled();
-    // The value is kept while it is greyed out.
-    await expect(modifierSelect(page)).toHaveValue('ctrl_alt_shift');
-
     await shortcutsSwitch(page).check();
-    await expectSaved(page);
-    await expect(modifierSelect(page)).toBeEnabled();
-  });
-
-  for (const choice of MODIFIER_CHOICES) {
-    test(`choosing "${choice.label}" saves it`, async ({ page }) => {
-      await openShortcuts(page);
-      // Start from something else so a change really happens.
-      const other = choice.value === 'ctrl_alt' ? 'win_ctrl' : 'ctrl_alt';
-      await modifierSelect(page).selectOption(other);
-      await expectSaved(page);
-
-      await modifierSelect(page).selectOption(choice.value);
-      await expect(modifierSelect(page)).toHaveValue(choice.value);
-      await expectSaved(page);
-    });
-
-    test(`choosing "${choice.label}" rewrites the key map and hints at Win-key trouble`, async ({ page }) => {
-      await openShortcuts(page);
-      // Start from something else so a change really happens.
-      const other = choice.value === 'ctrl_alt' ? 'win_ctrl' : 'ctrl_alt';
-      await modifierSelect(page).selectOption(other);
-      await expectSaved(page);
-
-      await modifierSelect(page).selectOption(choice.value);
-      await expect(modifierSelect(page)).toHaveValue(choice.value);
-      await expectKeymap(page, choice.label);
-      await expectSaved(page);
-
-      // Windows keeps many Win-key chords for itself: those choices carry a hint.
-      const hint = page.getByTestId('shortcuts-win-hint');
-      if (choice.winKey) {
-        await expect(hint).toBeVisible();
-        await expect(hint).toContainText('Ctrl + Alt + Shift is the safest choice');
-        await expect(modifierSelect(page)).toHaveAccessibleDescription(/Windows keeps many shortcuts/);
-      } else {
-        await expect(hint).toHaveCount(0);
-      }
-    });
-  }
-
-  test('the key map follows the choice at once, before the save is done', async ({ page }) => {
-    await openShortcuts(page);
-    await modifierSelect(page).selectOption('win_ctrl');
-    await expectKeymap(page, 'Win + Ctrl');
-    await expect(page.getByTestId('keymap-left').locator('kbd')).toHaveText([
-      'Win',
-      'Ctrl',
-      'Left',
-    ]);
-  });
-
-  test('the arrow keys change the choice on a focused select and save', async ({ page }) => {
-    await openShortcuts(page);
-    await modifierSelect(page).focus();
-    await page.keyboard.press('ArrowDown');
-    await expect(modifierSelect(page)).toHaveValue('ctrl_alt');
     await expectSaved(page);
   });
 
@@ -203,7 +125,7 @@ test.describe('Keyboard shortcuts group: what the backend reports', () => {
 
     // The controls still work: the user can pick other keys.
     await expect(shortcutsSwitch(page)).toBeEnabled();
-    await expect(modifierSelect(page)).toBeEnabled();
+    await expect(page.getByTestId('shortcut-move')).toBeEnabled();
     await expect(page.getByTestId('shortcuts-inactive')).toHaveCount(0);
   });
 
@@ -252,10 +174,8 @@ test.describe('Without platform support (?capabilities=none, the macOS case toda
     await expect(note).toContainText('Keyboard shortcuts are not available on this system yet');
 
     await expect(shortcutsSwitch(page)).toBeDisabled();
-    await expect(modifierSelect(page)).toBeDisabled();
-    // The stored values are still shown.
+    // The stored value is still shown.
     await expect(shortcutsSwitch(page)).toBeChecked();
-    await expect(modifierSelect(page)).toHaveValue('ctrl_alt_shift');
 
     // A key list for keys that do nothing here would only mislead.
     await expect(page.getByTestId('shortcuts-keymap')).toHaveCount(0);
@@ -414,9 +334,10 @@ test.describe('persistence and keyboard order', () => {
   }) => {
     await openShortcuts(page, '?reset');
 
-    // Not the default (Ctrl + Alt + Shift), so a stored choice is told apart from a default.
-    await modifierSelect(page).selectOption('win_alt');
-    await expectSaved(page);
+    // Not the default (Ctrl + Alt + T), so a stored chord is told apart from a default.
+    await page.getByTestId('shortcut-pause').click();
+    await page.keyboard.press('Control+Alt+KeyP');
+    await expect(page.getByTestId('shortcut-pause').locator('kbd')).toHaveText(['Ctrl', 'Alt', 'P']);
     await shortcutsSwitch(page).uncheck();
     await expectSaved(page);
     await gotoSection(page, 'arrange');
@@ -429,7 +350,7 @@ test.describe('persistence and keyboard order', () => {
     await page.goto('/');
     await gotoSection(page, 'shortcuts');
     await expect(shortcutsSwitch(page)).not.toBeChecked();
-    await expect(modifierSelect(page)).toHaveValue('win_alt');
+    await expect(page.getByTestId('shortcut-pause').locator('kbd')).toHaveText(['Ctrl', 'Alt', 'P']);
     await gotoSection(page, 'arrange');
     await expect(restoreSwitch(page)).not.toBeChecked();
     await expect(linkedSwitch(page)).not.toBeChecked();
@@ -450,11 +371,12 @@ test.describe('persistence and keyboard order', () => {
     }
   });
 
-  test('Tab goes from the shortcut switch to the modifier choice', async ({ page }) => {
+  test('Tab goes from the shortcut sheet to the shortcut switch', async ({ page }) => {
     await openShortcuts(page);
-    await shortcutsSwitch(page).focus();
+    await page.getByTestId('shortcut-focus').focus();
     await page.keyboard.press('Tab');
-    await expect(modifierSelect(page)).toBeFocused();
+    await expect(page.getByTestId('shortcut-cheat_sheet')).toBeFocused();
+    await shortcutsSwitch(page).focus();
     expect(await focusRingVisible(page)).toBe(true);
   });
 

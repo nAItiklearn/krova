@@ -8,7 +8,8 @@ test.describe('Arrange: auto-arrange', () => {
     const enabled = page.getByTestId('arrange-enabled');
     await expect(enabled).toBeChecked();
     await expect(page.getByTestId('arrange-policy-next_free')).toBeChecked();
-    await expect(page.getByTestId('arrange-fill_gaps')).toBeChecked();
+    // The backend's defaults (krova-core ArrangeSettings): fill gaps off, stack when full on.
+    await expect(page.getByTestId('arrange-fill_gaps')).not.toBeChecked();
     await expect(page.getByTestId('arrange-stack_when_full')).toBeChecked();
 
     await enabled.uncheck();
@@ -19,8 +20,8 @@ test.describe('Arrange: auto-arrange', () => {
     await enabled.check();
     await page.getByTestId('arrange-policy-main_first').check();
     await expect(page.getByTestId('arrange-policy-main_first')).toBeChecked();
-    await page.getByTestId('arrange-fill_gaps').uncheck();
-    await expect(page.getByTestId('arrange-fill_gaps')).not.toBeChecked();
+    await page.getByTestId('arrange-fill_gaps').check();
+    await expect(page.getByTestId('arrange-fill_gaps')).toBeChecked();
   });
 
   test('the choices are kept when coming back to Arrange', async ({ page }) => {
@@ -128,12 +129,19 @@ test.describe('Displays', () => {
     await expect(cards.nth(0).getByTestId('display-scale')).toHaveText(/^\d+%$/);
   });
 
-  test('reserved edges are a disabled preview for now', async ({ page }) => {
+  test('reserved edges show per monitor and follow the Screen view', async ({ page }) => {
     await openSection(page, 'displays');
     const reserved = page.getByTestId('display-reserved').first();
-    await expect(reserved.getByRole('switch')).toHaveCount(4);
-    for (const sw of await reserved.getByRole('switch').all()) await expect(sw).toBeDisabled();
-    await expect(page.getByTestId('display-card').first()).toContainText('Coming soon');
+    await expect(reserved.getByTestId('display-reserved-none')).toBeVisible();
+    await expect(page.getByTestId('display-card').first()).not.toContainText('Coming soon');
+    await reserved.getByTestId('display-reserved-edit').click();
+    await expect(page.getByTestId('view-screen')).toBeVisible();
+    await page.getByTestId('screen-monitor').first().getByTestId('screen-bottom').fill('48');
+    await page.getByTestId('screen-monitor').first().getByTestId('screen-bottom').blur();
+    await gotoSection(page, 'displays');
+    const first = page.getByTestId('display-reserved').first();
+    await expect(first.getByTestId('display-reserved-bottom')).toHaveText('48 px');
+    await expect(first.getByTestId('display-reserved-top')).toHaveText('0 px');
   });
 
   test('a new active layout shows up on its card', async ({ page }) => {

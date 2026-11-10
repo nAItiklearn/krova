@@ -2,7 +2,7 @@
   import { app } from '../../lib/app.svelte';
   import { exeNameError, MAX_EXE_LEN } from '../../lib/appRules';
   import type { Modifier, MoveMode } from '../../lib/bindings';
-  import { ext, type AppRule, type AppRuleAction, type AutoArrange } from '../../lib/ext.svelte';
+  import { ext, MAX_RULE_ZONE, type AppRule, type AppRuleAction, type AutoArrange } from '../../lib/ext.svelte';
   import { MODIFIERS, modifierLabel } from '../../lib/platform';
   import { settings } from '../../lib/settings.svelte';
   import Icon from '../Icon.svelte';
@@ -61,7 +61,7 @@
   function setZone(i: number, raw: string): void {
     const n = Math.round(Number(raw));
     if (!Number.isFinite(n)) return;
-    setRule(i, { zone: Math.min(99, Math.max(1, n)) });
+    setRule(i, { zone: Math.min(MAX_RULE_ZONE, Math.max(1, n)) });
   }
 
   let newExe = $state('');
@@ -292,7 +292,7 @@
                     type="number"
                     class="zone-num"
                     min="1"
-                    max="99"
+                    max={MAX_RULE_ZONE}
                     step="1"
                     value={r.zone ?? 1}
                     aria-label="Zone number for {r.exe}"

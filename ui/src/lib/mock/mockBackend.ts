@@ -111,6 +111,8 @@ export interface MockOptions {
   shortcuts?: ShortcutsMode;
   /** Fake platform support (default `all`). */
   capabilities?: CapabilitiesMode;
+  /** Start with `DEMO_APP_RULES` (the demo page does; tests start with none). */
+  exampleRules?: boolean;
 }
 
 /** Hooks for design review / e2e tests, exposed as `window.__krovaDemo`. */
@@ -165,6 +167,12 @@ export interface DemoControls {
 }
 
 export type MockBackend = Backend & { demo: DemoControls };
+
+/** The example rules a fresh demo shows (`Settings.app_rules` defaults to none). */
+export const DEMO_APP_RULES: AppRule[] = [
+  { exe: "Calculator.exe", action: { kind: "float" } },
+  { exe: "Spotify.exe", action: { kind: "preferred_zone", value: 3 } },
+];
 
 export function defaultSettings(): Settings {
   return {
@@ -222,7 +230,7 @@ const MONITORS: MonitorSnapshot[] = [
   },
 ];
 
-function initialConfig(): Config {
+function initialConfig(exampleRules = false): Config {
   const profiles: MonitorProfile[] = MONITORS.map((m, i) => ({
     id: m.profile_id,
     label: m.label,
@@ -237,7 +245,10 @@ function initialConfig(): Config {
   }));
   return {
     schema_version: 1,
-    settings: defaultSettings(),
+    // The demo starts with two example app rules, so the Arrange view shows some.
+    settings: exampleRules
+      ? { ...defaultSettings(), app_rules: DEMO_APP_RULES.map((r) => clone(r)) }
+      : defaultSettings(),
     monitors: profiles,
     // --- wave3 ---
     workspaces: [],
@@ -483,7 +494,7 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
         ? opts.storage
         : defaultStorage();
 
-  let config = initialConfig();
+  let config = initialConfig(options.exampleRules);
   let autostart = false;
   let permission: Permission = opts.permission ?? "not_required";
   let shortcutsMode: ShortcutsMode = opts.shortcuts ?? "ok";
@@ -639,7 +650,7 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
   }
 
   function reset(clearStorage: boolean): void {
-    config = initialConfig();
+    config = initialConfig(options.exampleRules);
     autostart = false;
     shortcutsMode = opts.shortcuts ?? "ok";
     capabilitiesMode = opts.capabilities ?? "all";
@@ -665,7 +676,7 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
         if (raw) {
           const parsed: unknown = JSON.parse(raw);
           if (looksValid(parsed)) {
-            config = { ...initialConfig(), ...parsed.config };
+            config = { ...initialConfig(options.exampleRules), ...parsed.config };
             config.settings = {
               ...defaultSettings(),
               ...parsed.config.settings,

@@ -323,7 +323,7 @@ export function insideTauri(): boolean {
 // otherwise the mock is used whenever there is no Tauri runtime.
 const mock: MockBackend | null =
   import.meta.env.MODE === "demo" || !insideTauri()
-    ? createMockBackend()
+    ? createMockBackend({ exampleRules: true })
     : null;
 
 /** The one and only way the UI talks to Rust. */

@@ -70,7 +70,7 @@ Generated files (`e2e/.results`, `e2e/.report`) are git-ignored by
 | `app.spec.ts` | first load, demo badge, both monitor tabs, no console errors, monitor selection and canvas aspect ratio, nav, `navigate` / `setPermission` / `toggleEnabled` / `reset` hooks, `?permission=`, `?reset`, `?nopersist`, persistence across reload |
 | `editor.spec.ts` | templates + Save/Undo/Revert, pointer split (vertical, horizontal), refused splits closer than 5% to an edge (backend text in the live region, layout unchanged), divider drag (commit on release, Escape cancels, clamping), arrow-key divider moves, delete zone + undo, last zone, no merge target, layouts (new, rename, set active, two-step delete) |
 | `settings.spec.ts` | every setting, the Saved indicator, hex validation (`aria-invalid`), persistence, theme switching and the rendered colour scheme |
-| `settings-shortcuts.spec.ts` | the "Keyboard shortcuts" and "Windows" groups: defaults, switch, modifier `select` and the key map that follows it, persistence, `?shortcuts=failed` / `?shortcuts=off` notes, `?capabilities=none` disabled states (and Tab skipping them), live changes with the `setShortcuts` / `setCapabilities` hooks, Tab order after Appearance |
+| `settings-shortcuts.spec.ts` | the shortcut sheet against the backend actions (`shortcut_actions`, `probe_shortcut`, `set_shortcut`, `reset_shortcuts`: defaults, recording, families, refusals with suggestions, Backspace, Reset all), the "Keyboard shortcuts" and "Windows" groups: switch, persistence, `?shortcuts=failed` / `?shortcuts=off` notes, `?capabilities=none` disabled states (and Tab skipping them), live changes with the `setShortcuts` / `setCapabilities` hooks, Tab order after Appearance |
 | `layout-transfer.spec.ts` | Export (envelope text, follows edits / layouts / monitors, Copy with and without a clipboard, Close, Escape), Import (Display 1 to Display 2, id suffixes, keyboard-only, 14 refused inputs with their exact messages, the 64-layout cap, persistence) |
 | `keyboard.spec.ts` | Tab order, visible focus ring at every stop, a complete edit with the keyboard only, live region |
 | `emulation.spec.ts` | `prefers-reduced-motion`, `prefers-color-scheme` light and dark, `forced-colors` |
@@ -83,7 +83,8 @@ Generated files (`e2e/.results`, `e2e/.report`) are git-ignored by
 | --- | --- |
 | `settings-shortcuts`, `settings-windows` | the two Settings cards (`role="group"`, named by their `h3`) |
 | `setting-keyboard_shortcuts` | switch "Use keyboard shortcuts" |
-| `setting-shortcut_modifier` | `select` "Modifier keys" (`ctrl_alt_shift` is the default and comes first, then `ctrl_alt`, `win_alt`, `win_ctrl`) |
+| `shortcut-<row>`, `shortcut-conflict-<row>`, `shortcuts-reset` | a sheet row's record button (`move`, `swap`, `zone_n`, `layout_n`, `maximize_zone`, `stack_next`, `stack_prev`, `switcher`, `pause`, `focus`, `cheat_sheet`), its refusal notice, Reset all |
+| `setting-shortcut_modifier` | (only with a backend without `shortcut_actions`) `select` "Modifier keys" (`ctrl_alt_shift` is the default and comes first, then `ctrl_alt`, `win_alt`, `win_ctrl`) |
 | `shortcuts-win-hint` | hint under the select, only for `win_alt` / `win_ctrl` ("Windows keeps many shortcuts with the Windows key for itself ...") |
 | `shortcuts-keymap` | the `dl` of key combinations; rows `keymap-left`, `keymap-right`, `keymap-number`, `keymap-up` are the `dt`s ("Ctrl + Alt + Shift + Left", "... + 1 to 9") |
 | `shortcuts-status` | polite live region around the next three |

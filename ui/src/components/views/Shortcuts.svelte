@@ -10,7 +10,9 @@
   import { app } from '../../lib/app.svelte';
   import { ext } from '../../lib/ext.svelte';
   import { settings } from '../../lib/settings.svelte';
-  import type { ShortcutModifier } from '../../lib/bindings';
+  import type { ProbeResult, ShortcutModifier } from '../../lib/bindings';
+  import { api } from '../../lib/backend';
+  import { allDefault, backendChords, membersOf, refusalOf, suggestionFor } from '../../lib/shortcutMap';
   import { shortcutKeys, usesWinKey } from '../../lib/platform';
 
   type GroupName = 'Windows' | 'Layouts' | 'Krova';
@@ -38,6 +40,16 @@
   ];
   const GROUPS: GroupName[] = ['Windows', 'Layouts', 'Krova'];
 
+  // With a backend that has per-action shortcuts (`AppState.shortcut_actions`), the
+  // sheet shows only the rows it can bind, records through `probe_shortcut` /
+  // `set_shortcut`, and takes conflicts and suggestions from the probe.
+  const rows = $derived(app.state?.shortcut_actions ?? []);
+  const backed = $derived(rows.length > 0);
+  const shown = $derived(backed ? ACTIONS.filter((a) => membersOf(a.id).length > 0) : ACTIONS);
+  /** The last refused probe per sheet row (cleared when the row is set). */
+  let probes = $state<Record<string, ProbeResult>>({});
+  let busy = $state(false);
+
   const map = $derived(ext.get('shortcuts'));
   const chordOf = (a: Action): string | null => (a.id in map ? map[a.id] : a.def);
   const fullChords = (a: Action, c: string | null): string[] => {
@@ -49,6 +61,11 @@
 
   // Conflicts: two actions that would claim the same final chord.
   const conflicts = $derived.by(() => {
+    if (backed) {
+      const bad = new Set<string>(Object.keys(probes));
+      for (const a of shown) if (refusalOf(a.id, rows)) bad.add(a.id);
+      return bad;
+    }
     const owner = new Map<string, string>();
     const bad = new Set<string>();
     for (const a of ACTIONS) {
@@ -67,6 +84,7 @@
   const RESERVED = new Set(['Ctrl+Alt+Delete', 'Win+L', 'Ctrl+Shift+Escape', 'Alt+Tab', 'Alt+F4']);
 
   function suggestions(a: Action): string[] {
+    if (backed) return (probes[a.id]?.suggestions ?? []).map((x) => suggestionFor(a.id, x));
     const c = chordOf(a);
     if (!c) return [];
     const key = a.family ? '' : c.split('+').pop()!;
@@ -82,8 +100,57 @@
     return out;
   }
   function setChord(a: Action, c: string | null): void {
+    if (backed) {
+      void bind(a, c);
+      return;
+    }
     ext.set('shortcuts', { ...map, [a.id]: c });
   }
+
+  /** What the conflict notice says for a row. */
+  function conflictText(a: Action): string {
+    if (!backed) return 'Used twice.';
+    const p = probes[a.id];
+    if (p) return p.message + '.';
+    return refusalOf(a.id, rows)?.message ?? 'Windows refused this shortcut.';
+  }
+
+  /** Probe every action of the row, then set them; a refusal shows its suggestions. */
+  async function bind(a: Action, c: string | null): Promise<void> {
+    const pairs = backendChords(a.id, c);
+    busy = true;
+    try {
+      if (c !== null) {
+        for (const [action, chord] of pairs) {
+          const p = await api.probeShortcut(action, chord!);
+          if (p.status !== 'free' && p.status !== 'current' && p.status !== 'unknown') {
+            probes = { ...probes, [a.id]: p };
+            return;
+          }
+        }
+      }
+      const { [a.id]: _gone, ...rest } = probes;
+      probes = rest;
+      for (const [action, chord] of pairs) {
+        if (!(await ext.run(api.setShortcut(action, chord)))) {
+          probes = {
+            ...probes,
+            [a.id]: { status: 'invalid', chord, conflict_with: null, message: ext.error ?? 'Not saved', suggestions: [] },
+          };
+          return;
+        }
+      }
+    } finally {
+      busy = false;
+    }
+  }
+
+  function resetAll(): void {
+    probes = {};
+    if (backed) void ext.run(api.resetShortcuts());
+    else ext.set('shortcuts', {});
+  }
+  const nothingToReset = $derived(backed ? allDefault(rows) : Object.keys(map).length === 0);
 
   // ---- recording ----
   let recording = $state<string | null>(null);
@@ -193,7 +260,7 @@
   const active = $derived(app.state?.shortcuts?.active ?? false);
   const canShort = $derived(capabilities?.shortcuts ?? false);
   const modKeys = $derived(shortcutKeys(s.shortcut_modifier, canShort));
-  const winHint = $derived(canShort && s.keyboard_shortcuts && usesWinKey(s.shortcut_modifier));
+  const winHint = $derived(!backed && canShort && s.keyboard_shortcuts && usesWinKey(s.shortcut_modifier));
 
   let sheet = $state(false);
   let sheetEl: HTMLElement | undefined = $state();
@@ -221,7 +288,7 @@
   {#snippet actions()}
     <SaveIndicator />
     <button type="button" class="btn" data-testid="open-cheat-sheet" onclick={() => (sheet = true)}>Cheat sheet</button>
-    <button type="button" class="btn" onclick={() => ext.set('shortcuts', {})} disabled={Object.keys(map).length === 0}>
+    <button type="button" class="btn" data-testid="shortcuts-reset" onclick={resetAll} disabled={nothingToReset || busy}>
       Reset all
     </button>
   {/snippet}
@@ -250,7 +317,7 @@
   <div class="cols">
     {#each GROUPS as g (g)}
       <Group title={g} id="sc-{g.toLowerCase()}">
-        {#each ACTIONS.filter((a) => a.group === g) as a (a.id)}
+        {#each shown.filter((a) => a.group === g) as a (a.id)}
           {@const c = chordOf(a)}
           {@const bad = conflicts.has(a.id)}
           <div
@@ -282,7 +349,7 @@
             </button>
             {#if bad}
               <div class="conflict" role="alert">
-                <span>Used twice. Try</span>
+                <span data-testid="shortcut-conflict-{a.id}">{conflictText(a)}{suggestions(a).length ? ' Try' : ''}</span>
                 {#each suggestions(a) as sug (sug)}
                   <button type="button" class="chip" onclick={() => setChord(a, sug)}>{sug}{a.family ? ' + …' : ''}</button>
                 {/each}
@@ -309,6 +376,7 @@
         onchange={(v) => settings.update({ keyboard_shortcuts: v })}
       />
     </Row>
+    {#if !backed}
     <Row label="Zone keys today" desc="The keys this build registers for moving between zones." for="set-shortcut-mod">
       <select
         id="set-shortcut-mod"
@@ -327,6 +395,7 @@
         fail are listed below; Ctrl + Alt + Shift is the safest choice.
       </p>
     {/if}
+    {/if}
     <div class="pad live" role="status" aria-live="polite" data-testid="shortcuts-status">
       {#if canShort && failed.length > 0}
         <div class="notice warn" data-testid="shortcuts-failed">
@@ -340,7 +409,7 @@
         <p class="notice" data-testid="shortcuts-inactive">Keyboard shortcuts are not active right now.</p>
       {/if}
     </div>
-    {#if canShort}
+    {#if canShort && !backed}
       <div class="pad">
         <h4 class="sub-title">What the keys do</h4>
         <dl class="keymap" data-testid="shortcuts-keymap">
@@ -374,7 +443,7 @@
         {#each GROUPS as g (g)}
           <div>
             <p class="sheet-g">{g}</p>
-            {#each ACTIONS.filter((a) => a.group === g) as a (a.id)}
+            {#each shown.filter((a) => a.group === g) as a (a.id)}
               <div class="sheet-row"><span>{a.label}</span>{@render keycaps(chordOf(a), a.family)}</div>
             {/each}
           </div>
@@ -431,7 +500,8 @@
   }
   .key.lit {
     background: var(--accent);
-    color: #fff;
+    /* Ink on ember: white would be about 3:1. */
+    color: #141413;
     box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--accent) 70%, transparent);
     transform: translateY(1px);
   }

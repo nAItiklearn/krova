@@ -42,8 +42,14 @@ class SettingsStore {
   async flush(): Promise<void> {
     clearTimeout(this.timer);
     this.timer = undefined;
-    const sent = this.draft;
-    if (sent === null) return;
+    const draft = this.draft;
+    if (draft === null) return;
+    // App rules and shortcuts have their own commands (set_app_rule, set_shortcut):
+    // always send the backend's current ones so a pending form save never undoes them.
+    const saved = app.state?.config.settings;
+    const sent: Settings = saved
+      ? { ...draft, app_rules: saved.app_rules ?? draft.app_rules, shortcuts: saved.shortcuts ?? draft.shortcuts }
+      : draft;
     if (this.inflight) {
       this.again = true;
       return;
@@ -55,7 +61,7 @@ class SettingsStore {
       const state = await api.saveSettings(sent);
       app.setState(state);
       // Only adopt the backend's (possibly clamped) values if nothing changed meanwhile.
-      if (this.draft === sent) this.draft = state.config.settings;
+      if (this.draft === draft) this.draft = state.config.settings;
       this.status = 'saved';
       this.badgeTimer = setTimeout(() => {
         if (this.status === 'saved') this.status = 'idle';
