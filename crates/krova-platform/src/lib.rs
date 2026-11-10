@@ -26,6 +26,13 @@ pub mod win;
 pub mod win_events;
 #[cfg(windows)]
 pub mod win_overlay;
+// --- wave3 ---
+pub mod desk;
+#[cfg(windows)]
+pub mod win_desk;
+#[cfg(windows)]
+pub mod win_visuals;
+// --- end wave3 ---
 
 pub use hotkeys::{HotkeyEvent, HotkeySpec};
 
