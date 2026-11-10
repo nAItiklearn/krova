@@ -35,4 +35,6 @@ export default defineConfig({
   },
   compressHTML: true,
   devToolbar: { enabled: false },
+  // Never inline scripts: the CSP allows same-origin script files only.
+  vite: { build: { assetsInlineLimit: 0 } },
 });

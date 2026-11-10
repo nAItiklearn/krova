@@ -26,6 +26,7 @@ body {
   line-height: var(--leading-body);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  font-feature-settings: 'ss01', 'cv11';
   overflow-x: clip;
 }
 
@@ -211,7 +212,7 @@ hr {
 
 /* ---- Section heads: mono eyebrow, short headline with a muted second half ---- */
 .sec-head {
-  max-width: 46rem;
+  max-width: 68rem;
   margin: 0 auto clamp(2.25rem, 1.5rem + 3vw, 3.75rem);
   text-align: center;
 }
@@ -222,17 +223,21 @@ hr {
 }
 
 .eyebrow {
-  margin-bottom: var(--space-xs);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: var(--color-accent-text);
+  margin-bottom: var(--space-s);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
 }
 
 .sec-head h2,
 .h2 {
-  font-size: clamp(1.9rem, 1.2rem + 2.6vw, 3rem);
-  letter-spacing: -0.035em;
+  font-size: clamp(2.2rem, 1.2rem + 3.6vw, 4rem);
+  font-weight: 740;
+  letter-spacing: -0.048em;
+  line-height: 1.02;
 }
 
 .soft {
@@ -242,6 +247,9 @@ hr {
 /* Section headlines: a dark first line and a muted second line. */
 .sec-head h2 .soft {
   display: block;
+}
+.sec-head h2 {
+  text-wrap: balance;
 }
 
 .sec-head .lead {
@@ -640,4 +648,20 @@ hr {
   height: 0.45rem;
   border-radius: 50%;
   background: var(--color-warn);
+}
+
+/* ---- Scroll reveal (class added by BaseLayout's script, so no-JS pages stay visible) ---- */
+.reveal {
+  opacity: 0;
+  filter: blur(6px);
+  transform: translateY(16px);
+  transition:
+    opacity 0.8s cubic-bezier(0.2, 0.8, 0.2, 1),
+    filter 0.8s cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.reveal.in {
+  opacity: 1;
+  filter: none;
+  transform: none;
 }

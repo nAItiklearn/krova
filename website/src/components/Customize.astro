@@ -1,0 +1,266 @@
+---
+/**
+ * "Change anything and the desk follows": a settings card next to a live desk. The highlight,
+ * colour, space and layout controls act on the desk at once. Highlight styles and colours are
+ * planned (see /roadmap/); space between zones and layouts are in 0.1.
+ */
+import LiveDesk from './LiveDesk.astro';
+const colours = [
+  { name: 'Ember', v: '#ff5b1f' },
+  { name: 'Rose', v: '#f43f6b' },
+  { name: 'Amber', v: '#f5a524' },
+  { name: 'Moss', v: '#3f9e6b' },
+  { name: 'Violet', v: '#8b5cf6' },
+  { name: 'Graphite', v: '#5c5a55' },
+];
+---
+
+<section class="section cz" id="customize" aria-labelledby="cz-title">
+  <div class="container">
+    <header class="sec-head">
+      <p class="eyebrow">Customise</p>
+      <h2 id="cz-title">Your desk, your rules. <span class="soft">Borders, space, colour, layout.</span></h2>
+      <p class="lead">Change anything here and the desk follows, the same way it will on your PC.</p>
+    </header>
+
+    <div class="grid" data-cz>
+      <div class="stage">
+        <LiveDesk id="cz-desk" mode="static" controls={false} label="Demo desk that follows the settings next to it" />
+      </div>
+
+      <form class="card" aria-label="Demo settings" onsubmit="return false">
+        <fieldset>
+          <legend>Highlight <span class="soon">Planned</span></legend>
+          <div class="opts" role="radiogroup" aria-label="Highlight">
+            {
+              [
+                ['none', 'None'],
+                ['active', 'Active border'],
+                ['all', 'All borders'],
+                ['glow', 'Glow'],
+              ].map(([v, l]) => (
+                <button type="button" role="radio" aria-checked={v === 'active' ? 'true' : 'false'} data-hl={v}>
+                  {l}
+                </button>
+              ))
+            }
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Colour <span class="soon">Planned</span></legend>
+          <div class="swatches" role="radiogroup" aria-label="Highlight colour">
+            {
+              colours.map((c, i) => (
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={i === 0 ? 'true' : 'false'}
+                  aria-label={c.name}
+                  data-colour={c.v}
+                  style={`--c: ${c.v}`}
+                />
+              ))
+            }
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Space · <output data-gap-out>8 px</output></legend>
+          <input type="range" min="0" max="24" step="2" value="8" aria-label="Space between zones, in pixels" data-gap />
+        </fieldset>
+
+        <fieldset>
+          <legend>Layout</legend>
+          <div class="opts three" role="radiogroup" aria-label="Layout">
+            {
+              [
+                ['side', 'Main + side'],
+                ['columns', 'Columns'],
+                ['grid', 'Grid'],
+              ].map(([v, l]) => (
+                <button type="button" role="radio" aria-checked={v === 'side' ? 'true' : 'false'} data-lay={v}>
+                  {l}
+                </button>
+              ))
+            }
+          </div>
+        </fieldset>
+      </form>
+    </div>
+  </div>
+</section>
+
+<style>
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) minmax(18rem, 1fr);
+    gap: clamp(1.5rem, 1rem + 2vw, 2.5rem);
+    align-items: center;
+  }
+  .stage :global(.desk-wrap) {
+    padding: 0;
+  }
+  .card {
+    padding: 1.75rem;
+    border-radius: var(--radius-xl);
+    background: var(--color-surface);
+    box-shadow:
+      0 0 0 1px var(--color-border),
+      var(--shadow-2);
+    display: grid;
+    gap: 1.6rem;
+  }
+  fieldset {
+    border: 0;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+  }
+  legend {
+    padding: 0;
+    margin-bottom: 0.7rem;
+    font-weight: 600;
+    font-size: var(--text-sm);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  legend output {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .soon {
+    font-size: 0.72rem;
+    font-weight: 650;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    background: var(--accent-tint-strong);
+    color: var(--color-accent-text);
+  }
+  .opts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.45rem;
+  }
+  .opts.three {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .opts button {
+    font: inherit;
+    font-size: var(--text-sm);
+    font-weight: 550;
+    padding: 0.62rem 0.5rem;
+    border-radius: 12px;
+    border: 0;
+    cursor: pointer;
+    background: var(--color-surface-2);
+    color: var(--color-text-muted);
+    box-shadow: inset 0 0 0 1px var(--color-border);
+    transition:
+      background 0.2s,
+      color 0.2s,
+      box-shadow 0.2s;
+  }
+  .opts button[aria-checked='true'] {
+    background: var(--accent-tint);
+    color: var(--color-text);
+    box-shadow: inset 0 0 0 1.5px var(--color-ember);
+  }
+  .swatches {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+  .swatches button {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    border: 0;
+    cursor: pointer;
+    background: var(--c);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+    transition: transform 0.25s cubic-bezier(0.2, 0.9, 0.25, 1.3);
+  }
+  .swatches button:hover {
+    transform: scale(1.08);
+  }
+  .swatches button[aria-checked='true'] {
+    box-shadow:
+      0 0 0 2px var(--color-surface),
+      0 0 0 4px var(--c);
+  }
+  button:focus-visible,
+  input:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+  input[type='range'] {
+    width: 100%;
+    accent-color: var(--color-ember);
+  }
+  @media (max-width: 60rem) {
+    .grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-cz]').forEach((wrap) => {
+    const desk = wrap.querySelector<HTMLElement>('.desk-wrap')!;
+    function radio(group: HTMLElement[], on: HTMLElement) {
+      group.forEach((b) => b.setAttribute('aria-checked', String(b === on)));
+    }
+    function arrowKeys(group: HTMLElement[]) {
+      group.forEach((b, i) =>
+        b.addEventListener('keydown', (e) => {
+          const k = (e as KeyboardEvent).key;
+          if (k !== 'ArrowRight' && k !== 'ArrowLeft' && k !== 'ArrowDown' && k !== 'ArrowUp') return;
+          e.preventDefault();
+          const n = group[(i + (k === 'ArrowRight' || k === 'ArrowDown' ? 1 : group.length - 1)) % group.length];
+          n.focus();
+          n.click();
+        }),
+      );
+    }
+
+    const hl = [...wrap.querySelectorAll<HTMLElement>('[data-hl]')];
+    hl.forEach((b) =>
+      b.addEventListener('click', () => {
+        radio(hl, b);
+        desk.classList.remove('hl-none', 'hl-active', 'hl-all', 'hl-glow');
+        desk.classList.add('hl-' + b.dataset.hl);
+      }),
+    );
+    arrowKeys(hl);
+
+    const sw = [...wrap.querySelectorAll<HTMLElement>('[data-colour]')];
+    sw.forEach((b) =>
+      b.addEventListener('click', () => {
+        radio(sw, b);
+        desk.style.setProperty('--hl', b.dataset.colour!);
+      }),
+    );
+    arrowKeys(sw);
+
+    const gap = wrap.querySelector<HTMLInputElement>('[data-gap]')!;
+    const out = wrap.querySelector<HTMLOutputElement>('[data-gap-out]')!;
+    const send = () => {
+      out.value = `${gap.value} px`;
+      desk.dispatchEvent(new CustomEvent('krova:gap', { detail: Number(gap.value) * 0.11 }));
+    };
+    gap.addEventListener('input', send);
+
+    const lay = [...wrap.querySelectorAll<HTMLElement>('[data-lay]')];
+    lay.forEach((b) =>
+      b.addEventListener('click', () => {
+        radio(lay, b);
+        desk.dispatchEvent(new CustomEvent('krova:layout', { detail: b.dataset.lay }));
+      }),
+    );
+    arrowKeys(lay);
+
+    requestAnimationFrame(send);
+  });
+</script>

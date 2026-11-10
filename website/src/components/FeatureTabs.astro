@@ -1,0 +1,344 @@
+---
+/**
+ * Features as tabs: a pill bar on top, one panel at a time (copy left, picture right).
+ * Each panel says whether the feature is in v0.1 or coming. Pictures are a real screenshot where
+ * the feature has UI, otherwise a labelled diagram from Krova's zone shapes.
+ */
+import Shot from './Shot.astro';
+import ZoneScene from './ZoneScene.astro';
+import SwitcherLoop from './SwitcherLoop.astro';
+
+type Tab = {
+  id: string;
+  tab: string;
+  ask: string;
+  title: string;
+  status: 'now' | 'soon';
+  body: string;
+};
+const tabs: Tab[] = [
+  { id: 'zones', tab: 'Your zones', ask: 'Want it exactly your way?', title: 'Draw your zones', status: 'now',
+    body: 'Split, drag a divider, undo. Start from halves, thirds or a grid and shape it until it fits how you work.' },
+  { id: 'snap', tab: 'Hold & drop', ask: 'Placing one by hand?', title: 'Hold Shift, drop it in', status: 'now',
+    body: 'Hold Shift while you drag and the zones appear. Let go over one and the window fills it. Edge snapping is there too.' },
+  { id: 'auto', tab: 'Auto-arrange', ask: 'Rather not drag at all?', title: 'Windows arrange themselves', status: 'soon',
+    body: 'Open a window and it takes the next free zone. Close one and the rest fill in. Works with any layout you draw.' },
+  { id: 'switch', tab: 'Switcher', ask: 'Different work, different layout?', title: 'Flip through layouts', status: 'soon',
+    body: 'Press Ctrl+Alt+Space for a stack of your layouts. Swipe to flip, tap to apply, swipe sideways to delete.' },
+  { id: 'monitors', tab: 'Every monitor', ask: 'Two screens, or three?', title: 'A layout per monitor', status: 'now',
+    body: 'Each monitor keeps its own layouts. Unplug it, plug it back in, and its layouts are still there.' },
+  { id: 'memory', tab: 'Window memory', ask: 'Docking and undocking?', title: 'Windows come back', status: 'now',
+    body: 'When a monitor returns, the windows you had snapped there go back to their zones.' },
+  { id: 'dividers', tab: 'Linked edges', ask: 'Resizing two at once?', title: 'Neighbours follow', status: 'now',
+    body: 'Drag the edge of a snapped window and the window next to it gives way, so nothing overlaps.' },
+  { id: 'private', tab: 'Private', ask: 'Who sees your windows?', title: 'Nobody but you', status: 'now',
+    body: 'No account, no telemetry, no network calls. Window titles are never logged or saved.' },
+];
+---
+
+<section class="section ft" id="features" aria-labelledby="ft-title">
+  <div class="container">
+    <header class="sec-head">
+      <p class="eyebrow">Features</p>
+      <h2 id="ft-title">Built around how you work. <span class="soft">Drawn, dropped or automatic.</span></h2>
+    </header>
+
+    <div class="bar-wrap">
+      <div class="tabbar" role="tablist" aria-label="Features" data-tabbar>
+        <span class="ind" aria-hidden="true" data-ind></span>
+        {
+          tabs.map((t, i) => (
+            <button
+              type="button"
+              role="tab"
+              id={`ft-tab-${t.id}`}
+              aria-controls={`ft-panel-${t.id}`}
+              aria-selected={i === 0 ? 'true' : 'false'}
+              tabindex={i === 0 ? 0 : -1}
+            >
+              {t.tab}
+            </button>
+          ))
+        }
+      </div>
+    </div>
+
+    {
+      tabs.map((t, i) => (
+        <div class="panel" role="tabpanel" id={`ft-panel-${t.id}`} aria-labelledby={`ft-tab-${t.id}`} hidden={i !== 0}>
+          <div class="copy">
+            <p class="ask">{t.ask}</p>
+            <h3>
+              {t.title}
+              <span class:list={['badge', t.status]}>{t.status === 'now' ? 'In 0.1' : 'Coming in 0.2'}</span>
+            </h3>
+            <p class="body">{t.body}</p>
+          </div>
+          <div class="viz">
+            {t.id === 'zones' && (
+              <div class="shot">
+                <Shot name="editor" alt="Krova's layout editor with a three-zone layout; the middle zone is selected." />
+              </div>
+            )}
+            {t.id === 'snap' && (
+              <ZoneScene state="drag" layout="thirds" target={1} keyLabel="Shift" label="Diagram: a window dragged over the middle zone while Shift is held." />
+            )}
+            {t.id === 'auto' && (
+              <ZoneScene state="snap" layout="priority" fill={[0, 1, 2]} target={1} label="Diagram: three windows that each took a zone of their own." />
+            )}
+            {t.id === 'switch' && <SwitcherLoop />}
+            {t.id === 'monitors' && (
+              <div class="duo">
+                <ZoneScene state="zones" layout="priority" label="Diagram: the first monitor with a three-zone layout." />
+                <ZoneScene state="zones" layout="grid" label="Diagram: the second monitor with a grid of four zones." />
+              </div>
+            )}
+            {t.id === 'memory' && (
+              <ZoneScene state="snap" layout="halves" fill={[0, 1]} target={0} label="Diagram: two windows back in their zones after a monitor reconnects." />
+            )}
+            {t.id === 'dividers' && (
+              <ZoneScene state="dividers" layout="halves" label="Diagram: the shared edge of two snapped windows being dragged; both resize." />
+            )}
+            {t.id === 'private' && (
+              <ul class="checks">
+                <li>No account</li>
+                <li>No telemetry</li>
+                <li>No network calls</li>
+                <li>Titles never stored</li>
+                <li>Settings in one local file</li>
+              </ul>
+            )}
+          </div>
+        </div>
+      ))
+    }
+  </div>
+</section>
+
+<style>
+  .bar-wrap {
+    display: flex;
+    justify-content: center;
+    margin-bottom: clamp(2rem, 1.5rem + 2vw, 3.25rem);
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding: 2px;
+  }
+  .tabbar {
+    position: relative;
+    display: inline-flex;
+    gap: 2px;
+    padding: 5px;
+    border-radius: 999px;
+    background: var(--color-surface-3);
+  }
+  .ind {
+    position: absolute;
+    top: 5px;
+    bottom: 5px;
+    left: 0;
+    width: 0;
+    border-radius: 999px;
+    background: var(--color-surface);
+    pointer-events: none;
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.08),
+      0 0 0 1px var(--color-border);
+    transition:
+      transform 0.45s cubic-bezier(0.32, 0.72, 0, 1),
+      width 0.45s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  [role='tab'] {
+    position: relative;
+    font: inherit;
+    font-size: var(--text-sm);
+    font-weight: 550;
+    white-space: nowrap;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-muted);
+    padding: 0.6rem 1.05rem;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+  [role='tab'][aria-selected='true'],
+  [role='tab']:hover {
+    color: var(--color-text);
+  }
+  [role='tab']:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 1px;
+  }
+
+  .panel {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: clamp(2rem, 1rem + 4vw, 4.5rem);
+    align-items: center;
+    animation: panel-in 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .panel[hidden] {
+    display: none;
+  }
+  @keyframes panel-in {
+    from {
+      opacity: 0;
+      filter: blur(6px);
+      transform: translateY(12px);
+    }
+  }
+  .ask {
+    color: var(--color-accent-text);
+    font-weight: 600;
+    font-size: var(--text-md);
+  }
+  h3 {
+    margin-top: 0.6rem;
+    font-size: clamp(2rem, 1.3rem + 2.4vw, 3rem);
+    font-weight: 720;
+    letter-spacing: -0.04em;
+    line-height: 1.04;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.8rem;
+  }
+  .badge {
+    font-size: 0.8rem;
+    letter-spacing: 0;
+    font-weight: 600;
+    padding: 0.25rem 0.7rem;
+    border-radius: 999px;
+    line-height: 1.2;
+  }
+  .badge.now {
+    background: var(--color-surface-3);
+    color: var(--color-text-muted);
+  }
+  .badge.soon {
+    background: var(--accent-tint-strong);
+    color: var(--color-accent-text);
+  }
+  .body {
+    margin-top: 1.1rem;
+    font-size: var(--text-md);
+    line-height: 1.6;
+    color: var(--color-text-muted);
+    max-width: 30rem;
+  }
+
+  .viz {
+    position: relative;
+    padding: clamp(1.25rem, 0.5rem + 3vw, 2.75rem);
+    border-radius: var(--radius-xl);
+    background: var(--stage-bg);
+    box-shadow: inset 0 0 0 1px var(--color-border);
+    min-height: 20rem;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+  }
+  .viz > :global(*) {
+    width: 100%;
+  }
+  .shot {
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: var(--shadow-2);
+  }
+  .duo {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  .checks {
+    list-style: none;
+    margin: 0;
+    padding: 1.5rem 1.75rem;
+    border-radius: 18px;
+    background: var(--color-surface);
+    box-shadow: var(--shadow-2);
+    max-width: 22rem;
+    display: grid;
+    gap: 0.85rem;
+    font-weight: 550;
+  }
+  .checks li {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .checks li::before {
+    content: '';
+    width: 1.35rem;
+    height: 1.35rem;
+    border-radius: 50%;
+    flex: none;
+    background:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5.5 10.5l3 3 6-7' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+        center / 70% no-repeat,
+      var(--color-ember);
+  }
+
+  @media (max-width: 56rem) {
+    .bar-wrap {
+      justify-content: flex-start;
+    }
+    .panel {
+      grid-template-columns: 1fr;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .panel {
+      animation: none;
+    }
+    .ind {
+      transition: none;
+    }
+  }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-tabbar]').forEach((bar) => {
+    const tabs = [...bar.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    const ind = bar.querySelector<HTMLElement>('[data-ind]')!;
+    const current = () => tabs.find((t) => t.getAttribute('aria-selected') === 'true') ?? tabs[0];
+    function move(t: HTMLElement) {
+      const b = bar.getBoundingClientRect();
+      const r = t.getBoundingClientRect();
+      if (!r.width) return;
+      ind.style.width = r.width + 'px';
+      ind.style.transform = `translateX(${r.left - b.left}px)`;
+    }
+    function select(t: HTMLButtonElement) {
+      tabs.forEach((x) => {
+        const on = x === t;
+        x.setAttribute('aria-selected', String(on));
+        x.tabIndex = on ? 0 : -1;
+        const p = document.getElementById(x.getAttribute('aria-controls')!);
+        if (p) p.hidden = !on;
+      });
+      move(t);
+      t.focus();
+    }
+    tabs.forEach((t) => t.addEventListener('click', () => select(t)));
+    bar.addEventListener('keydown', (e) => {
+      const i = tabs.indexOf(document.activeElement as HTMLButtonElement);
+      if (i < 0) return;
+      let n = -1;
+      if (e.key === 'ArrowRight') n = (i + 1) % tabs.length;
+      else if (e.key === 'ArrowLeft') n = (i - 1 + tabs.length) % tabs.length;
+      else if (e.key === 'Home') n = 0;
+      else if (e.key === 'End') n = tabs.length - 1;
+      if (n >= 0) {
+        e.preventDefault();
+        select(tabs[n]);
+      }
+    });
+    requestAnimationFrame(() => move(current()));
+    document.fonts?.ready.then(() => move(current()));
+    addEventListener('load', () => move(current()));
+    new ResizeObserver(() => move(current())).observe(bar);
+  });
+</script>
