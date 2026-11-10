@@ -57,6 +57,23 @@ No Critical or High findings in Krova's own code; privacy promises hold for Krov
 - F-15, F-17: injected input is not filtered; the config temp file name is fixed.
 - `npm audit`: `ui/` has advisories in dev tooling only (vitest/tinypool); `website/` has advisories in Astro 5.18.2, a static site that uses none of the affected features. Dependabot has opened major-version upgrade branches (Vite 8, Vitest 5, TypeScript 7, Astro 7, the Svelte Vite plugin 7). They are breaking changes and need a test run each before merging; none is merged.
 
+## Manual tests for the notch branch
+
+Run the app (`npm run tauri dev` or a build) on Windows. Watch Task Manager: with the notch idle, the Krova process stays at 0% CPU.
+
+1. Start Krova: a small ink pill with an orange dot appears at the top centre of the primary monitor, 4 px below the edge, above every other window.
+2. Hover it: nothing for about 150 ms, then it grows smoothly (no bounce) to show the active layout name. Move away: it shrinks back. A quick pass over it does not expand it.
+3. Left click: the quick panel opens just below the notch, centred on it, and has the focus. Click elsewhere or press Esc: it hides. Click the notch again: it reopens instantly (no white flash). Click the notch while the panel is open: it closes.
+4. Right click: the menu shows Pause Krova, Layouts (the active one checked), Layout switcher, Cheat sheet, Open Krova, Hide notch. Pick another layout: the notch label follows. Pause: the dot turns grey and the label reads "Paused · name"; the tray's Enabled checkmark clears. Resume restores both.
+5. Layout switcher / Open Krova / Cheat sheet bring the main window forward with that view (Cheat sheet is ignored by a UI that does not know it yet).
+6. Drag the notch: it shrinks to the pill and follows the cursor; drop near the bottom right: it springs into the corner just above the taskbar. Restart Krova: it comes back there. Try all five positions, with the taskbar at the bottom and at the top.
+7. Hide notch: it disappears; setting `notch.enabled` back to true in Settings (or the config) brings it back without a restart.
+8. Start a fullscreen video (F11 in a browser, or a game): the notch hides on that monitor and returns when the app leaves fullscreen or loses the focus. A normal maximized window does not hide it.
+9. Mixed DPI: with monitors at 100% and 150%, set `notch.monitor` to `cursor`, move the cursor to the other monitor and click a window there: the notch moves and is drawn at that monitor's scale (crisp, the same physical size in logical terms). Change the scale in Display settings: it redraws at the new size.
+10. Unplug or rearrange monitors: the notch moves to the (new) primary monitor.
+11. Share-safe (once the setting exists): the label shows "N zones" and the menu lists "Layout 1..N" instead of names.
+12. Privacy: no window titles appear anywhere (label, menu, logs).
+
 ## Owner actions (only the repository owner can do these)
 
 - [x] Settings → Pages → Source: GitHub Actions (the deploy job succeeded on 2026-10-31).
