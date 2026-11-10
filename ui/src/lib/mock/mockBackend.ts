@@ -14,6 +14,9 @@ import type {
   MonitorProfile,
   MonitorSnapshot,
   NavigateTarget,
+  NotchCorner,
+  NotchNavigateTarget,
+  PanelAnchor,
   Permission,
   ReservedEdges,
   Settings,
@@ -43,6 +46,9 @@ import {
   sanitizeReserved,
 } from './wave4';
 // --- end wave4 ---
+// --- notch ---
+import { defaultNotchSettings, demoAnchor, sanitizeNotch } from './notch';
+// --- notch ---
 
 /** localStorage key used for the optional persistence of demo edits. */
 export const STORAGE_KEY = 'krova-demo';
@@ -100,6 +106,16 @@ export interface DemoControls {
   /** How often `openReleasesPage` was called (the demo opens nothing). */
   releasesOpened(): number;
   // --- end wave4 ---
+  // --- notch ---
+  /**
+   * As if the notch were clicked: sends "panel-anchor" for the primary monitor at
+   * `corner` (default: `settings.notch.corner`); `onNotchNavigate` listeners then
+   * get `panel`, like the real panel window.
+   */
+  clickNotch(corner?: NotchCorner): PanelAnchor;
+  /** Listen to the notch's extra navigate targets (`panel`, `cheatsheet`). */
+  onNotchNavigate(cb: (view: NotchNavigateTarget) => void): () => void;
+  // --- notch ---
 }
 
 export type MockBackend = Backend & { demo: DemoControls };
@@ -130,6 +146,9 @@ export function defaultSettings(): Settings {
     hover_picker: false,
     language: 'system',
     // --- end wave4 ---
+    // --- notch ---
+    notch: defaultNotchSettings(),
+    // --- notch ---
   };
 }
 
@@ -224,6 +243,9 @@ function sanitizeSettings(s: Settings): Settings {
     hover_picker: flag(s.hover_picker, defaults.hover_picker),
     language: sanitizeLanguage(s.language),
     // --- end wave4 ---
+    // --- notch ---
+    notch: sanitizeNotch(s.notch),
+    // --- notch ---
   };
 }
 
@@ -287,6 +309,19 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
   // --- wave3 ---
   const wave3 = createWave3Mock(() => config);
   // --- end wave3 ---
+  // --- notch ---
+  const anchorListeners = new Set<(a: PanelAnchor) => void>();
+  const notchNavigateListeners = new Set<(v: NotchNavigateTarget) => void>();
+  let lastAnchor: PanelAnchor | null = null;
+  function sendAnchor(corner?: NotchCorner): PanelAnchor {
+    const monitor = MONITORS.find((m) => m.primary) ?? MONITORS[0];
+    const anchor = demoAnchor(monitor, corner ?? config.settings.notch.corner);
+    lastAnchor = anchor;
+    for (const cb of anchorListeners) cb({ ...anchor });
+    for (const cb of notchNavigateListeners) cb('panel');
+    return { ...anchor };
+  }
+  // --- notch ---
 
   function persist(): void {
     if (!storage) return;
@@ -501,6 +536,15 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
       return releasesOpened;
     },
     // --- end wave4 ---
+    // --- notch ---
+    clickNotch(corner) {
+      return sendAnchor(corner);
+    },
+    onNotchNavigate(cb) {
+      notchNavigateListeners.add(cb);
+      return () => notchNavigateListeners.delete(cb);
+    },
+    // --- notch ---
   };
 
   const backend: MockBackend = {
@@ -719,6 +763,23 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
       return () => hoverEndListeners.delete(cb);
     },
     // --- end wave4 ---
+    // --- notch ---
+    async onPanelAnchor(cb): Promise<Unlisten> {
+      anchorListeners.add(cb);
+      // The demo has no real notch: pretend it was just clicked.
+      if (lastAnchor) cb({ ...lastAnchor });
+      else queueMicrotask(() => sendAnchor());
+      return () => anchorListeners.delete(cb);
+    },
+
+    async panelAnchor() {
+      return lastAnchor ? { ...lastAnchor } : null;
+    },
+
+    async hidePanel() {
+      // A browser tab has no panel window to hide.
+    },
+    // --- notch ---
   };
 
   return backend;

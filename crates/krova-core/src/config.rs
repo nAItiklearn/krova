@@ -139,6 +139,11 @@ pub struct Settings {
     /// Language of the native strings: "system", "en", "es", "de", "ja", "zh-Hans".
     pub language: String,
     // --- end wave4 ---
+    // --- notch ---
+    /// The notch at a screen edge (see `crate::notch`). Lenient: a bad value
+    /// falls back to the defaults field by field.
+    pub notch: crate::notch::NotchSettings,
+    // --- notch ---
 }
 
 /// `#rrggbb` (any case, optional `#`, surrounding spaces ignored) as lowercase `#rrggbb`.
@@ -207,6 +212,9 @@ impl Default for Settings {
             hover_picker: false,
             language: crate::i18n::SYSTEM.to_owned(),
             // --- end wave4 ---
+            // --- notch ---
+            notch: crate::notch::NotchSettings::default(),
+            // --- notch ---
         }
     }
 }

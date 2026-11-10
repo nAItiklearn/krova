@@ -146,6 +146,9 @@ fn visuals_config(settings: &Settings) -> VisualsConfig {
 pub fn apply_settings(shared: &Shared) {
     let settings = lock(&shared.model).config.settings.clone();
     desk::set_share_safe(kfocus::share_safe(&settings));
+    // --- integration ---
+    crate::notch::set_share_safe(kfocus::share_safe(&settings));
+    // --- end integration ---
     let want = (settings.enabled).then(|| visuals_config(&settings));
     let want = want.filter(VisualsConfig::is_active);
     let w = &shared.wave3;

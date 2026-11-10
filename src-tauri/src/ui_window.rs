@@ -51,6 +51,9 @@ fn known_view(name: &str) -> Option<&'static str> {
         "editor" => Some("editor"),
         "settings" => Some("settings"),
         "switcher" => Some("switcher"),
+        // --- notch --- (the notch menu's "Cheat sheet")
+        "cheatsheet" => Some("cheatsheet"),
+        // --- notch ---
         _ => None,
     }
 }

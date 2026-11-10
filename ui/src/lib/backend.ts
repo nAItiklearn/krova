@@ -13,6 +13,7 @@ import type {
   HoverPicker,
   Layout,
   NavigateTarget,
+  PanelAnchor,
   ReservedEdges,
   RestoreReport,
   Settings,
@@ -120,6 +121,18 @@ export interface Backend {
   /** Backend event "hover-picker-end": close the picker. */
   onHoverPickerEnd(cb: () => void): Promise<Unlisten>;
   // --- end wave4 ---
+  // --- notch ---
+  /**
+   * Backend event "panel-anchor": the notch was clicked and the `panel` window was
+   * placed next to it. In demo mode a fake anchor (the notch on the primary monitor)
+   * is sent right after subscribing, and `demoControls.clickNotch()` sends more.
+   */
+  onPanelAnchor(cb: (anchor: PanelAnchor) => void): Promise<Unlisten>;
+  /** The last anchor, for a panel page that missed the event (null if none). */
+  panelAnchor(): Promise<PanelAnchor | null>;
+  /** Hide the panel window (Esc). It stays warm for the next click. */
+  hidePanel(): Promise<void>;
+  // --- notch ---
 }
 
 /** Commands reject with a string; be tolerant of Error objects too. */
@@ -182,6 +195,11 @@ export const tauriBackend: Backend = {
   onHoverPicker: (cb) => listen<HoverPicker>('hover-picker', (e) => cb(e.payload)),
   onHoverPickerEnd: (cb) => listen<null>('hover-picker-end', () => cb()),
   // --- end wave4 ---
+  // --- notch ---
+  onPanelAnchor: (cb) => listen<PanelAnchor>('panel-anchor', (e) => cb(e.payload)),
+  panelAnchor: () => invoke<PanelAnchor | null>('panel_anchor'),
+  hidePanel: () => invoke<void>('hide_panel'),
+  // --- notch ---
 };
 
 /** True when running inside the Tauri webview. */

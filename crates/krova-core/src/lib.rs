@@ -16,6 +16,9 @@ pub mod geometry;
 pub mod layout_io;
 pub mod linked;
 pub mod monitor;
+// --- notch ---
+pub mod notch;
+// --- notch ---
 pub mod presets;
 pub mod registry;
 pub mod snap;

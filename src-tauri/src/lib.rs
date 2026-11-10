@@ -14,6 +14,9 @@ mod engine;
 mod i18n;
 // --- end wave4 ---
 mod model;
+// --- notch ---
+mod notch;
+// --- notch ---
 mod tray;
 mod ui_window;
 // --- wave3 ---
@@ -68,8 +71,15 @@ pub fn run() {
             wave4::place_hovered,
             wave4::open_releases_page,
             // --- end wave4 ---
+            // --- notch ---
+            notch::hide_panel,
+            notch::panel_anchor,
+            // --- notch ---
         ])
         .on_window_event(|window, event| match event {
+            // --- notch --- (the quick panel hides instead of closing; see notch.rs)
+            _ if notch::on_window_event(window, event) => {}
+            // --- notch ---
             // The tray keeps the app alive. By default closing the window destroys
             // it so the embedded browser exits; `show` rebuilds it on demand.
             WindowEvent::CloseRequested { api, .. } if !ui_window::DESTROY_ON_CLOSE => {
@@ -147,5 +157,8 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // --- wave4 ---
     wave4::start(app.handle(), &shared);
     // --- end wave4 ---
+    // --- notch ---
+    notch::start(app.handle());
+    // --- notch ---
     Ok(())
 }

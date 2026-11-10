@@ -237,6 +237,15 @@ pub fn apply(shared: &Shared) {
     }
 }
 
+// --- integration ---
+/// Krova is paused (`settings.enabled` off): focus follows mouse and the hover
+/// picker do nothing. Their entry points ask this; `pointer_wanted` also stops
+/// the watcher. After the engine merge, also check the engine's pause here.
+pub fn paused(shared: &Shared) -> bool {
+    !lock(&shared.model).config.settings.enabled
+}
+// --- end integration ---
+
 /// Called after every settings change (UI or tray).
 pub fn settings_changed(shared: &Shared) {
     apply(shared);
@@ -246,6 +255,13 @@ fn on_pointer_event(ev: PointerEvent) {
     let Some(w) = WAVE4.get() else {
         return;
     };
+    // --- integration ---
+    // Paused (the notch's Pause, the tray, the master switch): an event still in
+    // flight from the watcher (which `apply` stops) opens no picker.
+    if paused(&w.shared) && !matches!(ev, PointerEvent::HoverEnd) {
+        return;
+    }
+    // --- end integration ---
     match ev {
         PointerEvent::HoverCaption {
             window,
@@ -342,6 +358,11 @@ pub fn place_hovered_on(
     hovered: &Hovered,
     zone_id: u32,
 ) -> Result<PxRect, String> {
+    // --- integration ---
+    if paused(shared) {
+        return Err("Krova is paused".to_owned());
+    }
+    // --- end integration ---
     let (target, work, mut record, animate) = {
         let model = lock(&shared.model);
         let (t, w, r) = plan_hover_place(&model, &hovered.monitor_id, zone_id)?;

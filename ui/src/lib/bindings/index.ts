@@ -92,7 +92,41 @@ export interface Settings {
   /** Language of the native strings (tray, notifications). Default `system`. */
   language: Language;
   // --- end wave4 ---
+  // --- notch ---
+  /** The notch at a screen edge. Rust fills in defaults field by field. */
+  notch: NotchSettings;
+  // --- notch ---
 }
+
+// --- notch ---
+/** Where on its monitor the notch sits. */
+export type NotchCorner = 'top_center' | 'top_left' | 'top_right' | 'bottom_left' | 'bottom_right';
+/** Which monitor shows the notch: the primary one, or the one under the cursor. */
+export type NotchMonitor = 'primary' | 'cursor';
+
+/** `Settings.notch`. Defaults: enabled, `top_center`, `primary`, hide in fullscreen. */
+export interface NotchSettings {
+  enabled: boolean;
+  corner: NotchCorner;
+  monitor: NotchMonitor;
+  /** Hide the notch while a fullscreen app is in front of its monitor. */
+  hide_in_fullscreen: boolean;
+}
+
+/**
+ * Payload of the backend event `panel-anchor`, sent to the `panel` window when the
+ * notch is clicked: the notch's rect in PHYSICAL screen px, its position and its
+ * monitor (`MonitorProfile.id`). The panel window has already been placed next to it.
+ */
+export interface PanelAnchor {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  corner: NotchCorner;
+  monitor_id: string;
+}
+// --- notch ---
 
 export interface MonitorProfile {
   id: string;
@@ -144,6 +178,10 @@ export interface ShortcutStatus {
 export interface Capabilities {
   shortcuts: boolean;
   window_memory: boolean;
+  // --- notch ---
+  /** This build can show the notch (Windows). Missing in older backends. */
+  notch?: boolean;
+  // --- notch ---
 }
 
 export interface AppState {
@@ -347,3 +385,11 @@ export interface HoverPicker {
   zones: HoverZone[];
 }
 // --- end wave4 ---
+// --- notch ---
+/**
+ * Further "navigate" targets sent because of the notch: `cheatsheet` (to the main
+ * window, from the notch menu) and `panel` (to the `panel` window, after
+ * `panel-anchor`). Kept out of `NavigateTarget` so existing views ignore them.
+ */
+export type NotchNavigateTarget = 'cheatsheet' | 'panel';
+// --- notch ---

@@ -34,6 +34,7 @@ features = [
     "Win32_System_Registry", # wave3: needed by ShellExecuteExW
     # wave3: ShellExecuteExW (workspace restore); wave4: SHQueryUserNotificationState
     # (focus follows mouse), ShellExecuteW (updates)
+    # --- notch --- (SHQueryUserNotificationState: fullscreen detection)
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ]

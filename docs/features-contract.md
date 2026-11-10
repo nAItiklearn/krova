@@ -137,6 +137,41 @@ Names follow the layout rules: 1-64 characters after trimming spaces, no control
 **Highlight overlay** (when Windows does not draw it): a click-through ring following the focused window, eased between windows on focus change, shaped for Windows 11's rounded corners (8 px at 100 %); `all` puts one ring just above each window (at most 48; unfocused ones fainter); `glow` is a soft per-pixel-alpha halo. Hidden for full-screen, minimised and cloaked windows. Switching off resets every border colour Krova set. The overlay thread runs only while focus dim or a highlight is on, and is per-monitor DPI aware.
 
 **Known limits:** packaged (Microsoft Store) apps report a path under `WindowsApps` that cannot be started directly, so restore reuses them when they are open and otherwise reports `refused` or `timed_out`. Programs running as administrator are not listed (Krova cannot move them). The Svelte views (workspace cards in the switcher deck, quick-panel toggles) are not built.
+## Notch (Windows; `capabilities.notch`)
+
+A small ink pill at a screen edge, the main way to control Krova without opening the app. Native window (layered, topmost, never activated, per-pixel alpha), no WebView while collapsed, no idle CPU (a frame timer runs only while it animates).
+
+**Setting** `notch` (object in `config.settings`; TS `NotchSettings`). Every field has a default and a bad value falls back to its default on its own, so a hand-edited file never makes the config unreadable.
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `enabled` | bool | `true` | The menu's "Hide notch" sets it to `false`; Settings turns it back on. |
+| `corner` | string enum | `"top_center"` | `"top_center"`, `"top_left"`, `"top_right"`, `"bottom_left"`, `"bottom_right"` (TS `NotchCorner`). Dragging the notch saves the position it snaps to. |
+| `monitor` | string enum | `"primary"` | `"primary"` or `"cursor"` (TS `NotchMonitor`). `cursor` = the monitor under the cursor, re-checked when the foreground window or the displays change (never polled). |
+| `hide_in_fullscreen` | bool | `true` | Hidden while a fullscreen app (game, video, presentation) is in front of its monitor. |
+
+**Look.** Collapsed 46 x 13 logical px, fully rounded, ink `#141413` with a hairline rim and a dot: the accent (`appearance.accent`, default `#ff5b1f`) while Krova runs, grey `#8a877f` while paused. Hover for 150 ms grows it with a spring (damping 0.85, about 240 ms) to 220 x 28 with corner radius `appearance.corner_radius_px` (default 10) and the monitor's active layout name in off-white `#f2f1ee` (Segoe UI Variable, grayscale anti-aliasing); "Paused · name" while paused. With share-safe on (`settings.share_safe` once it exists) the name becomes "3 zones" and the menu lists "Layout 1..N". Sizes follow the monitor's DPI. It sits `4` logical px in from the monitor edge, but never under a reserved edge: a bottom position sits just above a bottom taskbar, a top one below a top taskbar.
+
+**Mouse.**
+- Left click: opens the quick panel next to the notch, or closes it if it is open (below). 
+- Right click: a native menu with Pause/Resume Krova, Layouts (activates one on the notch's monitor), Layout switcher (opens the switcher for that monitor, like `<mods>+Space`), Cheat sheet (`navigate` = `"cheatsheet"` to the main window), Open Krova (the editor), Hide notch.
+- Drag (more than 4 px): the collapsed pill follows the cursor; on release it springs to the nearest of the five positions on its monitor and saves `notch.corner` (`state-changed` follows).
+
+**Quick panel.** A left click places the `panel` window (frameless, transparent, always on top, no taskbar entry, 360 x 440 logical px) below a top notch or above a bottom one, aligned with it and inside the work area, shows and focuses it, and sends it two events:
+
+1. `panel-anchor` with `PanelAnchor` `{ "x", "y", "w", "h", "corner", "monitor_id" }`: the notch's rect in **physical** screen px, its position, and the `MonitorProfile.id` of its monitor.
+2. `navigate` with `"panel"`.
+
+A page that loaded late can pull the last anchor with the command `panel_anchor` (returns `PanelAnchor | null`). Esc should call `hide_panel`; losing focus hides it too. The window is created on the first click and then kept hidden ("warm"), never destroyed, so later clicks are instant. If a `panel` window already exists (the engine's), it is reused as is.
+
+| Command | Arguments | Returns | Notes |
+|---|---|---|---|
+| `panel_anchor` | none | `PanelAnchor \| null` | The last anchor sent. |
+| `hide_panel` | none | nothing | Hides the panel window. |
+
+`AppState.capabilities.notch` is `true` on Windows and `false` elsewhere (and absent from older backends). The UI should hide the notch settings when it is not `true`.
+
+**Demo mode.** `onPanelAnchor` sends a fake anchor (the notch on the primary demo monitor at `settings.notch.corner`) right after subscribing; `demoControls.clickNotch(corner?)` sends another, and `demoControls.onNotchNavigate` gets `"panel"` with it.
 
 ## Not part of the contract
 
