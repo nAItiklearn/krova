@@ -101,3 +101,11 @@ Run on a real Windows PC with the app built from the `engine` branch (automated 
 9. Switch the active layout (switcher or editor): the arranged windows move to the new zones.
 10. Turn auto-arrange off for one monitor: new windows there are not touched; the other monitor still arranges.
 11. Idle: with nothing happening, Task Manager shows 0 % CPU for Krova (no timers run between events).
+
+**Wave 2: shortcuts, popups, pause**
+12. `cargo test -p krova-platform default_chords_probe -- --ignored --nocapture`: note which default `Ctrl+Alt` chords this PC refuses (IDE, Intel driver).
+13. With two windows tiled: `Ctrl+Alt+Right` moves the focused one to the next zone; past the right edge it enters the next monitor's leftmost zone. `Ctrl+Alt+Shift+Left` swaps two tiled windows; `Ctrl+Alt+3` sends to zone 3; `Ctrl+Alt+Shift+2` applies layout 2 on the monitor under the cursor.
+14. `Ctrl+Alt+Enter`: the window fills the screen; again: back in its zone. `Ctrl+Alt+]` / `[` cycle a stack.
+15. `Ctrl+Alt+T`: the tray icon dims, its tooltip says "Krova (paused)", the tray item is checked, new windows are not arranged; again: resumes.
+16. `Ctrl+Alt+Space` opens the switcher window on the monitor under the cursor; Esc or a click outside hides it; the second open is instant (warm). `Ctrl+Alt+/` opens the cheat sheet in the same window. A left click on the tray icon opens the quick panel near the tray. Record the latencies in `docs/measurements/popup-open-latency.md`.
+17. Rebind `pause` to a chord another app holds: the sheet shows it as in use with up to three suggestions; reset brings the defaults back. An old config with `"shortcut_modifier":"win_alt"` keeps Win+Alt for the zone shortcuts.

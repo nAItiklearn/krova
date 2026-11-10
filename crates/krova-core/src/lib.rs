@@ -13,6 +13,7 @@ pub mod linked;
 pub mod monitor;
 pub mod presets;
 pub mod registry;
+pub mod shortcuts;
 pub mod snap;
 pub mod stack;
 pub mod swap;

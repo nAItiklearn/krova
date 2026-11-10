@@ -848,6 +848,9 @@ impl Platform for WindowsPlatform {
             .map(|s| Box::new(s) as Box<dyn crate::StripHost>)
     }
 
+    fn probe_hotkey(&self, chord: krova_core::shortcuts::Chord) -> Result<bool, PlatformError> {
+        crate::win_events::probe_hotkey(chord)
+    }
     fn start_hotkeys(
         &self,
         spec: HotkeySpec,

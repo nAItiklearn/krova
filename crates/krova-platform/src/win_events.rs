@@ -21,8 +21,6 @@ use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 
-use krova_core::registry::KeyAction;
-use krova_core::ShortcutModifier;
 use windows::core::{HRESULT, PCWSTR};
 use windows::Win32::Foundation::{
     CloseHandle, ERROR_HOTKEY_ALREADY_REGISTERED, FALSE, HANDLE, HINSTANCE, HMODULE, HWND, LPARAM,
@@ -33,7 +31,8 @@ use windows::Win32::System::Threading::{CreateEventW, SetEvent, INFINITE};
 use windows::Win32::UI::Accessibility::{SetWinEventHook, UnhookWinEvent, HWINEVENTHOOK};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     RegisterHotKey, UnregisterHotKey, HOT_KEY_MODIFIERS, MOD_ALT, MOD_CONTROL, MOD_NOREPEAT,
-    MOD_SHIFT, MOD_WIN, VK_LEFT, VK_RIGHT, VK_SPACE, VK_UP,
+    MOD_SHIFT, MOD_WIN, VK_DOWN, VK_F1, VK_LEFT, VK_OEM_2, VK_OEM_4, VK_OEM_6, VK_OEM_COMMA,
+    VK_OEM_MINUS, VK_OEM_PERIOD, VK_OEM_PLUS, VK_RETURN, VK_RIGHT, VK_SPACE, VK_UP,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetAncestor,
@@ -47,7 +46,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WM_SETTINGCHANGE, WNDCLASSEXW, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_POPUP,
 };
 
-use crate::hotkeys::{action_for_id, refusal_message, HotkeyEvent, HotkeySpec, Key, Refusal};
+use crate::hotkeys::{
+    refusal_message, Chord, HotkeyEvent, HotkeySpec, Key, Refusal, ShortcutAction,
+};
 use crate::{EventSink, HotkeyHandle, PlatformError, WatchEvent, WatchHandle, WindowId};
 
 fn os_err(e: windows::core::Error) -> PlatformError {
@@ -121,13 +122,21 @@ fn dispatch(msg: &MSG) {
 // ------------------------------------------------------------- hotkeys
 
 /// The `RegisterHotKey` modifier bits for a chord (without `MOD_NOREPEAT`).
-pub fn modifier_bits(m: ShortcutModifier) -> u32 {
-    match m {
-        ShortcutModifier::CtrlAlt => MOD_CONTROL.0 | MOD_ALT.0,
-        ShortcutModifier::WinAlt => MOD_WIN.0 | MOD_ALT.0,
-        ShortcutModifier::CtrlAltShift => MOD_CONTROL.0 | MOD_ALT.0 | MOD_SHIFT.0,
-        ShortcutModifier::WinCtrl => MOD_WIN.0 | MOD_CONTROL.0,
+pub fn modifier_bits(chord: Chord) -> u32 {
+    let mut bits = 0;
+    if chord.ctrl {
+        bits |= MOD_CONTROL.0;
     }
+    if chord.alt {
+        bits |= MOD_ALT.0;
+    }
+    if chord.shift {
+        bits |= MOD_SHIFT.0;
+    }
+    if chord.win {
+        bits |= MOD_WIN.0;
+    }
+    bits
 }
 
 /// Virtual-key code of a shortcut's key.
@@ -136,25 +145,64 @@ pub fn virtual_key(key: Key) -> u32 {
         Key::Left => u32::from(VK_LEFT.0),
         Key::Right => u32::from(VK_RIGHT.0),
         Key::Up => u32::from(VK_UP.0),
-        // '1'..'9' on the main row have the virtual-key codes of their ASCII digits.
+        Key::Down => u32::from(VK_DOWN.0),
+        // '0'..'9' and 'A'..'Z' have the virtual-key codes of their ASCII characters.
         Key::Digit(n) => u32::from(b'0') + u32::from(n.min(9)),
+        Key::Letter(c) => u32::from(c.to_ascii_uppercase()),
+        Key::F(n) => u32::from(VK_F1.0) + u32::from(n.clamp(1, 12)) - 1,
         Key::Space => u32::from(VK_SPACE.0),
+        Key::Enter => u32::from(VK_RETURN.0),
+        Key::Slash => u32::from(VK_OEM_2.0),
+        Key::BracketLeft => u32::from(VK_OEM_4.0),
+        Key::BracketRight => u32::from(VK_OEM_6.0),
+        Key::Comma => u32::from(VK_OEM_COMMA.0),
+        Key::Period => u32::from(VK_OEM_PERIOD.0),
+        Key::Minus => u32::from(VK_OEM_MINUS.0),
+        Key::Equals => u32::from(VK_OEM_PLUS.0),
+    }
+}
+
+fn register(id: i32, chord: Chord) -> Result<(), Refusal> {
+    let mods = HOT_KEY_MODIFIERS(modifier_bits(chord) | MOD_NOREPEAT.0);
+    // SAFETY: a thread-bound hot key (no window); the caller unregisters it on
+    // this same thread.
+    unsafe { RegisterHotKey(HWND::default(), id, mods, virtual_key(chord.key)) }.map_err(|e| {
+        if e.code() == HRESULT::from_win32(ERROR_HOTKEY_ALREADY_REGISTERED.0) {
+            Refusal::InUse
+        } else {
+            Refusal::Other((e.code().0 & 0xFFFF) as u32)
+        }
+    })
+}
+
+/// Is `chord` free right now? Registers it on the calling thread and releases it
+/// again at once. `Ok(false)` when another program (or Krova) holds it.
+pub fn probe_hotkey(chord: Chord) -> Result<bool, PlatformError> {
+    const PROBE_ID: i32 = 0xBFFF;
+    match register(PROBE_ID, chord) {
+        Ok(()) => {
+            // SAFETY: releases the hot key registered just above on this thread.
+            let _ = unsafe { UnregisterHotKey(HWND::default(), PROBE_ID) };
+            Ok(true)
+        }
+        Err(Refusal::InUse) => Ok(false),
+        Err(Refusal::Other(code)) => Err(PlatformError::Os(format!(
+            "{chord} could not be checked (error {code})"
+        ))),
     }
 }
 
 struct HotkeyReport {
-    accepted: Vec<KeyAction>,
-    refused: Vec<(KeyAction, String)>,
+    accepted: Vec<ShortcutAction>,
+    refused: Vec<(ShortcutAction, String)>,
 }
 
 fn hotkey_thread(
     stop: usize,
-    spec: HotkeySpec,
+    spec: &HotkeySpec,
     sink: &EventSink<HotkeyEvent>,
     ready: &mpsc::Sender<HotkeyReport>,
 ) {
-    let mods = HOT_KEY_MODIFIERS(modifier_bits(spec.modifier) | MOD_NOREPEAT.0);
-
     // Touching the queue creates it, so a WM_HOTKEY posted right after
     // registration is not lost.
     let mut probe = MSG::default();
@@ -164,29 +212,23 @@ fn hotkey_thread(
     let mut registered = Vec::new();
     let mut accepted = Vec::new();
     let mut refused = Vec::new();
-    for def in spec.defs() {
-        // SAFETY: a thread-bound hot key (no window); unregistered below on this thread.
-        let result = unsafe { RegisterHotKey(HWND::default(), def.id, mods, virtual_key(def.key)) };
-        match result {
+    for (id, binding) in spec.ids() {
+        match register(id, binding.chord) {
             Ok(()) => {
-                registered.push(def.id);
-                accepted.push(def.action);
+                registered.push(id);
+                accepted.push(binding.action);
             }
-            Err(e) => {
-                let why = if e.code() == HRESULT::from_win32(ERROR_HOTKEY_ALREADY_REGISTERED.0) {
-                    Refusal::InUse
-                } else {
-                    Refusal::Other((e.code().0 & 0xFFFF) as u32)
-                };
-                refused.push((def.action, refusal_message(spec.modifier, def.key, why)));
-            }
+            Err(why) => refused.push((binding.action, refusal_message(binding.chord, why))),
         }
     }
     let _ = ready.send(HotkeyReport { accepted, refused });
 
     pump(stop, |msg| {
         if msg.message == WM_HOTKEY {
-            if let Some(action) = i32::try_from(msg.wParam.0).ok().and_then(action_for_id) {
+            if let Some(action) = i32::try_from(msg.wParam.0)
+                .ok()
+                .and_then(|id| spec.action_for_id(id))
+            {
                 sink(HotkeyEvent { action });
             }
         } else {
@@ -200,9 +242,8 @@ fn hotkey_thread(
     }
 }
 
-/// Register the requested shortcuts (the window-move group, `<mods>+Space`, or both)
-/// on a dedicated thread. Shortcuts the OS refuses are listed in the returned
-/// handle; the others work regardless.
+/// Register the requested shortcuts on a dedicated thread. Shortcuts the OS refuses
+/// are listed in the returned handle; the others work regardless.
 pub fn start_hotkeys(
     spec: HotkeySpec,
     sink: EventSink<HotkeyEvent>,
@@ -212,7 +253,7 @@ pub fn start_hotkeys(
     let (ready_tx, ready_rx) = mpsc::channel::<HotkeyReport>();
     let join = thread::Builder::new()
         .name("krova-hotkeys".into())
-        .spawn(move || hotkey_thread(raw, spec, &sink, &ready_tx))
+        .spawn(move || hotkey_thread(raw, &spec, &sink, &ready_tx))
         .map_err(|e| PlatformError::Os(e.to_string()))?;
 
     match ready_rx.recv_timeout(Duration::from_secs(2)) {
@@ -496,30 +537,15 @@ mod tests {
 
     #[test]
     fn modifier_chords_map_to_the_right_bits() {
+        let bits = |s: &str| modifier_bits(s.parse::<Chord>().unwrap());
+        assert_eq!(bits("Ctrl+Alt+Left"), MOD_CONTROL.0 | MOD_ALT.0);
+        assert_eq!(bits("Win+Alt+3"), MOD_WIN.0 | MOD_ALT.0);
         assert_eq!(
-            modifier_bits(ShortcutModifier::CtrlAlt),
-            MOD_CONTROL.0 | MOD_ALT.0
-        );
-        assert_eq!(
-            modifier_bits(ShortcutModifier::WinAlt),
-            MOD_WIN.0 | MOD_ALT.0
-        );
-        assert_eq!(
-            modifier_bits(ShortcutModifier::CtrlAltShift),
+            bits("Ctrl+Alt+Shift+Up"),
             MOD_CONTROL.0 | MOD_ALT.0 | MOD_SHIFT.0
         );
-        assert_eq!(
-            modifier_bits(ShortcutModifier::WinCtrl),
-            MOD_WIN.0 | MOD_CONTROL.0
-        );
-        for m in [
-            ShortcutModifier::CtrlAlt,
-            ShortcutModifier::WinAlt,
-            ShortcutModifier::CtrlAltShift,
-            ShortcutModifier::WinCtrl,
-        ] {
-            assert_eq!(modifier_bits(m) & MOD_NOREPEAT.0, 0);
-        }
+        assert_eq!(bits("Win+Ctrl+Right"), MOD_WIN.0 | MOD_CONTROL.0);
+        assert_eq!(bits("Ctrl+Alt+Shift+Win+F1") & MOD_NOREPEAT.0, 0);
     }
 
     #[test]
@@ -530,6 +556,14 @@ mod tests {
         assert_eq!(virtual_key(Key::Digit(1)), 0x31);
         assert_eq!(virtual_key(Key::Digit(9)), 0x39);
         assert_eq!(virtual_key(Key::Space), 0x20);
+        assert_eq!(virtual_key(Key::Down), 0x28);
+        assert_eq!(virtual_key(Key::Letter('T')), 0x54);
+        assert_eq!(virtual_key(Key::F(1)), 0x70);
+        assert_eq!(virtual_key(Key::F(12)), 0x7B);
+        assert_eq!(virtual_key(Key::Enter), 0x0D);
+        assert_eq!(virtual_key(Key::Slash), 0xBF);
+        assert_eq!(virtual_key(Key::BracketLeft), 0xDB);
+        assert_eq!(virtual_key(Key::BracketRight), 0xDD);
     }
 
     #[test]
@@ -622,20 +656,16 @@ mod tests {
         use std::sync::Arc;
         let _turn = take_turn();
         // Whatever the OS refuses is reported, never an error; dropping stops the thread.
-        let spec = HotkeySpec {
-            modifier: ShortcutModifier::CtrlAltShift,
-            window_moves: true,
-            switcher: true,
-        };
-        let handle = start_hotkeys(spec, Arc::new(|_| {})).expect("thread starts");
+        let spec = default_spec();
+        let handle = start_hotkeys(spec.clone(), Arc::new(|_| {})).expect("thread starts");
         assert_eq!(
             handle.registered() + handle.failed().len(),
-            spec.defs().len()
+            spec.bindings.len()
         );
-        assert_eq!(spec.defs().len(), 13);
+        assert_eq!(spec.bindings.len(), 33);
         let refused_first = handle.failed().len();
         drop(handle);
-        // The same chord can be registered again right away: the first
+        // The same chords can be registered again right away: the first
         // registrations were released when the thread ended.
         let handle = start_hotkeys(spec, Arc::new(|_| {})).expect("thread starts again");
         assert_eq!(
@@ -646,68 +676,66 @@ mod tests {
         );
     }
 
-    #[test]
-    fn each_group_registers_on_its_own() {
-        use std::sync::Arc;
-        let _turn = take_turn();
-        let only = |window_moves, switcher| {
-            let spec = HotkeySpec {
-                modifier: ShortcutModifier::CtrlAltShift,
-                window_moves,
-                switcher,
-            };
-            let handle = start_hotkeys(spec, Arc::new(|_| {})).expect("thread starts");
-            let (moves, space) = (handle.window_moves(), handle.switcher());
-            // Whatever the OS refuses is reported; a group that was not asked for is empty.
-            assert_eq!(
-                moves.registered + moves.failed.len(),
-                usize::from(window_moves) * 12
-            );
-            assert_eq!(space.registered + space.failed.len(), usize::from(switcher));
-            drop(handle);
-        };
-        only(true, false);
-        only(false, true);
-        only(false, false);
+    fn default_spec() -> HotkeySpec {
+        use crate::hotkeys::HotkeyBinding;
+        HotkeySpec {
+            bindings: krova_core::shortcuts::ShortcutMap::new()
+                .effective()
+                .into_iter()
+                .filter_map(|(action, chord)| {
+                    Some(HotkeyBinding {
+                        action,
+                        chord: chord?,
+                    })
+                })
+                .collect(),
+        }
     }
 
-    /// Which `<mods>+Space` chords this PC's Windows lets a program register. Prints
-    /// a table (`-- --ignored --nocapture`); it asserts only for the default chord,
-    /// and is ignored because another running program may legitimately own it.
     #[test]
-    #[ignore = "depends on the programs running on this PC; run by hand"]
-    fn space_chords_probe() {
+    fn a_probe_releases_the_chord_and_sees_a_held_one() {
+        use crate::hotkeys::HotkeyBinding;
         use std::sync::Arc;
         let _turn = take_turn();
-        for modifier in [
-            ShortcutModifier::CtrlAlt,
-            ShortcutModifier::WinAlt,
-            ShortcutModifier::CtrlAltShift,
-            ShortcutModifier::WinCtrl,
-        ] {
-            let spec = HotkeySpec {
-                modifier,
-                window_moves: false,
-                switcher: true,
-            };
-            let handle = start_hotkeys(spec, Arc::new(|_| {})).expect("thread starts");
-            let report = handle.switcher();
-            println!(
-                "{:>15}+Space: {}",
-                modifier.label(),
-                if report.registered == 1 {
-                    "registered".to_owned()
+        // An unusual chord nobody holds.
+        let chord: Chord = "Ctrl+Alt+Shift+Win+F11".parse().unwrap();
+        let first = probe_hotkey(chord).expect("probe works");
+        if !first {
+            println!("SKIPPED: something on this PC holds {chord}");
+            return;
+        }
+        // The probe released it: probing again finds it free.
+        assert!(probe_hotkey(chord).unwrap());
+        // While Krova's own shortcut thread holds it, it is not free.
+        let spec = HotkeySpec {
+            bindings: vec![HotkeyBinding {
+                action: ShortcutAction::Focus,
+                chord,
+            }],
+        };
+        let handle = start_hotkeys(spec, Arc::new(|_| {})).expect("thread starts");
+        assert!(handle.is_registered(ShortcutAction::Focus));
+        assert!(!probe_hotkey(chord).unwrap());
+        drop(handle);
+        assert!(probe_hotkey(chord).unwrap());
+    }
+
+    /// Which of the default chords this PC's Windows lets a program register. Prints
+    /// a table (`-- --ignored --nocapture`); ignored because other running programs
+    /// (IDEs, graphics drivers) may legitimately own some of them.
+    #[test]
+    #[ignore = "depends on the programs running on this PC; run by hand"]
+    fn default_chords_probe() {
+        let _turn = take_turn();
+        for b in default_spec().bindings {
+            let free = probe_hotkey(b.chord).map_or("error".to_owned(), |f| {
+                if f {
+                    "free".to_owned()
                 } else {
-                    report.failed.join("; ")
+                    "in use".to_owned()
                 }
-            );
-            if modifier == ShortcutModifier::CtrlAltShift {
-                assert_eq!(
-                    report.registered, 1,
-                    "the default chord: {:?}",
-                    report.failed
-                );
-            }
+            });
+            println!("{:>24}: {free}", b.chord.to_string());
         }
     }
 

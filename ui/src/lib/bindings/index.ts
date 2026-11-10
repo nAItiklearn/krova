@@ -58,8 +58,8 @@ export interface Settings {
   /** Global keyboard shortcuts that move the focused window between zones. Default true. */
   keyboard_shortcuts: boolean;
   /**
-   * Default `ctrl_alt_shift`. Windows refuses most Win+Alt and Win+Ctrl chords, so
-   * `shortcuts.failed` says which ones were not registered.
+   * Deprecated: replaced by `shortcuts`. Kept so an older config migrates (a
+   * `win_alt` / `win_ctrl` choice becomes overrides). Send back what you got.
    */
   shortcut_modifier: ShortcutModifier;
   /** Snapped windows return to their zones when their monitor reconnects. Default true. */
@@ -75,6 +75,8 @@ export interface Settings {
   layout_switcher_shortcut: boolean;
   /** Per-program rules, in the order the user made them (at most 256). Default []. */
   app_rules: AppRule[];
+  /** Changes to the default shortcut map (see `ShortcutMap`). Default {}. */
+  shortcuts: ShortcutMap;
 }
 
 export interface MonitorProfile {
@@ -144,6 +146,10 @@ export interface AppState {
   layout_switcher: ShortcutStatus;
   /** The program in front and whether auto-arrange looks after it; null if unknown. */
   front_app: FrontApp | null;
+  /** Auto-arrange is paused (Ctrl+Alt+T, the tray, `setPaused`). */
+  paused: boolean;
+  /** Every shortcut with its chord and state, in sheet order. */
+  shortcut_actions: ShortcutActionState[];
 }
 
 /**
@@ -161,7 +167,7 @@ export type View = 'editor' | 'settings';
  * the monitor it is for comes from `switcher_monitor`). A UI that does not know
  * `switcher` yet must ignore it.
  */
-export type NavigateTarget = View | 'switcher';
+export type NavigateTarget = View | 'switcher' | 'cheat_sheet' | 'panel';
 
 // ---------------------------------------------------------------- Wave 1: arrange
 
@@ -230,4 +236,60 @@ export interface PresetInfo {
   /** Made for the shape of the monitor that was asked about. */
   recommended: boolean;
   layout: Layout;
+}
+
+// ---------------------------------------------------------------- Wave 2: shortcuts
+
+/**
+ * The user's changes to the default shortcut map: action id -> chord text
+ * (`"Ctrl+Alt+Left"`) or `null` (switched off). Missing ids keep their default.
+ */
+export type ShortcutMap = Record<string, string | null>;
+
+export type ShortcutGroup = 'Windows' | 'Layouts' | 'Krova';
+
+/**
+ * `active` registered; `off` no chord or its feature is off; `in_use` Windows refused
+ * it (another app owns it); `error` another refusal; `unsupported` no global
+ * shortcuts on this OS.
+ */
+export type ShortcutStatusCode = 'active' | 'off' | 'in_use' | 'error' | 'unsupported';
+
+/** One row of the shortcut sheet (`AppState.shortcut_actions`, in sheet order). */
+export interface ShortcutActionState {
+  /** `move_left`, `swap_up`, `zone_3`, `layout_2`, `maximize_in_zone`, `stack_prev`,
+   * `stack_next`, `switcher`, `pause`, `cheat_sheet`, `focus`. */
+  id: string;
+  /** One to four words, e.g. "Move left". */
+  label: string;
+  group: ShortcutGroup;
+  /** Display text of the chord now; null when switched off. */
+  chord: string | null;
+  default_chord: string | null;
+  status: ShortcutStatusCode;
+  /** Why, for `in_use` / `error`. */
+  message: string | null;
+}
+
+/** Answer of `probe_shortcut`. */
+export interface ProbeResult {
+  /** `free`, `current` (already this action's), `conflict` (another Krova action),
+   * `in_use` (another program), `invalid` (not a chord), `unknown` (cannot check). */
+  status: 'free' | 'current' | 'conflict' | 'in_use' | 'invalid' | 'unknown';
+  /** Normalised chord text, when it could be read. */
+  chord: string | null;
+  /** The Krova action id that has it, for `conflict`. */
+  conflict_with: string | null;
+  /** One sentence for the UI. */
+  message: string;
+  /** Up to three free chords with the same key. */
+  suggestions: string[];
+}
+
+/** Window labels of the two warm popups. */
+export type PopupLabel = 'panel' | 'switcher';
+
+/** Payload of the `panel-anchor` event: where the panel was opened from (the notch). */
+export interface PanelAnchor {
+  rect: PxRect;
 }

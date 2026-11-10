@@ -89,6 +89,11 @@ impl ArrangeState {
     fn tracked(&self, window: u64) -> bool {
         self.stacks.values().any(|s| s.contains(window))
     }
+
+    /// Forget the windows waiting to be arranged (on pause).
+    pub fn clear_pending(&mut self) {
+        self.pending.clear();
+    }
 }
 
 /// Stable key of a strip: the monitor profile and the zone.
@@ -500,7 +505,6 @@ impl Engine<'_> {
 
     /// Swap the focused window with its neighbour in `dir` (a keyboard shortcut).
     /// Into an empty neighbour it simply moves. Returns whether anything moved.
-    #[allow(dead_code)] // bound to a shortcut by the wave 2 shortcut map
     pub(super) fn swap_focused(&mut self, dir: Direction) -> bool {
         let Some(window) = self.shared.platform.foreground_window() else {
             return false;
@@ -521,7 +525,6 @@ impl Engine<'_> {
     }
 
     /// Step through the stack of the focused window's zone.
-    #[allow(dead_code)] // bound to a shortcut by the wave 2 shortcut map
     pub(super) fn cycle_focused(&mut self, forward: bool) {
         let Some(window) = self.shared.platform.foreground_window() else {
             return;

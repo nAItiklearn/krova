@@ -20,6 +20,36 @@
         "center": true,
         "visible": false,
         "create": false
+      },
+      {
+        "label": "panel",
+        "title": "Krova",
+        "width": 360,
+        "height": 520,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "shadow": false,
+        "visible": false,
+        "focus": true,
+        "create": false
+      },
+      {
+        "label": "switcher",
+        "title": "Krova",
+        "width": 820,
+        "height": 560,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "shadow": false,
+        "visible": false,
+        "focus": true,
+        "create": false
       }
     ],
     "security": {

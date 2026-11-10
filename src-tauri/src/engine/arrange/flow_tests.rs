@@ -86,6 +86,9 @@ impl Platform for Desk {
             owner: None,
         })
     }
+    fn is_movable_target(&self, w: WindowId) -> bool {
+        self.window_exists(w)
+    }
     fn raise_window(&self, w: WindowId) -> Result<(), PlatformError> {
         lock(&self.raised).push(w.0);
         Ok(())
@@ -315,4 +318,115 @@ fn a_shown_window_already_tracked_or_pending_is_not_queued_twice() {
     e.arrange_new(WindowId(1));
     e.on_window_shown(WindowId(1));
     assert!(e.arrange.pending.is_empty());
+}
+
+// ---------------------------------------------------------------- Wave 2 keys
+
+use crate::hooks::EngineEvent;
+use krova_core::shortcuts::ShortcutAction;
+
+fn record_hooks(shared: &Shared) -> Arc<Mutex<Vec<EngineEvent>>> {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let sink = Arc::clone(&seen);
+    shared
+        .hooks
+        .register(Arc::new(move |e| lock(&sink).push(e.clone())));
+    seen
+}
+
+#[test]
+fn the_pause_key_toggles_tells_the_hooks_and_pushes_the_state() {
+    let (_desk, shared) = setup();
+    let seen = record_hooks(&shared);
+    let pushes = Arc::new(Mutex::new(0));
+    let count = Arc::clone(&pushes);
+    *lock(&shared.state_changed) = Some(Arc::new(move || *lock(&count) += 1));
+    let mut e = Engine::new(&shared, None, None);
+    e.on_hotkey(ShortcutAction::Pause);
+    assert!(shared.is_paused());
+    e.on_hotkey(ShortcutAction::Pause);
+    assert!(!shared.is_paused());
+    assert_eq!(
+        *lock(&seen),
+        [
+            EngineEvent::PauseChanged(true),
+            EngineEvent::PauseChanged(false)
+        ]
+    );
+    assert_eq!(*lock(&pushes), 2);
+}
+
+#[test]
+fn focus_is_only_reported_to_the_hooks() {
+    let (desk, shared) = setup();
+    let seen = record_hooks(&shared);
+    let mut e = Engine::new(&shared, None, None);
+    e.on_hotkey(ShortcutAction::Focus);
+    assert_eq!(*lock(&seen), [EngineEvent::Action("focus")]);
+    assert!(lock(&desk.placed).is_empty());
+}
+
+#[test]
+fn ctrl_alt_right_moves_the_focused_window_to_the_next_zone() {
+    let (desk, shared) = setup();
+    let mut e = Engine::new(&shared, None, None);
+    open(&desk, 1, WindowKind::Normal, "app.exe");
+    e.arrange_new(WindowId(1));
+    assert_eq!(rect_of(&desk, 1), LEFT);
+    *lock(&desk.foreground) = Some(1);
+    e.on_hotkey(ShortcutAction::Move(Direction::Right));
+    assert_eq!(rect_of(&desk, 1), RIGHT);
+    // The stacks follow the shortcut.
+    assert_eq!(e.arrange.stacks["monitor-1"].zone_of(1), Some(2));
+    // Keyboard shortcuts off: nothing moves.
+    lock(&shared.model).config.settings.keyboard_shortcuts = false;
+    e.on_hotkey(ShortcutAction::Move(Direction::Left));
+    assert_eq!(rect_of(&desk, 1), RIGHT);
+}
+
+#[test]
+fn ctrl_alt_shift_n_applies_layout_n_and_re_tiles() {
+    let (desk, shared) = setup();
+    let mut e = Engine::new(&shared, None, None);
+    for id in 1..=2 {
+        open(&desk, id, WindowKind::Normal, "app.exe");
+        e.arrange_new(WindowId(id));
+    }
+    e.on_hotkey(ShortcutAction::ApplyLayout(2));
+    assert_eq!(
+        lock(&shared.model).config.monitors[0].active_layout,
+        "thirds"
+    );
+    assert_eq!(rect_of(&desk, 2), PxRect::new(640, 0, 640, 1040));
+    // A layout number past the list does nothing.
+    e.on_hotkey(ShortcutAction::ApplyLayout(9));
+    assert_eq!(
+        lock(&shared.model).config.monitors[0].active_layout,
+        "thirds"
+    );
+}
+
+#[test]
+fn fill_screen_toggles_between_the_work_area_and_the_zone() {
+    let (desk, shared) = setup();
+    let mut e = Engine::new(&shared, None, None);
+    open(&desk, 1, WindowKind::Normal, "app.exe");
+    e.arrange_new(WindowId(1));
+    *lock(&desk.foreground) = Some(1);
+    e.on_hotkey(ShortcutAction::MaximizeInZone);
+    assert_eq!(rect_of(&desk, 1), PxRect::new(0, 0, 1920, 1040));
+    e.on_hotkey(ShortcutAction::MaximizeInZone);
+    assert_eq!(rect_of(&desk, 1), LEFT);
+}
+
+#[test]
+fn the_cheat_sheet_and_the_switcher_open_their_views() {
+    let (_desk, shared) = setup();
+    let opened = Arc::new(Mutex::new(Vec::new()));
+    let rec = Arc::clone(&opened);
+    *lock(&shared.open_view) = Some(Arc::new(move |v| lock(&rec).push(v)));
+    let mut e = Engine::new(&shared, None, None);
+    e.on_hotkey(ShortcutAction::CheatSheet);
+    e.on_hotkey(ShortcutAction::Switcher);
+    assert_eq!(*lock(&opened), ["cheat_sheet", "switcher"]);
 }

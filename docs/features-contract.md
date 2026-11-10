@@ -49,7 +49,7 @@ All errors are plain strings.
 
 Existing commands are unchanged. (`save_layout` + `move_layout` + `set_active_layout` could also undo a delete, but as three persists and three `state-changed` pushes, with the layout visibly at the end of the list in between; `insert_layout` does it atomically.)
 
-## Keyboard map (display text)
+## Keyboard map (display text; superseded by Wave 2 below)
 
 With the chosen modifier (`<mods>`, by default `Ctrl+Alt+Shift`):
 
@@ -135,6 +135,79 @@ TS: `ArrangeSettings`, `ArrangePolicy`, `AppRule`, `RuleAction`.
 ### Window classification (for other branches)
 
 `krova_platform::classify(&WindowFacts) -> WindowKind` is OS-independent and unit-tested; `Platform::probe_window(id) -> Option<WindowProbe {kind, exe, exe_path, owner}>` reads the facts on Windows (styles, owner, class family, DWM cloaking, elevation) and the program path. `WindowKind` gained `cloaked` and `elevated`. Only `normal` windows are ever arranged. No title is read.
+
+## Wave 2: shortcut scheme, rebinding, popups, pause (engine branch)
+
+**This replaces the "Keyboard map" above.** Base chord `Ctrl+Alt`; every action can be rebound or switched off one by one.
+
+| Action id | Default | Does |
+|---|---|---|
+| `move_left` / `move_right` / `move_up` / `move_down` | `Ctrl+Alt+Arrow` | Focused window to the neighbouring zone in that direction; past the layout's edge, to the nearest zone on the next monitor that way. A window in no zone goes to the far zone in that direction. |
+| `swap_left` ... `swap_down` | `Ctrl+Alt+Shift+Arrow` | Swap with the window in the neighbouring zone (auto-arranged windows); an untracked window just moves. |
+| `zone_1` ... `zone_9` | `Ctrl+Alt+1..9` | Focused window to zone N (reading order). |
+| `layout_1` ... `layout_9` | `Ctrl+Alt+Shift+1..9` | Apply layout N (the monitor's list order) on the monitor under the cursor; auto-arranged windows re-tile. |
+| `maximize_in_zone` | `Ctrl+Alt+Enter` | A window in a zone fills its monitor's work area; again: back into its zone. |
+| `stack_prev` / `stack_next` | `Ctrl+Alt+[` / `]` | Previous / next tab of the focused window's stack. |
+| `switcher` | `Ctrl+Alt+Space` | Layout switcher on the monitor under the cursor (also needs `layout_switcher_shortcut`). |
+| `pause` | `Ctrl+Alt+T` | Pause / resume auto-arrange; windows stay where they are. |
+| `cheat_sheet` | `Ctrl+Alt+/` | Show every shortcut (the `switcher` window with `navigate` = `cheat_sheet`). |
+| `focus` | `Ctrl+Alt+F` | Reported to the engine hooks only (`Action("focus")`); wave 3 implements focus. |
+
+**Known collisions.** `Ctrl+Alt+Left` / `Right` are "navigate back / forward" in Visual Studio and JetBrains IDEs (a global hot key wins while Krova runs), and older Intel graphics drivers bind `Ctrl+Alt+Arrow` to screen rotation; Windows then refuses the chord and its row shows `in_use` with suggestions. `Ctrl+Alt+Space` is a common quick-entry shortcut.
+
+### Settings
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `shortcuts` | `ShortcutMap` = `{ [actionId]: string \| null }` | `{}` | Only the user's changes: a chord text (`"Ctrl+Shift+F"`; modifiers written in the order Win, Ctrl, Alt, Shift, parsed in any order and case) or `null` (off). Missing ids keep their default. Loaded leniently: unknown ids and unreadable chords are dropped, a duplicate chord switches the later action off. |
+| `shortcut_modifier` | (deprecated) | | Migrated once: a config without `shortcuts` whose modifier was `win_alt` / `win_ctrl` gets overrides for the actions that existed then (move left / right / up, zones, switcher). `ctrl_alt_shift` (the old default) and `ctrl_alt` start from the new scheme. |
+
+`keyboard_shortcuts` still switches every shortcut except the switcher; `layout_switcher_shortcut` the switcher. `AppState.shortcuts` / `layout_switcher` keep working as group summaries.
+
+### `AppState` additions
+
+- `shortcut_actions: ShortcutActionState[]`: one row per action in sheet order: `{id, label (1-4 words), group: "Windows" | "Layouts" | "Krova", chord: string | null, default_chord, status: "active" | "off" | "in_use" | "error" | "unsupported", message: string | null}`. Render the shortcut sheet and the cheat sheet straight from it.
+- `paused: bool`. While paused the tray item "Pause arranging" is checked, the tray icon is drawn at 40 % opacity and its tooltip says "Krova (paused)".
+
+### Commands
+
+| Command | Arguments | Returns | Notes |
+|---|---|---|---|
+| `probe_shortcut` | `action: string`, `chord: string` | `ProbeResult` | `{status: "free" \| "current" \| "conflict" \| "in_use" \| "invalid" \| "unknown", chord, conflict_with, message, suggestions}`. Krova's own map first (`conflict` names the action), then a live `RegisterHotKey` probe. `suggestions`: up to 3 free chords with the same key. |
+| `set_shortcut` | `action`, `chord: string \| null` | `AppState` | Rebind or switch off; re-registers at once. A chord another action has is refused ("Ctrl+Alt+Left is already Move left"). |
+| `reset_shortcuts` | none | `AppState` | Every action back to its default. |
+| `set_paused` | `paused: bool` | `null` | Like `Ctrl+Alt+T`; the new state comes with `state-changed`. |
+| `hide_popup` | `label: "panel" \| "switcher"` | `null` | Call on Esc. |
+| `popup_open_ms` | `label` | `number \| null` | How long the last open took (request to shown); see `docs/measurements/popup-open-latency.md`. |
+
+### Windows `panel` and `switcher`
+
+Two more windows in `tauri.conf.json` (`create: false`, undecorated, transparent, always on top, no taskbar entry; panel 360x520, switcher 820x560), both in the capability file. Created on first use, then **kept warm**: closing, Esc (`hide_popup`) or a click outside (focus lost) only hides them; the next open is a show plus a `navigate` event. The UI tells them apart by `getCurrentWindow().label`. `navigate` payloads: `"panel"` in `panel`; `"switcher"` or `"cheat_sheet"` in `switcher`. The switcher opens centred (upper third) on the monitor `switcher_monitor` names; the panel near the tray (bottom right of the primary work area), or below the rect set by the notch, in which case `panel-anchor` `{rect}` is emitted to it. A left click on the tray icon opens the panel; the tray menu has "Quick panel" and "Pause arranging".
+
+TS: `ShortcutMap`, `ShortcutActionState`, `ShortcutGroup`, `ShortcutStatusCode`, `ProbeResult`, `PopupLabel`, `PanelAnchor`; `NavigateTarget` gained `cheat_sheet` and `panel`.
+
+## Engine hooks (for the wave 3 / wave 4 / notch / corners branches)
+
+`src-tauri/src/hooks.rs`. Register once at start-up: `shared.hooks.register(Arc::new(|event| { ... }))`. A hook runs on the engine thread right after the event and must return at once (send to a channel, flip a flag); never call back into the engine synchronously. No event carries a title.
+
+| `EngineEvent` | When |
+|---|---|
+| `FocusChanged { window }` | The foreground window changed. |
+| `WindowMoved { window, rect }` | Krova placed a window (snap, shortcut, auto-arrange, restore, fill screen). |
+| `MonitorsChanged` | The monitor set settled after a change. |
+| `SettingsChanged` | Settings or layouts changed (UI, tray, a layout applied by shortcut). |
+| `PauseChanged(bool)` | Auto-arrange paused / resumed. |
+| `Action(&'static str)` | A feature the engine does not implement was asked for (`"focus"` today). |
+
+Calls the other way (on `Shared` or in `engine`):
+
+- `engine::request(&shared, ShortcutAction::...)`: run any shortcut action as if pressed (switcher, cheat sheet, pause, focus, ...).
+- `shared.is_paused()`; `engine::notify(&shared, Msg::SetPaused(b))` changes it.
+- `shared.active_layouts()`: `[{profile_id, layout_id, layout_name}]` for every connected monitor (the notch shows the name).
+- `shared.set_hide_app_names(bool)` / `hide_app_names()`: share-safe; the stack tab strips stop drawing names and icons from their next refresh.
+- `*lock(&shared.panel_anchor) = Some(rect)`, then the `"panel"` view through `shared.open_view`: the panel opens anchored there and receives `panel-anchor`.
+- `shared.state_changed`: call it to push `state-changed` to the UI and refresh the tray after changing something.
+- `krova_platform::classify` / `Platform::probe_window`: the window classifier (see Wave 1).
 
 ## Not part of the contract
 

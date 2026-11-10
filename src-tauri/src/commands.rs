@@ -51,6 +51,16 @@ pub fn build_state(shared: &Shared) -> AppState {
         capabilities,
     );
     state.front_app = lock(&shared.front_app).clone();
+    state.paused = shared.is_paused();
+    state.shortcut_actions = {
+        let settings = lock(&shared.model).config.settings.clone();
+        let features = lock(&shared.features);
+        crate::shortcut_cmds::shortcut_rows(
+            &settings,
+            features.hotkeys.as_ref(),
+            capabilities.shortcuts,
+        )
+    };
     state
 }
 
@@ -90,11 +100,13 @@ pub fn change_settings(shared: &Shared, edit: impl FnOnce(&mut Settings)) -> Res
         old.keyboard_shortcuts,
         old.layout_switcher_shortcut,
         old.shortcut_modifier,
+        &old.shortcuts,
     ) != (
         new.enabled,
         new.keyboard_shortcuts,
         new.layout_switcher_shortcut,
         new.shortcut_modifier,
+        &new.shortcuts,
     ) {
         engine::apply_shortcuts(shared);
     }

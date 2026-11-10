@@ -10,7 +10,10 @@ mod desktop_reconnect_tests;
 #[cfg(all(test, windows))]
 mod desktop_tests;
 mod engine;
+mod hooks;
 mod model;
+mod popups;
+mod shortcut_cmds;
 mod tray;
 mod ui_window;
 
@@ -50,17 +53,39 @@ pub fn run() {
             commands::edit_split_zone,
             commands::edit_remove_zone,
             commands::edit_move_divider,
+            shortcut_cmds::probe_shortcut,
+            shortcut_cmds::set_shortcut,
+            shortcut_cmds::reset_shortcuts,
+            shortcut_cmds::set_paused,
+            popups::hide_popup,
+            popups::popup_open_ms,
             ui_window::take_pending_view,
         ])
-        .on_window_event(|window, event| match event {
-            // The tray keeps the app alive. By default closing the window destroys
-            // it so the embedded browser exits; `show` rebuilds it on demand.
-            WindowEvent::CloseRequested { api, .. } if !ui_window::DESTROY_ON_CLOSE => {
-                api.prevent_close();
-                let _ = window.hide();
+        .on_window_event(|window, event| {
+            // The panel and the switcher stay warm: closing or leaving them hides them.
+            if popups::is_popup(window.label()) {
+                match event {
+                    WindowEvent::CloseRequested { api, .. } => {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    }
+                    WindowEvent::Focused(false) => {
+                        let _ = window.hide();
+                    }
+                    _ => {}
+                }
+                return;
             }
-            WindowEvent::Destroyed => ui_window::destroyed(window.app_handle()),
-            _ => {}
+            match event {
+                // The tray keeps the app alive. By default closing the window destroys
+                // it so the embedded browser exits; `show` rebuilds it on demand.
+                WindowEvent::CloseRequested { api, .. } if !ui_window::DESTROY_ON_CLOSE => {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+                WindowEvent::Destroyed => ui_window::destroyed(window.app_handle()),
+                _ => {}
+            }
         })
         .build(tauri::generate_context!())
         .expect("error while building Krova");
@@ -115,11 +140,27 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     app.manage(Arc::clone(&shared));
     app.manage(ui_window::UiState::default());
 
-    // The layout switcher's shortcut asks the shell to bring its view forward. Set
-    // before the engine starts so the first key press already finds it.
+    app.manage(popups::PopupState::default());
+
+    // The engine asks the shell to bring a view forward (the switcher's shortcut,
+    // the cheat sheet, the panel). Set before the engine starts so the first key
+    // press already finds it.
     let handle = app.handle().clone();
     *model::lock(&shared.open_view) = Some(Arc::new(move |view| {
-        ui_window::show(&handle, Some(view));
+        if popups::window_for(view).is_some() {
+            popups::show(&handle, view);
+        } else {
+            ui_window::show(&handle, Some(view));
+        }
+    }));
+    // When the engine changes something itself (pause, a layout by shortcut), the
+    // UI and the tray hear about it like after a command.
+    let handle = app.handle().clone();
+    let notifier_shared = Arc::clone(&shared);
+    *model::lock(&shared.state_changed) = Some(Arc::new(move || {
+        let state = commands::build_state(&notifier_shared);
+        tray::sync(&handle, &state);
+        let _ = tauri::Emitter::emit(&handle, "state-changed", &state);
     }));
 
     let initial = commands::build_state(&shared);

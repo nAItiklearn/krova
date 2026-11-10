@@ -9,6 +9,7 @@ use crate::arrange::ArrangeSettings;
 use crate::geometry::PxRect;
 use crate::monitor::{match_monitors, MonitorDescriptor};
 use crate::presets::{MainSize, PresetFamily, PresetSpec, PresetVariant};
+use crate::shortcuts::ShortcutMap;
 use crate::zone::{has_hidden_char, strip_hidden, templates, Layout};
 
 pub const SCHEMA_VERSION: u32 = 1;
@@ -128,6 +129,9 @@ pub struct Settings {
     pub layout_switcher_shortcut: bool,
     /// Per-program rules (by executable file name, never a title). A plain array.
     pub app_rules: AppRules,
+    /// Changes to the default shortcut map (`action id -> chord | null`). Replaces
+    /// `shortcut_modifier`, which is kept only so an older file can be migrated.
+    pub shortcuts: ShortcutMap,
 }
 
 /// `#rrggbb` (any case, optional `#`, surrounding spaces ignored) as lowercase `#rrggbb`.
@@ -154,6 +158,7 @@ impl Settings {
         self.highlight_color =
             normalize_hex_color(&self.highlight_color).unwrap_or(defaults.highlight_color);
         self.app_rules = self.app_rules.sanitized();
+        self.shortcuts = self.shortcuts.sanitized();
         self
     }
 }
@@ -177,6 +182,7 @@ impl Default for Settings {
             zone_gap_px: 0,
             layout_switcher_shortcut: true,
             app_rules: AppRules::default(),
+            shortcuts: ShortcutMap::default(),
         }
     }
 }
@@ -330,11 +336,19 @@ impl Config {
                 supported: SCHEMA_VERSION,
             });
         }
+        // Before the shortcut map existed, one modifier applied to every shortcut.
+        let had_shortcut_map = value
+            .get("settings")
+            .and_then(|s| s.get("shortcuts"))
+            .is_some();
         let mut cfg: Config = match serde_json::from_value(value) {
             Ok(c) => c,
             Err(_) => return Self::quarantine(path),
         };
         // Migrations from older versions would run here, keyed on `found`.
+        if !had_shortcut_map {
+            cfg.settings.shortcuts = ShortcutMap::migrated_from(cfg.settings.shortcut_modifier);
+        }
         cfg.schema_version = SCHEMA_VERSION;
         cfg.settings = cfg.settings.sanitized();
         cfg.monitors.truncate(MAX_MONITORS);
@@ -1491,5 +1505,49 @@ mod tests {
             s.app_rules.as_slice(),
             &[AppRule::new("a.exe", RuleAction::Float)]
         );
+    }
+
+    #[test]
+    fn an_old_win_alt_choice_becomes_shortcut_overrides_once() {
+        use crate::shortcuts::ShortcutAction;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        std::fs::write(
+            &path,
+            r#"{"schema_version":1,"settings":{"shortcut_modifier":"win_alt"},"monitors":[]}"#,
+        )
+        .unwrap();
+        let (c, _) = Config::load(&path).unwrap();
+        assert_eq!(
+            c.settings
+                .shortcuts
+                .chord(ShortcutAction::Zone(2))
+                .unwrap()
+                .to_string(),
+            "Win+Alt+2"
+        );
+        // Saved and loaded again, the map is the user's now: no second migration.
+        let mut c = c;
+        c.settings.shortcuts.reset();
+        c.save(&path).unwrap();
+        let (c, _) = Config::load(&path).unwrap();
+        assert!(c.settings.shortcuts.is_default());
+    }
+
+    #[test]
+    fn a_bad_shortcut_entry_does_not_cost_the_config() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        std::fs::write(
+            &path,
+            r#"{"schema_version":1,"settings":{"zone_gap_px":4,"shortcuts":{"pause":"Hyper+T","focus":null}},"monitors":[]}"#,
+        )
+        .unwrap();
+        let (c, status) = Config::load(&path).unwrap();
+        assert_eq!(status, LoadStatus::Loaded);
+        assert_eq!(c.settings.zone_gap_px, 4);
+        use crate::shortcuts::ShortcutAction;
+        assert_eq!(c.settings.shortcuts.chord(ShortcutAction::Focus), None);
+        assert!(c.settings.shortcuts.chord(ShortcutAction::Pause).is_some());
     }
 }

@@ -22,15 +22,17 @@ use std::time::{Duration, Instant};
 
 use krova_core::linked::{plan_linked_resize, MIN_LINKED_SIDE_PX};
 use krova_core::registry::{plan_reconnect, KeyAction, WindowKey, WindowSnapshot, MAX_AGE};
+use krova_core::shortcuts::ShortcutAction;
 use krova_core::{
     Action, DragEvent, MonitorView, MoveMode, PxRect, Session, Settings, SnapSettings, SnapTarget,
 };
 mod arrange;
+mod keys;
 
 use krova_platform::overlay::{Overlay, OverlayScene, OverlayStyle};
 use krova_platform::{
-    ChordReport, EventSink, HotkeyEvent, HotkeyHandle, HotkeySpec, InputEvent, PlatformError,
-    StripEvent, StripHost, WatchEvent, WindowId,
+    hotkeys::HotkeyBinding, ChordReport, EventSink, HotkeyEvent, HotkeyHandle, HotkeySpec,
+    InputEvent, PlatformError, StripEvent, StripHost, WatchEvent, WindowId,
 };
 
 use crate::actions::{classify_change, plan_key_move, same_place, Change, Slot};
@@ -47,12 +49,14 @@ const OWN_MOVE_GRACE: Duration = Duration::from_millis(400);
 #[derive(Debug)]
 pub enum Msg {
     Input(InputEvent),
-    Hotkey(KeyAction),
+    Hotkey(ShortcutAction),
     Watch(WatchEvent),
     /// A tab of a stack strip was clicked, or the wheel turned over a strip.
     Strip(StripEvent),
     /// Settings or layouts were changed (by the UI or the tray): follow them.
     ConfigChanged,
+    /// Pause (`true`) or resume auto-arrange.
+    SetPaused(bool),
     /// Arrange every ordinary window on this monitor (profile id) now.
     ArrangeMonitor(String),
 }
@@ -256,6 +260,13 @@ pub fn notify(shared: &Shared, msg: Msg) {
     }
 }
 
+/// Run a shortcut action as if its chord had been pressed (the notch menu, a hot
+/// corner, another feature). Asynchronous: the engine thread does the work.
+#[allow(dead_code)] // called by the notch and hot-corner branches
+pub fn request(shared: &Shared, action: ShortcutAction) {
+    notify(shared, Msg::Hotkey(action));
+}
+
 /// Try to (re)start the mouse hook, for example after a permission was granted.
 pub fn retry_input(shared: &Arc<Shared>) {
     let tx = lock(&shared.engine_tx).clone();
@@ -304,18 +315,33 @@ fn start_watcher(shared: &Shared, tx: &Sender<Msg>) {
     }
 }
 
-/// Which shortcut groups the settings ask for: the twelve that move the focused
-/// window (`keyboard_shortcuts`) and `<mods>+Space` for the layout switcher
-/// (`layout_switcher_shortcut`), each only while Krova is enabled, both with the
-/// chosen modifier. `None` when neither is wanted.
+/// Which shortcuts the settings ask for: every action with a chord, the switcher
+/// only while `layout_switcher_shortcut` is on and the others only while
+/// `keyboard_shortcuts` is on, all only while Krova is enabled. `None` when nothing
+/// is wanted.
 pub fn hotkey_request(settings: &Settings) -> Option<HotkeySpec> {
-    let window_moves = settings.enabled && settings.keyboard_shortcuts;
-    let switcher = settings.enabled && settings.layout_switcher_shortcut;
-    (window_moves || switcher).then_some(HotkeySpec {
-        modifier: settings.shortcut_modifier,
-        window_moves,
-        switcher,
-    })
+    if !settings.enabled {
+        return None;
+    }
+    let bindings: Vec<HotkeyBinding> = settings
+        .shortcuts
+        .effective()
+        .into_iter()
+        .filter(|(action, _)| {
+            if *action == ShortcutAction::Switcher {
+                settings.layout_switcher_shortcut
+            } else {
+                settings.keyboard_shortcuts
+            }
+        })
+        .filter_map(|(action, chord)| {
+            Some(HotkeyBinding {
+                action,
+                chord: chord?,
+            })
+        })
+        .collect();
+    (!bindings.is_empty()).then_some(HotkeySpec { bindings })
 }
 
 /// What the UI is told after the OS answered: the status of the window-move
@@ -330,7 +356,7 @@ pub fn shortcut_statuses(handle: &HotkeyHandle) -> (ShortcutStatus, ShortcutStat
 }
 
 /// Statuses for the case that the shortcut thread could not even be started.
-fn unstarted_statuses(spec: HotkeySpec, why: &str) -> (ShortcutStatus, ShortcutStatus) {
+fn unstarted_statuses(spec: &HotkeySpec, why: &str) -> (ShortcutStatus, ShortcutStatus) {
     let failed = |wanted: bool, what: &str| ShortcutStatus {
         active: false,
         failed: if wanted {
@@ -340,8 +366,16 @@ fn unstarted_statuses(spec: HotkeySpec, why: &str) -> (ShortcutStatus, ShortcutS
         },
     };
     (
-        failed(spec.window_moves, "Keyboard shortcuts"),
-        failed(spec.switcher, "The layout switcher shortcut"),
+        failed(
+            spec.bindings
+                .iter()
+                .any(|b| b.action != ShortcutAction::Switcher),
+            "Keyboard shortcuts",
+        ),
+        failed(
+            spec.wants(ShortcutAction::Switcher),
+            "The layout switcher shortcut",
+        ),
     )
 }
 
@@ -371,7 +405,7 @@ pub fn apply_shortcuts(shared: &Shared) {
     let sink: EventSink<HotkeyEvent> = Arc::new(move |ev| {
         let _ = tx.send(Msg::Hotkey(ev.action));
     });
-    match shared.platform.start_hotkeys(spec, sink) {
+    match shared.platform.start_hotkeys(spec.clone(), sink) {
         Ok(handle) => {
             let (shortcuts, layout_switcher) = shortcut_statuses(&handle);
             let mut features = lock(&shared.features);
@@ -381,7 +415,7 @@ pub fn apply_shortcuts(shared: &Shared) {
         }
         Err(e) => {
             eprintln!("krova: keyboard shortcuts are unavailable: {e}");
-            let (shortcuts, layout_switcher) = unstarted_statuses(spec, &e.to_string());
+            let (shortcuts, layout_switcher) = unstarted_statuses(&spec, &e.to_string());
             let mut features = lock(&shared.features);
             features.shortcuts = shortcuts;
             features.layout_switcher = layout_switcher;
@@ -421,8 +455,14 @@ fn run(
             Some(Msg::Hotkey(action)) => engine.on_hotkey(action),
             Some(Msg::Watch(ev)) => engine.on_watch(ev),
             Some(Msg::Strip(ev)) => engine.on_strip(ev),
-            Some(Msg::ConfigChanged) => engine.on_config_changed(),
+            Some(Msg::ConfigChanged) => {
+                engine.on_config_changed();
+                shared
+                    .hooks
+                    .emit(&crate::hooks::EngineEvent::SettingsChanged);
+            }
             Some(Msg::ArrangeMonitor(profile)) => engine.arrange_monitor(&profile),
+            Some(Msg::SetPaused(paused)) => engine.set_paused(paused),
             None => {}
         }
         let now = Instant::now();
@@ -448,6 +488,8 @@ struct Engine<'a> {
     display_deadline: Option<Instant>,
     /// Windows Krova moved itself a moment ago; their own move/size events are ignored.
     placed_at: HashMap<WindowKey, Instant>,
+    /// Windows that fill their monitor for now (`Ctrl+Alt+Enter`), with their zone.
+    filled: HashMap<WindowKey, Slot>,
     /// Auto-arrange: stacks per monitor, windows waiting to settle, strips shown.
     arrange: arrange::ArrangeState,
 }
@@ -464,6 +506,7 @@ impl<'a> Engine<'a> {
             overlay,
             strips,
             arrange: arrange::ArrangeState::default(),
+            filled: HashMap::new(),
             session: Session::new(SnapSettings::default()),
             scene: SceneState::default(),
             connected,
@@ -566,6 +609,14 @@ impl<'a> Engine<'a> {
             let owner = shared.platform.window_owner(window);
             registry.insert(key, slot.record(rect, owner));
         }
+        {
+            self.shared
+                .hooks
+                .emit(&crate::hooks::EngineEvent::WindowMoved {
+                    window: window.0,
+                    rect,
+                });
+        }
         self.placed_at.insert(key, Instant::now());
         self.placed_at
             .retain(|_, at| at.elapsed() < OWN_MOVE_GRACE * 10);
@@ -579,11 +630,8 @@ impl<'a> Engine<'a> {
 
     // ------------------------------------------------------------ keyboard
 
-    fn on_hotkey(&mut self, action: KeyAction) {
-        if action == KeyAction::OpenSwitcher {
-            self.open_switcher();
-            return;
-        }
+    /// Move the focused window as a zone shortcut asks (`Ctrl+Alt+Arrow`, `+N`).
+    fn key_move(&mut self, action: KeyAction) {
         let shared = self.shared;
         let (active, gap, animate) = {
             let model = lock(&shared.model);
@@ -676,9 +724,17 @@ impl<'a> Engine<'a> {
             WatchEvent::WindowShown(window) | WatchEvent::WindowRestored(window) => {
                 self.on_window_shown(window);
             }
-            WatchEvent::WindowGone(window) => self.on_window_left(window, true),
+            WatchEvent::WindowGone(window) => {
+                self.forget_filled(window);
+                self.on_window_left(window, true);
+            }
             WatchEvent::WindowMinimized(window) => self.on_window_left(window, false),
-            WatchEvent::Foreground(window) => self.on_focus(window),
+            WatchEvent::Foreground(window) => {
+                self.on_focus(window);
+                self.shared
+                    .hooks
+                    .emit(&crate::hooks::EngineEvent::FocusChanged { window: window.0 });
+            }
         }
     }
 
@@ -718,6 +774,9 @@ impl<'a> Engine<'a> {
             (model.config.settings.clone(), model.connected())
         };
         self.arrange_monitors_changed();
+        self.shared
+            .hooks
+            .emit(&crate::hooks::EngineEvent::MonitorsChanged);
         if !settings.enabled || !settings.restore_on_reconnect {
             return;
         }
@@ -1186,7 +1245,7 @@ mod tests {
 mod switcher_tests {
     use super::*;
     use crate::model::AppModel;
-    use krova_core::{Config, Modifier, MonitorDescriptor, ShortcutModifier};
+    use krova_core::{Config, Modifier, MonitorDescriptor};
     use krova_platform::{Capabilities, InputHandle, MonitorInfo, Permission, Platform};
     use std::path::PathBuf;
     use std::sync::Mutex;
@@ -1247,14 +1306,14 @@ mod switcher_tests {
             spec: HotkeySpec,
             _: EventSink<HotkeyEvent>,
         ) -> Result<HotkeyHandle, PlatformError> {
-            lock(&self.hotkey_requests).push(spec);
-            let mut accepted: Vec<KeyAction> = Vec::new();
+            lock(&self.hotkey_requests).push(spec.clone());
+            let mut accepted: Vec<ShortcutAction> = Vec::new();
             let mut refused = Vec::new();
-            for def in spec.defs() {
-                if self.refuse_space && def.action == KeyAction::OpenSwitcher {
-                    refused.push((def.action, "Ctrl+Alt+Shift+Space is taken".to_owned()));
+            for b in &spec.bindings {
+                if self.refuse_space && b.action == ShortcutAction::Switcher {
+                    refused.push((b.action, "Ctrl+Alt+Space is taken".to_owned()));
                 } else {
-                    accepted.push(def.action);
+                    accepted.push(b.action);
                 }
             }
             Ok(HotkeyHandle::new(accepted, refused, || {}))
@@ -1307,7 +1366,7 @@ mod switcher_tests {
     }
 
     fn press(shared: &Shared) {
-        Engine::new(shared, None, None).on_hotkey(KeyAction::OpenSwitcher);
+        Engine::new(shared, None, None).on_hotkey(ShortcutAction::Switcher);
     }
 
     #[test]
@@ -1384,38 +1443,40 @@ mod switcher_tests {
     }
 
     #[test]
-    fn the_settings_decide_which_shortcut_groups_are_requested() {
+    fn the_settings_decide_which_shortcuts_are_requested() {
         let ask = |enabled, moves, switcher| {
             hotkey_request(&Settings {
                 enabled,
                 keyboard_shortcuts: moves,
                 layout_switcher_shortcut: switcher,
-                shortcut_modifier: ShortcutModifier::CtrlAlt,
                 ..Settings::default()
             })
         };
-        let spec = |window_moves, switcher| {
-            Some(HotkeySpec {
-                modifier: ShortcutModifier::CtrlAlt,
-                window_moves,
-                switcher,
-            })
-        };
-        assert_eq!(ask(true, true, true), spec(true, true));
-        assert_eq!(ask(true, true, false), spec(true, false));
-        assert_eq!(ask(true, false, true), spec(false, true));
+        let all = ask(true, true, true).unwrap();
+        assert_eq!(all.bindings.len(), 33);
+        assert!(all.wants(ShortcutAction::Switcher));
+        let moves = ask(true, true, false).unwrap();
+        assert_eq!(moves.bindings.len(), 32);
+        assert!(!moves.wants(ShortcutAction::Switcher));
+        let switcher = ask(true, false, true).unwrap();
+        assert_eq!(switcher.bindings.len(), 1);
+        assert!(switcher.wants(ShortcutAction::Switcher));
         assert_eq!(ask(true, false, false), None);
-        // Krova disabled switches both off.
+        // Krova disabled switches everything off.
         assert_eq!(ask(false, true, true), None);
-        assert_eq!(
-            hotkey_request(&Settings::default()),
-            Some(HotkeySpec {
-                modifier: ShortcutModifier::CtrlAltShift,
-                window_moves: true,
-                switcher: true,
-            }),
-            "the defaults ask for both, with Ctrl+Alt+Shift"
-        );
+        // An action switched off is not registered; a rebound one uses its chord.
+        let mut s = Settings::default();
+        s.shortcuts.set(ShortcutAction::Pause, None);
+        s.shortcuts
+            .set(ShortcutAction::Focus, Some("Ctrl+Shift+F".parse().unwrap()));
+        let spec = hotkey_request(&s).unwrap();
+        assert!(!spec.wants(ShortcutAction::Pause));
+        let focus = spec
+            .bindings
+            .iter()
+            .find(|b| b.action == ShortcutAction::Focus)
+            .unwrap();
+        assert_eq!(focus.chord.to_string(), "Ctrl+Shift+F");
     }
 
     #[test]
@@ -1438,7 +1499,7 @@ mod switcher_tests {
                 f.layout_switcher,
                 ShortcutStatus {
                     active: false,
-                    failed: vec!["Ctrl+Alt+Shift+Space is taken".to_owned()]
+                    failed: vec!["Ctrl+Alt+Space is taken".to_owned()]
                 },
                 "the refused switcher chord does not disturb the move shortcuts"
             );
@@ -1453,8 +1514,9 @@ mod switcher_tests {
         apply_shortcuts(&shared);
         let asked = lock(&desk.hotkey_requests).clone();
         assert_eq!(asked.len(), 2);
-        assert!(asked[0].window_moves && asked[0].switcher);
-        assert!(!asked[1].window_moves && asked[1].switcher);
+        assert_eq!(asked[0].bindings.len(), 33);
+        assert_eq!(asked[1].bindings.len(), 1);
+        assert!(asked[1].wants(ShortcutAction::Switcher));
         assert_eq!(lock(&shared.features).shortcuts, ShortcutStatus::default());
 
         // Both off: everything released, nothing requested again.
@@ -1479,23 +1541,21 @@ mod switcher_tests {
 
     #[test]
     fn a_shortcut_thread_that_cannot_start_is_reported_for_the_requested_groups() {
-        let spec = HotkeySpec {
-            modifier: ShortcutModifier::CtrlAltShift,
-            window_moves: false,
-            switcher: true,
+        let only_switcher = HotkeySpec {
+            bindings: vec![HotkeyBinding {
+                action: ShortcutAction::Switcher,
+                chord: "Ctrl+Alt+Space".parse().unwrap(),
+            }],
         };
-        let (moves, switcher) = unstarted_statuses(spec, "no thread");
+        let (moves, switcher) = unstarted_statuses(&only_switcher, "no thread");
         assert_eq!(moves, ShortcutStatus::default());
         assert!(!switcher.active);
         assert_eq!(
             switcher.failed,
             ["The layout switcher shortcut could not be started: no thread"]
         );
-        let both = HotkeySpec {
-            window_moves: true,
-            ..spec
-        };
-        let (moves, _) = unstarted_statuses(both, "x");
+        let both = hotkey_request(&Settings::default()).unwrap();
+        let (moves, _) = unstarted_statuses(&both, "x");
         assert_eq!(moves.failed, ["Keyboard shortcuts could not be started: x"]);
     }
 }

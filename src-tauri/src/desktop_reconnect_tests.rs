@@ -23,7 +23,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-use krova_core::registry::{KeyAction, WindowKey};
+use krova_core::registry::WindowKey;
 use krova_core::{Config, MonitorDescriptor, MoveMode, PxRect};
 use krova_platform::overlay::Overlay;
 use krova_platform::win::WindowsPlatform;
@@ -180,7 +180,10 @@ fn desktop_reconnect_puts_a_displaced_window_back_into_its_zone() {
     }
 
     // 1. Snap into zone 2 of B's "halves" layout.
-    send(&shared, Msg::Hotkey(KeyAction::Zone(2)));
+    send(
+        &shared,
+        Msg::Hotkey(krova_core::shortcuts::ShortcutAction::Zone(2)),
+    );
     let layout_zone2 = PxRect::new(
         b.work.x + b.work.w / 2,
         b.work.y,

@@ -8,6 +8,7 @@
 
 use crate::geometry::PxRect;
 use crate::snap::MonitorView;
+use crate::swap::{neighbour, Direction};
 use crate::zone::Layout;
 
 /// What a shortcut asks for.
@@ -24,6 +25,9 @@ pub enum KeyAction {
     /// `<mods>+Space`: open the layout switcher. It does not move a window, so
     /// [`plan_keyboard_move`] has nothing to plan for it.
     OpenSwitcher,
+    /// Move to the neighbouring zone in this direction; past the layout's edge, to
+    /// the nearest zone on the next monitor in that direction.
+    Move(Direction),
 }
 
 /// A zone on a monitor (index into the monitor list the caller passed in).
@@ -154,7 +158,87 @@ fn same_position(from: &Layout, zone_id: Option<u32>, to: &Layout) -> Option<u32
     Some(order[index.min(last)])
 }
 
-/// Where should `action` send a window that is on `monitors[from]`, currently in
+/// The nearest connected monitor beyond `from`'s edge in direction `dir` that has a
+/// layout: it must lie past that edge and share some span on the other axis
+/// (falling back to any monitor past the edge).
+fn monitor_beyond(monitors: &[MonitorView<'_>], from: usize, dir: Direction) -> Option<usize> {
+    let here = monitors.get(from)?.rect;
+    let beyond = |r: &PxRect| -> Option<(bool, i64)> {
+        let (gap, shared) = match dir {
+            Direction::Right => (
+                i64::from(r.x) - i64::from(here.right()),
+                span_overlap(here.y, here.bottom(), r.y, r.bottom()),
+            ),
+            Direction::Left => (
+                i64::from(here.x) - i64::from(r.right()),
+                span_overlap(here.y, here.bottom(), r.y, r.bottom()),
+            ),
+            Direction::Down => (
+                i64::from(r.y) - i64::from(here.bottom()),
+                span_overlap(here.x, here.right(), r.x, r.right()),
+            ),
+            Direction::Up => (
+                i64::from(here.y) - i64::from(r.bottom()),
+                span_overlap(here.x, here.right(), r.x, r.right()),
+            ),
+        };
+        // Monitors touch (gap 0) or sit a little apart; overlapping ones are not "beyond".
+        (gap > -8).then_some((shared <= 0, gap.max(0)))
+    };
+    monitors
+        .iter()
+        .enumerate()
+        .filter(|&(i, m)| i != from && m.layout.is_some_and(|l| !l.zones.is_empty()))
+        .filter_map(|(i, m)| beyond(&m.rect).map(|(apart, gap)| ((apart, gap, i), i)))
+        .min_by_key(|&(key, _)| key)
+        .map(|(_, i)| i)
+}
+
+fn span_overlap(a0: i32, a1: i32, b0: i32, b1: i32) -> i64 {
+    i64::from(a1.min(b1)) - i64::from(a0.max(b0))
+}
+
+/// Centre of zone `z` on the axis across `dir`, in screen pixels.
+fn zone_center_across(layout: &Layout, work: PxRect, z: u32, dir: Direction) -> Option<i64> {
+    let r = layout.zone_pixels(z, work)?;
+    Some(match dir {
+        Direction::Left | Direction::Right => i64::from(r.y) + i64::from(r.h) / 2,
+        Direction::Up | Direction::Down => i64::from(r.x) + i64::from(r.w) / 2,
+    })
+}
+
+/// The zone a window entering `layout` (on `work`) while travelling `dir` lands in:
+/// among the zones at the entry edge (leftmost when moving right, ...), the one
+/// whose centre is closest to `across` on the other axis; reading order breaks ties.
+fn entry_zone_px(
+    layout: &Layout,
+    work: PxRect,
+    dir: Direction,
+    across: Option<i64>,
+) -> Option<u32> {
+    let order = reading_order(layout);
+    order
+        .iter()
+        .enumerate()
+        .filter_map(|(rank, &id)| {
+            let r = layout.zone_pixels(id, work)?;
+            let (edge, center) = match dir {
+                Direction::Right => (i64::from(r.x), i64::from(r.y) + i64::from(r.h) / 2),
+                Direction::Left => (-i64::from(r.right()), i64::from(r.y) + i64::from(r.h) / 2),
+                Direction::Down => (i64::from(r.y), i64::from(r.x) + i64::from(r.w) / 2),
+                Direction::Up => (-i64::from(r.bottom()), i64::from(r.x) + i64::from(r.w) / 2),
+            };
+            let off = across.map_or(0, |a| (a - center).abs());
+            // Edge first, rounded to 1 % of the work area so tiny differences do not win.
+            let unit = i64::from(match dir {
+                Direction::Left | Direction::Right => work.w.max(100) / 100,
+                Direction::Up | Direction::Down => work.h.max(100) / 100,
+            });
+            Some(((edge / unit.max(1), off, rank), id))
+        })
+        .min_by_key(|&(key, _)| key)
+        .map(|(_, id)| id)
+}
 /// `current_zone` of that monitor's layout (`None` if it is in no zone)?
 ///
 /// Returns `None` when there is nothing sensible to do: no such monitor, an empty
@@ -170,6 +254,27 @@ pub fn plan_keyboard_move(
     let layout = here.layout.filter(|l| !l.zones.is_empty());
     match action {
         KeyAction::OpenSwitcher => None,
+        KeyAction::Move(dir) => {
+            let layout = layout?;
+            if let Some(zone) = current_zone.and_then(|z| neighbour(layout, z, dir)) {
+                return Some(KeyboardTarget {
+                    monitor: from,
+                    zone,
+                });
+            }
+            // In no zone: the zone at the far edge in that direction on this monitor.
+            if current_zone.is_none() {
+                return Some(KeyboardTarget {
+                    monitor: from,
+                    zone: entry_zone_px(layout, here.work, dir.opposite(), None)?,
+                });
+            }
+            let to = monitor_beyond(monitors, from, dir)?;
+            let target = monitors[to].layout.filter(|l| !l.zones.is_empty())?;
+            let across = current_zone.and_then(|z| zone_center_across(layout, here.work, z, dir));
+            let zone = entry_zone_px(target, monitors[to].work, dir, across)?;
+            Some(KeyboardTarget { monitor: to, zone })
+        }
         KeyAction::PrevZone | KeyAction::NextZone => {
             let layout = layout?;
             let forward = action == KeyAction::NextZone;
@@ -569,6 +674,88 @@ mod tests {
                 monitor: 1,
                 zone: 1
             })
+        );
+    }
+
+    fn mv(dir: Direction) -> KeyAction {
+        KeyAction::Move(dir)
+    }
+
+    #[test]
+    fn a_directional_move_goes_to_the_neighbouring_zone() {
+        let (h, g) = (halves(), grid());
+        let one = [view(0, Some(&h))];
+        let t = plan_keyboard_move(mv(Direction::Right), &one, 0, Some(1)).unwrap();
+        assert_eq!((t.monitor, t.zone), (0, 2));
+        let t = plan_keyboard_move(mv(Direction::Left), &one, 0, Some(2)).unwrap();
+        assert_eq!((t.monitor, t.zone), (0, 1));
+        // In a grid, down from the top-left is the bottom-left.
+        let grid_only = [view(0, Some(&g))];
+        let t = plan_keyboard_move(mv(Direction::Down), &grid_only, 0, Some(1)).unwrap();
+        assert_eq!(t.zone, 3);
+        // At the edge of the only monitor there is nowhere to go.
+        assert_eq!(
+            plan_keyboard_move(mv(Direction::Left), &one, 0, Some(1)),
+            None
+        );
+        assert_eq!(
+            plan_keyboard_move(mv(Direction::Up), &one, 0, Some(1)),
+            None
+        );
+    }
+
+    #[test]
+    fn past_the_edge_the_window_enters_the_next_monitor_at_its_near_side() {
+        let (h, t3, g) = (halves(), thirds(), grid());
+        let monitors = [view(0, Some(&h)), view(1920, Some(&t3))];
+        // Right from the right half of monitor 0: the leftmost third of monitor 1.
+        let t = plan_keyboard_move(mv(Direction::Right), &monitors, 0, Some(2)).unwrap();
+        assert_eq!((t.monitor, t.zone), (1, 1));
+        // Left from the leftmost third of monitor 1: the right half of monitor 0.
+        let t = plan_keyboard_move(mv(Direction::Left), &monitors, 1, Some(1)).unwrap();
+        assert_eq!((t.monitor, t.zone), (0, 2));
+        // Into a grid from the left: the left column, the row closest to the source.
+        let monitors = [view(0, Some(&h)), view(1920, Some(&g))];
+        let t = plan_keyboard_move(mv(Direction::Right), &monitors, 0, Some(2)).unwrap();
+        assert_eq!(t.monitor, 1);
+        assert!(t.zone == 1 || t.zone == 3, "a left-column zone: {}", t.zone);
+        // Nothing to the left of the leftmost monitor.
+        assert_eq!(
+            plan_keyboard_move(mv(Direction::Left), &monitors, 0, Some(1)),
+            None
+        );
+    }
+
+    #[test]
+    fn a_monitor_above_is_reached_by_moving_up() {
+        let (h, t3) = (halves(), thirds());
+        let below = MonitorView {
+            rect: PxRect::new(0, 1080, 1920, 1080),
+            work: PxRect::new(0, 1080, 1920, 1040),
+            layout: Some(&h),
+        };
+        let monitors = [below, view(0, Some(&t3))];
+        let t = plan_keyboard_move(mv(Direction::Up), &monitors, 0, Some(2)).unwrap();
+        assert_eq!(t.monitor, 1);
+        // Halves zone 2 is centred at x = 1440: the right third (1280..1920) is closest.
+        assert_eq!(t.zone, 3);
+    }
+
+    #[test]
+    fn a_window_in_no_zone_goes_to_the_far_zone_in_that_direction() {
+        let t3 = thirds();
+        let one = [view(0, Some(&t3))];
+        assert_eq!(
+            plan_keyboard_move(mv(Direction::Right), &one, 0, None)
+                .unwrap()
+                .zone,
+            3
+        );
+        assert_eq!(
+            plan_keyboard_move(mv(Direction::Left), &one, 0, None)
+                .unwrap()
+                .zone,
+            1
         );
     }
 }

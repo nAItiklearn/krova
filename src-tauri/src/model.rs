@@ -14,6 +14,7 @@ use krova_platform::{
 use serde::Serialize;
 
 use crate::engine::Msg;
+use crate::hooks::Hooks;
 
 /// Everything the app threads share.
 pub struct Shared {
@@ -40,6 +41,15 @@ pub struct Shared {
     /// Share-safe: native overlays show no program names or icons. Set by the
     /// share-safe feature (wave 3) through [`Shared::set_hide_app_names`].
     pub hide_names: AtomicBool,
+    /// Hooks of features built on other branches (see `hooks.rs`).
+    pub hooks: Hooks,
+    /// Push the current state to the UI and the tray, after the engine changed
+    /// something itself (pause, a layout applied by shortcut). Set by the Tauri
+    /// setup; `None` in unit tests.
+    pub state_changed: Mutex<Option<StateNotifier>>,
+    /// Where the quick panel opens from (the notch's rect, in screen pixels), set by
+    /// the notch; `None`: near the tray.
+    pub panel_anchor: Mutex<Option<PxRect>>,
     /// How the engine asks the shell to bring a view of the UI window forward. Set
     /// once by the Tauri setup; `None` where there is no window (unit tests).
     pub open_view: Mutex<Option<ViewOpener>>,
@@ -48,6 +58,9 @@ pub struct Shared {
 /// Brings the UI window forward showing a view (`"switcher"`). May create the
 /// window, so it must not be called while a lock the window code needs is held.
 pub type ViewOpener = Arc<dyn Fn(&'static str) + Send + Sync>;
+
+/// Pushes the state to the UI and the tray (see `Shared::state_changed`).
+pub type StateNotifier = Arc<dyn Fn() + Send + Sync>;
 
 impl Shared {
     pub fn new(model: AppModel, platform: Arc<dyn Platform>) -> Self {
@@ -63,6 +76,9 @@ impl Shared {
             front_app: Mutex::new(None),
             paused: AtomicBool::new(false),
             hide_names: AtomicBool::new(false),
+            hooks: Hooks::default(),
+            state_changed: Mutex::new(None),
+            panel_anchor: Mutex::new(None),
             open_view: Mutex::new(None),
         }
     }
@@ -71,7 +87,6 @@ impl Shared {
         self.paused.load(Ordering::Relaxed)
     }
 
-    #[allow(dead_code)] // the pause shortcut and tray item (wave 2) call it
     pub fn set_paused(&self, paused: bool) {
         self.paused.store(paused, Ordering::Relaxed);
     }
@@ -79,6 +94,22 @@ impl Shared {
     /// Whether native overlays must hide program names and icons (share-safe).
     pub fn hide_app_names(&self) -> bool {
         self.hide_names.load(Ordering::Relaxed)
+    }
+
+    /// The active layout of every connected monitor, for the notch and other
+    /// features that show it (name only; hide it under share-safe if asked).
+    #[allow(dead_code)] // read by the notch (notch branch)
+    pub fn active_layouts(&self) -> Vec<ActiveLayout> {
+        let model = lock(&self.model);
+        model
+            .monitor_ctxs()
+            .into_iter()
+            .map(|m| ActiveLayout {
+                profile_id: m.profile_id,
+                layout_id: m.layout.id.clone(),
+                layout_name: m.layout.name,
+            })
+            .collect()
     }
 
     /// The hook for share-safe: strips (and later the notch) stop showing names.
@@ -176,6 +207,11 @@ pub struct AppState {
     /// The program in front and whether auto-arrange looks after it (for the
     /// "Not arranged" chip). `None` when nothing is known yet.
     pub front_app: Option<FrontApp>,
+    /// Auto-arrange is paused (windows stay where they are).
+    pub paused: bool,
+    /// Every shortcut action with its chord and state, in sheet order. The UI
+    /// shortcut sheet and the cheat sheet render straight from it.
+    pub shortcut_actions: Vec<ShortcutActionState>,
 }
 
 /// The program in front, as far as auto-arrange is concerned. Never a title.
@@ -189,6 +225,34 @@ pub struct FrontApp {
     /// `"elevated"`, `"never_touch"`, `"float"`, `"auto_arrange_off"`, `"paused"`,
     /// `"other"`. `None` when arranged.
     pub reason: Option<String>,
+}
+
+/// A monitor and its active layout (see [`Shared::active_layouts`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ActiveLayout {
+    pub profile_id: String,
+    pub layout_id: String,
+    pub layout_name: String,
+}
+
+/// One row of the shortcut sheet.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ShortcutActionState {
+    /// Stable id (`move_left`, `zone_3`, `pause`, ...), the key of `Settings.shortcuts`.
+    pub id: String,
+    /// One to four words.
+    pub label: String,
+    /// `"Windows"`, `"Layouts"` or `"Krova"`.
+    pub group: String,
+    /// The chord now (`"Ctrl+Alt+Left"`), `None` when switched off.
+    pub chord: Option<String>,
+    pub default_chord: Option<String>,
+    /// `"active"` (registered), `"off"` (no chord, or its feature is switched off),
+    /// `"in_use"` (Windows refused it: another app owns it), `"error"`,
+    /// `"unsupported"` (this OS has no global shortcuts).
+    pub status: String,
+    /// Why, when the status is `in_use` or `error`.
+    pub message: Option<String>,
 }
 
 /// One connected monitor as the engine needs it, copied out of the model.
@@ -334,6 +398,8 @@ impl AppModel {
             capabilities: capabilities.into(),
             layout_switcher,
             front_app: None,
+            paused: false,
+            shortcut_actions: Vec::new(),
         }
     }
 

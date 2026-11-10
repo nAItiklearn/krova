@@ -15,6 +15,9 @@ import type {
   Layout,
   NavigateTarget,
   PresetInfo,
+  PanelAnchor,
+  PopupLabel,
+  ProbeResult,
   Settings,
 } from './bindings';
 import { createMockBackend, type DemoControls, type MockBackend } from './mock/mockBackend';
@@ -70,6 +73,19 @@ export interface Backend {
   removeAppRule(exe: string): Promise<AppState>;
   /** Arrange the windows already open on a monitor, now ("Tile now"). */
   arrangeMonitor(monitorId: string): Promise<void>;
+
+  /** Is `chord` free for `action`? Checks Krova's own map, then the OS. */
+  probeShortcut(action: string, chord: string): Promise<ProbeResult>;
+  /** Rebind an action, or switch it off with null. Rejects a chord another action has. */
+  setShortcut(action: string, chord: string | null): Promise<AppState>;
+  /** Every shortcut back to its default. */
+  resetShortcuts(): Promise<AppState>;
+  /** Pause / resume auto-arrange; the new state arrives with "state-changed". */
+  setPaused(paused: boolean): Promise<void>;
+  /** Hide the panel or the switcher window (on Esc). They stay warm. */
+  hidePopup(label: PopupLabel): Promise<void>;
+  /** Backend event "panel-anchor": the panel was opened from this rect (the notch). */
+  onPanelAnchor(cb: (anchor: PanelAnchor) => void): Promise<Unlisten>;
   /**
    * `MonitorProfile.id` of the monitor the layout switcher was last opened for (the
    * one under the cursor when its shortcut was pressed), or null if it was never
@@ -143,6 +159,12 @@ export const tauriBackend: Backend = {
   setAppRule: (rule) => invoke<AppState>('set_app_rule', { rule }),
   removeAppRule: (exe) => invoke<AppState>('remove_app_rule', { exe }),
   arrangeMonitor: (monitorId) => invoke<void>('arrange_monitor', { monitorId }),
+  probeShortcut: (action, chord) => invoke<ProbeResult>('probe_shortcut', { action, chord }),
+  setShortcut: (action, chord) => invoke<AppState>('set_shortcut', { action, chord }),
+  resetShortcuts: () => invoke<AppState>('reset_shortcuts'),
+  setPaused: (paused) => invoke<void>('set_paused', { paused }),
+  hidePopup: (label) => invoke<void>('hide_popup', { label }),
+  onPanelAnchor: (cb) => listen<PanelAnchor>('panel-anchor', (e) => cb(e.payload)),
   switcherMonitor: () => invoke<string | null>('switcher_monitor'),
 
   exportLayout: (layout) => invoke<string>('export_layout', { layout }),

@@ -18,6 +18,7 @@ import type {
   AppRule,
   ArrangeSettings,
   FrontApp,
+  PanelAnchor,
   ShortcutStatus,
 } from '../bindings';
 import { editMoveDivider, editRemoveZone, editSplitZone, validateLayout } from './edit';
@@ -30,6 +31,7 @@ import {
 } from './exchange';
 import { templates } from './templates';
 import { allPresets, variantForSize } from './presets';
+import { normalizeChord, probe, rows, sanitizeMap, setChord } from './shortcuts';
 
 /** localStorage key used for the optional persistence of demo edits. */
 export const STORAGE_KEY = 'krova-demo';
@@ -75,6 +77,8 @@ export interface DemoControls {
   setShortcuts(mode: ShortcutsMode): void;
   /** Change the fake platform support and emit "state-changed". */
   setCapabilities(mode: CapabilitiesMode): void;
+  /** Pretend the panel was opened from this rect (the notch): emits "panel-anchor". */
+  anchorPanel(anchor: PanelAnchor): void;
   /** Pretend another window came to the front (for the "Not arranged" chip). */
   setFrontApp(front: FrontApp): void;
   /** Back to the initial demo state (also clears localStorage). */
@@ -101,6 +105,7 @@ export function defaultSettings(): Settings {
     zone_gap_px: 0,
     layout_switcher_shortcut: true,
     app_rules: [],
+    shortcuts: {},
   };
 }
 
@@ -253,6 +258,7 @@ function sanitizeSettings(s: Settings): Settings {
     zone_gap_px: Math.min(32, Math.max(0, gap)),
     layout_switcher_shortcut: flag(s.layout_switcher_shortcut, defaults.layout_switcher_shortcut),
     app_rules: Array.isArray(s.app_rules) ? sanitizeRules(s.app_rules) : [],
+    shortcuts: sanitizeMap(s.shortcuts),
   };
 }
 
@@ -314,6 +320,8 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
   let switcherMonitorId: string | null = MONITORS[0].profile_id;
   // A plausible front window for the "Not arranged" chip.
   let frontApp: FrontApp = { exe: 'code.exe', arranged: true, reason: null };
+  let paused = false;
+  const anchorListeners = new Set<(a: PanelAnchor) => void>();
   const stateListeners = new Set<(s: AppState) => void>();
 
   function persist(): void {
@@ -367,6 +375,8 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
       capabilities: capabilities(),
       layout_switcher: layoutSwitcherStatus(),
       front_app: capabilities().auto_arrange ? frontApp : null,
+      paused,
+      shortcut_actions: rows(config.settings, capabilities().shortcuts, shortcutStatus().failed),
     });
   }
 
@@ -457,7 +467,11 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
       frontApp = clone(front);
       emitState();
     },
+    anchorPanel(anchor) {
+      for (const cb of anchorListeners) cb(clone(anchor));
+    },
     reset() {
+      paused = false;
       reset(true);
       emitState();
     },
@@ -603,6 +617,44 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
       if (!MONITORS.some((m) => m.profile_id === monitorId)) {
         throw `monitor ${monitorId} is not connected`;
       }
+    },
+
+    async probeShortcut(action, chord) {
+      return probe(config.settings.shortcuts, action, chord);
+    },
+
+    async setShortcut(action, chord) {
+      const normalized = chord === null ? null : normalizeChord(chord);
+      if (normalized !== null) {
+        const p = probe(config.settings.shortcuts, action, normalized);
+        if (p.status === 'conflict') throw p.message;
+      }
+      config.settings = {
+        ...config.settings,
+        shortcuts: setChord(config.settings.shortcuts, action, normalized),
+      };
+      persist();
+      return snapshot();
+    },
+
+    async resetShortcuts() {
+      config.settings = { ...config.settings, shortcuts: {} };
+      persist();
+      return snapshot();
+    },
+
+    async setPaused(value) {
+      paused = !!value;
+      emitState();
+    },
+
+    async hidePopup(label) {
+      if (label !== 'panel' && label !== 'switcher') throw `${String(label)} is not a popup window`;
+    },
+
+    async onPanelAnchor(cb): Promise<Unlisten> {
+      anchorListeners.add(cb);
+      return () => anchorListeners.delete(cb);
     },
 
     async switcherMonitor() {

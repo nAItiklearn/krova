@@ -10,7 +10,8 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
 
-use krova_core::registry::{KeyAction, WindowOwner};
+use krova_core::registry::WindowOwner;
+use krova_core::shortcuts::{Chord, ShortcutAction};
 use krova_core::{DragEvent, Modifier, MonitorDescriptor, PxRect};
 
 pub mod classify;
@@ -107,16 +108,16 @@ pub struct ChordReport {
 /// their thread.
 pub struct HotkeyHandle {
     /// What each accepted shortcut asks for.
-    accepted: Vec<KeyAction>,
+    accepted: Vec<ShortcutAction>,
     /// What each refused shortcut asked for, and the sentence that says why.
-    refused: Vec<(KeyAction, String)>,
+    refused: Vec<(ShortcutAction, String)>,
     stop: Option<Box<dyn FnOnce() + Send>>,
 }
 
 impl HotkeyHandle {
     pub fn new(
-        accepted: Vec<KeyAction>,
-        refused: Vec<(KeyAction, String)>,
+        accepted: Vec<ShortcutAction>,
+        refused: Vec<(ShortcutAction, String)>,
         stop: impl FnOnce() + Send + 'static,
     ) -> Self {
         Self {
@@ -137,7 +138,7 @@ impl HotkeyHandle {
     }
 
     fn report(&self, switcher: bool) -> ChordReport {
-        let in_group = |action: &KeyAction| (*action == KeyAction::OpenSwitcher) == switcher;
+        let in_group = |action: &ShortcutAction| (*action == ShortcutAction::Switcher) == switcher;
         ChordReport {
             registered: self.accepted.iter().filter(|a| in_group(a)).count(),
             failed: self
@@ -149,14 +150,27 @@ impl HotkeyHandle {
         }
     }
 
-    /// The twelve shortcuts that move the focused window.
+    /// Every shortcut but the switcher.
     pub fn window_moves(&self) -> ChordReport {
         self.report(false)
     }
 
-    /// `<mods>+Space`, which opens the layout switcher.
+    /// The layout switcher shortcut.
     pub fn switcher(&self) -> ChordReport {
         self.report(true)
+    }
+
+    /// Whether the OS accepted the chord of `action`.
+    pub fn is_registered(&self, action: ShortcutAction) -> bool {
+        self.accepted.contains(&action)
+    }
+
+    /// The sentence saying why the chord of `action` was refused, if it was.
+    pub fn refusal(&self, action: ShortcutAction) -> Option<&str> {
+        self.refused
+            .iter()
+            .find(|(a, _)| *a == action)
+            .map(|(_, why)| why.as_str())
     }
 }
 
@@ -410,6 +424,11 @@ pub trait Platform: Send + Sync {
         Err(PlatformError::Unsupported)
     }
 
+    /// Is `chord` free to register right now? `Ok(false)` when another program
+    /// (or Krova itself) holds it. Registers and releases it at once.
+    fn probe_hotkey(&self, _chord: Chord) -> Result<bool, PlatformError> {
+        Err(PlatformError::Unsupported)
+    }
     /// Register the global shortcuts. They stay registered until the handle is
     /// dropped. Shortcuts the OS refuses are reported in the handle, not as an error.
     fn start_hotkeys(
@@ -489,6 +508,8 @@ pub fn default_platform() -> Box<dyn Platform> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use krova_core::shortcuts::ShortcutAction as A;
+    use krova_core::swap::Direction;
     use std::sync::mpsc;
 
     #[test]
@@ -565,11 +586,11 @@ mod tests {
         assert_eq!(p.cursor_position(), None);
         assert!(!p.is_movable_target(w));
         assert_eq!(p.window_owner(w), None);
-        let spec = HotkeySpec {
-            modifier: krova_core::ShortcutModifier::WinAlt,
-            window_moves: true,
-            switcher: true,
-        };
+        let spec = HotkeySpec::default();
+        assert!(matches!(
+            p.probe_hotkey("Ctrl+Alt+T".parse().unwrap()),
+            Err(PlatformError::Unsupported)
+        ));
         assert!(matches!(
             p.start_hotkeys(spec, Arc::new(|_| {})),
             Err(PlatformError::Unsupported)
@@ -585,9 +606,9 @@ mod tests {
         let stops = Arc::new(AtomicU8::new(0));
         let s = Arc::clone(&stops);
         let hotkeys = HotkeyHandle::new(
-            vec![KeyAction::PrevZone, KeyAction::NextZone],
+            vec![A::Move(Direction::Left), A::Move(Direction::Right)],
             vec![(
-                KeyAction::Zone(3),
+                A::Zone(3),
                 "Win+Alt+3 is already used by another app".into(),
             )],
             move || {
@@ -612,15 +633,8 @@ mod tests {
     fn a_hotkey_handle_reports_the_two_groups_apart() {
         let chord = |what: &str| format!("Ctrl+Alt+Shift+{what} is already used by another app");
         let handle = HotkeyHandle::new(
-            vec![
-                KeyAction::PrevZone,
-                KeyAction::Zone(1),
-                KeyAction::OpenSwitcher,
-            ],
-            vec![
-                (KeyAction::Zone(2), chord("2")),
-                (KeyAction::Zone(3), chord("3")),
-            ],
+            vec![A::Move(Direction::Left), A::Zone(1), A::Switcher],
+            vec![(A::Zone(2), chord("2")), (A::Zone(3), chord("3"))],
             || {},
         );
         assert_eq!(handle.registered(), 3);
@@ -642,8 +656,8 @@ mod tests {
 
         // The switcher chord refused while the moves are fine.
         let handle = HotkeyHandle::new(
-            vec![KeyAction::NextZone],
-            vec![(KeyAction::OpenSwitcher, chord("Space"))],
+            vec![A::Move(Direction::Right)],
+            vec![(A::Switcher, chord("Space"))],
             || {},
         );
         assert_eq!(handle.window_moves().failed, Vec::<String>::new());
@@ -651,7 +665,9 @@ mod tests {
         assert_eq!(handle.switcher().failed, [chord("Space")]);
 
         // Nothing requested for a group: its report is empty, not an error.
-        let handle = HotkeyHandle::new(vec![KeyAction::OpenSwitcher], vec![], || {});
+        let handle = HotkeyHandle::new(vec![A::Switcher], vec![], || {});
+        assert!(handle.is_registered(A::Switcher));
+        assert_eq!(handle.refusal(A::Switcher), None);
         assert_eq!(handle.window_moves(), ChordReport::default());
     }
 }
