@@ -323,8 +323,8 @@
     </Row>
     {#if winHint}
       <p class="pad desc" id="set-shortcut-win-hint" data-testid="shortcuts-win-hint">
-        Windows keeps many Windows-key shortcuts for itself, so some of these may not register. Ctrl + Alt + Shift is the
-        safest choice.
+        Windows keeps many shortcuts with the Windows key for itself, so some of these may not register. The ones that
+        fail are listed below; Ctrl + Alt + Shift is the safest choice.
       </p>
     {/if}
     <div class="pad live" role="status" aria-live="polite" data-testid="shortcuts-status">
@@ -341,12 +341,15 @@
       {/if}
     </div>
     {#if canShort}
-      <dl class="pad keymap" data-testid="shortcuts-keymap">
-        <div class="km"><dt data-testid="keymap-left">{@render combo(['Left'])}</dt><dd>Move the focused window to the previous zone</dd></div>
-        <div class="km"><dt data-testid="keymap-right">{@render combo(['Right'])}</dt><dd>Move the focused window to the next zone</dd></div>
-        <div class="km"><dt data-testid="keymap-number">{@render combo(['1'], '9')}</dt><dd>Move the focused window to that zone number</dd></div>
-        <div class="km"><dt data-testid="keymap-up">{@render combo(['Up'])}</dt><dd>Send the focused window to the next monitor, keeping its zone number</dd></div>
-      </dl>
+      <div class="pad">
+        <h4 class="sub-title">What the keys do</h4>
+        <dl class="keymap" data-testid="shortcuts-keymap">
+          <div class="km"><dt data-testid="keymap-left">{@render combo(['Left'])}</dt><dd>Move the focused window to the previous zone</dd></div>
+          <div class="km"><dt data-testid="keymap-right">{@render combo(['Right'])}</dt><dd>Move the focused window to the next zone</dd></div>
+          <div class="km"><dt data-testid="keymap-number">{@render combo(['1'], '9')}</dt><dd>Move the focused window to that zone number</dd></div>
+          <div class="km"><dt data-testid="keymap-up">{@render combo(['Up'])}</dt><dd>Send the focused window to the next monitor, keeping its zone number</dd></div>
+        </dl>
+      </div>
     {/if}
   </Group>
 </Page>
@@ -560,6 +563,12 @@
   .desc {
     color: var(--text-muted);
     font-size: 0.85rem;
+  }
+  .sub-title {
+    margin-bottom: 8px;
+    font-size: 0.8rem;
+    font-weight: 650;
+    color: var(--text-muted);
   }
   .keymap {
     display: grid;

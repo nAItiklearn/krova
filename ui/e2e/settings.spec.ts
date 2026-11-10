@@ -2,7 +2,7 @@
 // every control, autosave with the Saved indicator, colour validation, theme
 // switching.
 
-import { expect, gotoSection, openArrange, openSection, test, type Section } from './fixtures';
+import { expect, gotoSection, openArrange, openSection, test, type Section, expectSaved } from './fixtures';
 import type { Page } from '@playwright/test';
 
 const LIGHT_BG = 'rgb(246, 245, 242)'; // --bg #f6f5f2
@@ -12,11 +12,6 @@ const COLOR_ERROR = /Use a colou?r like #[0-9a-f]{6}/;
 const openAppearance = (page: Page, query?: string) => openSection(page, 'appearance', query);
 
 const indicator = (page: Page) => page.getByTestId('save-indicator');
-
-async function expectSaved(page: Page): Promise<void> {
-  await expect(indicator(page)).toHaveAttribute('data-state', 'saved');
-  await expect(indicator(page)).toContainText('Saved');
-}
 
 test.describe('defaults', () => {
   test('every Arrange control shows its default value', async ({ page }) => {

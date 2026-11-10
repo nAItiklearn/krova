@@ -30,6 +30,8 @@ declare global {
         monitor_id: string;
       }): void;
     };
+    /** Count of "Saved" reports, kept by the `saveWatch` init script (tests only). */
+    __krovaSaves?: number;
   }
 }
 
@@ -93,6 +95,7 @@ export const test = base.extend<Fixtures>({
         }
       });
       page.on('pageerror', (error) => pageErrors.push(error.message));
+      await page.addInitScript(saveWatch);
 
       const guard: Guard = {
         urls,
@@ -172,6 +175,47 @@ export async function openApp(page: Page, query: string = NOPERSIST): Promise<vo
 export async function openArrange(page: Page, query: string = NOPERSIST): Promise<void> {
   await openSection(page, 'arrange', query);
   await expect(page.getByTestId('setting-enabled')).toBeVisible();
+}
+
+/**
+ * Wait until the settings auto-save reports "Saved" for the latest change.
+ *
+ * The badge only stays up for 2.5 s (src/lib/settings.svelte.ts). Polling the DOM
+ * for it races against that timer on a busy machine: the save happens, but the
+ * badge is gone again before the assertion looks. So the `saveWatch` init script
+ * (below) records each switch of the indicator to `data-state="saved"` with the
+ * text "Saved" as it happens, and forgets it on every later `input` / `change`
+ * event and every new "saving": a report only counts if it came after the last
+ * edit. This waits for such a report and then consumes it.
+ */
+export async function expectSaved(page: Page): Promise<void> {
+  await expect
+    .poll(() => page.evaluate(() => window.__krovaSaves ?? 0), { message: 'a "Saved" report' })
+    .toBeGreaterThan(0);
+  await page.evaluate(() => {
+    window.__krovaSaves = 0;
+  });
+}
+
+/** Init script: record "Saved" reports of the save indicator (see `expectSaved`). */
+function saveWatch(): void {
+  window.__krovaSaves = 0;
+  const forget = (): void => {
+    window.__krovaSaves = 0;
+  };
+  document.addEventListener('input', forget, true);
+  document.addEventListener('change', forget, true);
+  new MutationObserver((records) => {
+    for (const r of records) {
+      const el = r.target as Element;
+      if (el.getAttribute('data-testid') !== 'save-indicator') continue;
+      const state = el.getAttribute('data-state');
+      if (state === 'saving') forget();
+      else if (state === 'saved' && (el.textContent ?? '').includes('Saved')) {
+        window.__krovaSaves = (window.__krovaSaves ?? 0) + 1;
+      }
+    }
+  }).observe(document, { subtree: true, attributes: true, attributeFilter: ['data-state'] });
 }
 
 /** Call a `window.__krovaDemo` hook. */
