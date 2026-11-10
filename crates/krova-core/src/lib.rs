@@ -18,6 +18,11 @@ pub mod stack;
 pub mod swap;
 pub mod window;
 pub mod zone;
+// --- wave3 ---
+pub mod calm;
+pub mod focus;
+pub mod workspace;
+// --- end wave3 ---
 
 pub use config::{
     Config, ConfigError, LoadStatus, Modifier, MonitorProfile, MoveMode, ProfileError, Settings,

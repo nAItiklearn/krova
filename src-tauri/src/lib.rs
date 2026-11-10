@@ -13,6 +13,9 @@ mod engine;
 mod model;
 mod tray;
 mod ui_window;
+// --- wave3 ---
+mod wave3;
+// --- end wave3 ---
 
 use std::sync::Arc;
 
@@ -46,6 +49,14 @@ pub fn run() {
             commands::edit_remove_zone,
             commands::edit_move_divider,
             ui_window::take_pending_view,
+            // --- wave3 ---
+            wave3::cmd::toggle_focus_dim,
+            wave3::cmd::toggle_calm_desk,
+            wave3::cmd::capture_workspace,
+            wave3::cmd::rename_workspace,
+            wave3::cmd::delete_workspace,
+            wave3::cmd::restore_workspace,
+            // --- end wave3 ---
         ])
         .on_window_event(|window, event| match event {
             // The tray keeps the app alive. By default closing the window destroys
@@ -119,5 +130,8 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let initial = commands::build_state(&shared);
     tray::build(app.handle(), &initial)?;
     engine::start(&shared);
+    // --- wave3 ---
+    wave3::start(&shared);
+    // --- end wave3 ---
     Ok(())
 }

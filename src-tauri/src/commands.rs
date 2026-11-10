@@ -40,13 +40,17 @@ pub fn build_state(shared: &Shared) -> AppState {
         (features.shortcuts.clone(), features.layout_switcher.clone())
     };
     let capabilities = shared.platform.capabilities();
-    lock(&shared.model).state(
+    let mut state = lock(&shared.model).state(
         autostart,
         permission,
         shortcuts,
         layout_switcher,
         capabilities,
-    )
+    );
+    // --- wave3 ---
+    crate::wave3::fill_state(shared, &mut state);
+    // --- end wave3 ---
+    state
 }
 
 /// Persist the config, refresh the tray, tell every listener, return the state.
@@ -91,6 +95,9 @@ pub fn change_settings(shared: &Shared, edit: impl FnOnce(&mut Settings)) -> Res
     ) {
         engine::apply_shortcuts(shared);
     }
+    // --- wave3 ---
+    crate::wave3::on_settings_changed(shared, &old, &new);
+    // --- end wave3 ---
     if old.launch_at_login != new.launch_at_login {
         if let Err(e) = shared.platform.set_autostart(new.launch_at_login) {
             lock(&shared.model).config.settings.launch_at_login = old.launch_at_login;

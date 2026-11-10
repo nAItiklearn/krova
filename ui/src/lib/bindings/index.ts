@@ -73,6 +73,15 @@ export interface Settings {
    * the cursor. Independent of `keyboard_shortcuts`. Default true.
    */
   layout_switcher_shortcut: boolean;
+  // --- wave3 ---
+  /** Focus dim. Off by default. */
+  focus: FocusSettings;
+  calm_desk: CalmDeskSettings;
+  /** While on, Krova's overlays show only zone shapes, never app names or icons. Default false. */
+  share_safe: boolean;
+  /** Window highlight. Mode `none` by default. */
+  highlight: HighlightSettings;
+  // --- end wave3 ---
 }
 
 export interface MonitorProfile {
@@ -89,6 +98,10 @@ export interface Config {
   schema_version: number;
   settings: Settings;
   monitors: MonitorProfile[];
+  // --- wave3 ---
+  /** Saved workspaces, at most 32. */
+  workspaces: Workspace[];
+  // --- end wave3 ---
 }
 
 /** A currently connected monitor (app glue, not persisted). */
@@ -134,6 +147,9 @@ export interface AppState {
    * one sentence, e.g. "Ctrl+Alt+Shift+Space is already used by another app".
    */
   layout_switcher: ShortcutStatus;
+  // --- wave3 ---
+  wave3: Wave3State;
+  // --- end wave3 ---
 }
 
 /**
@@ -152,3 +168,100 @@ export type View = 'editor' | 'settings';
  * `switcher` yet must ignore it.
  */
 export type NavigateTarget = View | 'switcher';
+
+// --- wave3 ---
+// Workspaces, focus dim, calm desk, share-safe and window highlight
+// (crates/krova-core: workspace.rs, focus.rs, calm.rs; src-tauri/src/wave3.rs).
+
+export interface FocusSettings {
+  enabled: boolean;
+  /** How dark the rest of the screen gets, 0.2..0.8. Default 0.45. */
+  opacity: number;
+}
+
+export interface CalmDeskSettings {
+  /** Every monitor (default) or only the one under the cursor. */
+  all_monitors: boolean;
+}
+
+/** `active` = the focused window, `all` = every window, `glow` = a soft glow on the focused one. */
+export type HighlightMode = 'none' | 'active' | 'all' | 'glow';
+
+export interface HighlightSettings {
+  mode: HighlightMode;
+  /** `#rrggbb`, or null for the accent colour. */
+  color: string | null;
+  /** 1..6 px at 100 % scale. Default 2. */
+  width_px: number;
+}
+
+/** One program of a workspace: its executable path, never a title or arguments. */
+export interface WorkspaceEntry {
+  exe: string;
+  monitor_id: string;
+  zone_id: number;
+}
+
+export interface WorkspaceLayout {
+  monitor_id: string;
+  layout_id: string;
+}
+
+export interface Workspace {
+  id: string;
+  /** 1..64 characters, no control, zero-width or direction characters. */
+  name: string;
+  /** The layout that was active on each monitor at capture time. */
+  layouts: WorkspaceLayout[];
+  /** At most 64. */
+  entries: WorkspaceEntry[];
+}
+
+export type EntryOutcome =
+  | 'placed'
+  | 'launched'
+  | 'timed_out'
+  | 'not_running'
+  | 'refused'
+  | 'no_zone'
+  | 'failed';
+
+export interface EntryResult {
+  /** File name only (`code.exe`), never a folder. */
+  program: string;
+  monitor_id: string;
+  zone_id: number;
+  outcome: EntryOutcome;
+}
+
+export interface RestoreReport {
+  workspace_id: string;
+  entries: EntryResult[];
+  /** How many other windows were minimised (never closed). */
+  minimized: number;
+}
+
+export interface Wave3Capabilities {
+  workspaces: boolean;
+  calm_desk: boolean;
+  focus_dim: boolean;
+  highlight: boolean;
+  /** Windows 11 draws thin borders itself. */
+  dwm_borders: boolean;
+}
+
+export interface CalmDeskState {
+  active: boolean;
+  count: number;
+}
+
+export interface Wave3State {
+  capabilities: Wave3Capabilities;
+  calm_desk: CalmDeskState;
+  focus_active: boolean;
+  share_safe: boolean;
+  visuals_error: string | null;
+  /** Id of the workspace being restored right now. */
+  restoring: string | null;
+}
+// --- end wave3 ---

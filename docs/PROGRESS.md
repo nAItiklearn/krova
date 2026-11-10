@@ -84,3 +84,14 @@ No Critical or High findings in Krova's own code; privacy promises hold for Krov
 - macOS: blanket `#![allow(dead_code, unused_unsafe, unused_imports, ...)]` in the mac files predates the first green macOS CI run; tighten it now that the lints pass. The overlay is the lowest-confidence macOS item; if it misbehaves, make `create_overlay` return `Err(Unsupported)`.
 - macOS: `start_input` fails until Accessibility is granted. `get_state` retries it once permission is `Granted`; a restart may still be needed. The Accessibility prompt helper (`prompt_for_accessibility`) is not yet wired to any command.
 - Window memory, keyboard shortcuts and linked dividers are Windows-only (`capabilities` is false for them on macOS).
+
+## Manual tests for the wave3 branch
+
+Automated: `krova-core` unit tests for `workspace`, `focus` and `calm`; `krova-platform` tests for `desk` and `win_desk`; `src-tauri` `wave3::tests` (fake desk and platform); `ui` `wave3Mock.test.ts`. Ignored desktop tests, run by hand: `cargo test -p krova-platform -- --ignored visuals_start launching_notepad --nocapture`. Both passed on Windows 11 build 26300 (agent run); the Notepad test showed that `System32\notepad.exe` starts the packaged Notepad, whose process path differs, so a wait by path cannot find it (the test then finds the window by file name).
+
+- [ ] Workspaces: snap three apps into zones on two monitors, capture, move them around and open another app, restore: each lands in its zone in turn, the other app is minimised (not closed), every entry says `placed`.
+- [ ] Restore with launching: close one captured classic desktop app (VS Code, for example) and restore with `launch`: it starts and lands in its zone within 10 s; with launching off it reports `not_running`. A program copied to `%TEMP%` and captured from there is never started (`refused`).
+- [ ] Focus dim: `toggle_focus_dim`, then click between windows: the dim fades in, the rounded hole follows focus with a spring; drag the focused window: the hole follows; click the desktop: the dim fades out. Check a 100 % and a 150 % monitor and a window spanning both. Task Manager shows no CPU for Krova while nothing moves.
+- [ ] Calm desk: with floating windows and windows in zones, toggle: only the floating ones minimise; restore one by hand, toggle again: only the others come back.
+- [ ] Highlight `active` at 2 px on Windows 11: the focused window's own border takes the colour and the previous one returns to normal; at 5 px an overlay ring follows and eases between windows; `all`: every window gets a ring (or a Windows border); `glow`: a soft halo. All disappear for full-screen video, minimised windows and windows on another virtual desktop; switching the highlight off restores every border colour.
+- [ ] Share-safe: switch it on; `AppState.wave3.share_safe` is true and no overlay shows an app name or icon (none does today; this matters once the switcher and previews exist).

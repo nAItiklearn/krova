@@ -26,6 +26,9 @@ import {
   uniqueLayoutId,
 } from './exchange';
 import { templates } from './templates';
+// --- wave3 ---
+import { createWave3Mock, defaultWave3Settings, sanitizeWave3Settings } from './wave3Mock';
+// --- end wave3 ---
 
 /** localStorage key used for the optional persistence of demo edits. */
 export const STORAGE_KEY = 'krova-demo';
@@ -94,6 +97,9 @@ export function defaultSettings(): Settings {
     linked_dividers: true,
     zone_gap_px: 0,
     layout_switcher_shortcut: true,
+    // --- wave3 ---
+    ...defaultWave3Settings(),
+    // --- end wave3 ---
   };
 }
 
@@ -126,7 +132,14 @@ function initialConfig(): Config {
     layouts: templates(),
     active_layout: i === 0 ? 'halves' : 'thirds',
   }));
-  return { schema_version: 1, settings: defaultSettings(), monitors: profiles };
+  return {
+    schema_version: 1,
+    settings: defaultSettings(),
+    monitors: profiles,
+    // --- wave3 ---
+    workspaces: [],
+    // --- end wave3 ---
+  };
 }
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
@@ -171,6 +184,9 @@ function sanitizeSettings(s: Settings): Settings {
     linked_dividers: flag(s.linked_dividers, defaults.linked_dividers),
     zone_gap_px: Math.min(32, Math.max(0, gap)),
     layout_switcher_shortcut: flag(s.layout_switcher_shortcut, defaults.layout_switcher_shortcut),
+    // --- wave3 ---
+    ...sanitizeWave3Settings(s),
+    // --- end wave3 ---
   };
 }
 
@@ -231,6 +247,9 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
   // The demo's "cursor" is on the first monitor until a test says otherwise.
   let switcherMonitorId: string | null = MONITORS[0].profile_id;
   const stateListeners = new Set<(s: AppState) => void>();
+  // --- wave3 ---
+  const wave3 = createWave3Mock(() => config);
+  // --- end wave3 ---
 
   function persist(): void {
     if (!storage) return;
@@ -280,6 +299,9 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
       shortcuts: shortcutStatus(),
       capabilities: capabilities(),
       layout_switcher: layoutSwitcherStatus(),
+      // --- wave3 ---
+      wave3: wave3.status(),
+      // --- end wave3 ---
     });
   }
 
@@ -294,6 +316,9 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
     shortcutsMode = opts.shortcuts ?? 'ok';
     capabilitiesMode = opts.capabilities ?? 'all';
     switcherMonitorId = MONITORS[0].profile_id;
+    // --- wave3 ---
+    wave3.reset();
+    // --- end wave3 ---
     if (clearStorage && storage) {
       try {
         storage.removeItem(STORAGE_KEY);
@@ -504,6 +529,44 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
       stateListeners.add(cb);
       return () => stateListeners.delete(cb);
     },
+
+    // --- wave3 ---
+    async toggleFocusDim() {
+      wave3.toggleFocus();
+      persist();
+      emitState();
+      return snapshot();
+    },
+    async toggleCalmDesk() {
+      wave3.toggleCalmDesk();
+      emitState();
+      return snapshot();
+    },
+    async captureWorkspace(name, id) {
+      wave3.capture(name, id);
+      persist();
+      emitState();
+      return snapshot();
+    },
+    async renameWorkspace(id, name) {
+      wave3.rename(id, name);
+      persist();
+      emitState();
+      return snapshot();
+    },
+    async deleteWorkspace(id) {
+      wave3.remove(id);
+      persist();
+      emitState();
+      return snapshot();
+    },
+    async restoreWorkspace(id, launch) {
+      const report = wave3.restore(id, launch);
+      persist();
+      emitState();
+      return report;
+    },
+    // --- end wave3 ---
   };
 
   return backend;

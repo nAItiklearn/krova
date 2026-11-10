@@ -25,6 +25,8 @@ features = [
     "Win32_UI_Accessibility",
     "Win32_UI_HiDpi",
     "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_System_Registry", # wave3: needed by ShellExecuteExW
+    "Win32_UI_Shell", # wave3: ShellExecuteExW (workspace restore)
     "Win32_UI_WindowsAndMessaging",
 ]
 
