@@ -23,9 +23,17 @@ export default defineConfig({
     // WebView2 (Chromium >= 105) on Windows, WKWebView on macOS 13+ (Safari 16).
     target: ['chrome105', 'safari15'],
     sourcemap: false,
-    // Single chunk, so no preload links; this also keeps the bundle free of Vite's
-    // fetch()-based modulepreload polyfill (nothing in the app calls fetch itself).
+    // Two pages: the main window (index.html) and the quick panel the notch opens
+    // (panel.html). Their shared code lands in one chunk; Vite's fetch()-based
+    // modulepreload polyfill stays out (nothing in the app calls fetch itself).
     modulePreload: { polyfill: false },
+    rollupOptions: {
+      input: {
+        // Relative to the project root (this folder; npm scripts run here).
+        main: 'index.html',
+        panel: 'panel.html',
+      },
+    },
   },
   test: {
     environment: 'node',

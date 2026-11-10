@@ -12,6 +12,23 @@ import { createMockBackend, type DemoControls, type MockBackend } from './mock/m
 
 export type Unlisten = () => void;
 
+/** Where a notch can sit; the quick panel opens from that side. */
+export type PanelCorner = 'top_center' | 'top_left' | 'top_right' | 'bottom_left' | 'bottom_right';
+
+/**
+ * Payload of the backend "panel-anchor" event, sent when the notch (or the tray
+ * icon) is clicked: the clicked pill's rectangle in physical screen pixels, the
+ * edge it sits on, and the `MonitorProfile.id` of the monitor under it.
+ */
+export interface PanelAnchor {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  corner: PanelCorner;
+  monitor_id: string;
+}
+
 export interface Backend {
   /** `mock` = browser-only demo mode: nothing is written to a real config. */
   readonly kind: 'tauri' | 'mock';
@@ -77,6 +94,8 @@ export interface Backend {
   takePendingView(): Promise<string | null>;
   /** Backend event "navigate" (from the tray menu or the layout switcher shortcut). */
   onNavigate(cb: (view: NavigateTarget) => void): Promise<Unlisten>;
+  /** Backend event "panel-anchor": open the quick panel next to this rectangle. */
+  onPanelAnchor(cb: (anchor: PanelAnchor) => void): Promise<Unlisten>;
   /** Backend event "state-changed". */
   onStateChanged(cb: (state: AppState) => void): Promise<Unlisten>;
 }
@@ -123,6 +142,7 @@ export const tauriBackend: Backend = {
 
   takePendingView: () => invoke<string | null>('take_pending_view'),
   onNavigate: (cb) => listen<NavigateTarget>('navigate', (e) => cb(e.payload)),
+  onPanelAnchor: (cb) => listen<PanelAnchor>('panel-anchor', (e) => cb(e.payload)),
   onStateChanged: (cb) => listen<AppState>('state-changed', (e) => cb(e.payload)),
 };
 

@@ -101,6 +101,15 @@ function loadLocal(): Partial<Ext> {
 class ExtStore {
   private local = $state<Partial<Ext>>(typeof localStorage === 'undefined' ? {} : loadLocal());
 
+  constructor() {
+    // Another Krova window (the main window or the quick panel) changed a value.
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', (e) => {
+        if (e.key === KEY) this.local = loadLocal();
+      });
+    }
+  }
+
   get<K extends keyof Ext>(key: K): Ext[K] {
     const fromBackend = (settings.draft ?? app.state?.config.settings) as Record<string, unknown> | undefined;
     if (fromBackend && key in fromBackend) return fromBackend[key] as Ext[K];
