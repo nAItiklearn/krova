@@ -112,3 +112,8 @@ Run on a real Windows PC with the app built from the `engine` branch (automated 
 
 **Appearance**
 18. Change the accent and the corner radius in Settings: the drag zones and the stack tabs use the new colour and radius at once; on a 150 % monitor the radius and borders are 1.5 times as many pixels. Border width 6: the highlighted zone's border is clearly thicker than the idle ones.
+
+**Popup windows (after merging ui-panel / ui-switcher)**
+19. Ctrl+Alt+Space: the switcher window covers the monitor under the cursor with a blurred (acrylic or mica) backdrop on Windows 11; on Windows 10 the page's own background shows. Esc hides it; the next open is instant.
+20. In the quick panel, a link to Settings opens (or focuses) the editor window on that section (`open_main`); "Switcher" and "Shortcuts" links open the switcher window.
+21. With the notch branch merged: clicking the notch opens the panel next to it, on the notch's monitor, below a top notch and above a bottom one.

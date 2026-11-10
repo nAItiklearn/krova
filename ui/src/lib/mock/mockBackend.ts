@@ -668,6 +668,10 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
     async hidePopup(label) {
       if (label !== 'panel' && label !== 'switcher') throw `${String(label)} is not a popup window`;
     },
+    async openMain(view) {
+      if (!/^[a-z][a-z0-9_-]{0,31}$/.test(view)) throw `"${view.slice(0, 32)}" is not a view`;
+      if (view !== 'switcher' && view !== 'cheat_sheet') demo.navigate(view as NavigateTarget);
+    },
 
     async onPanelAnchor(cb): Promise<Unlisten> {
       anchorListeners.add(cb);

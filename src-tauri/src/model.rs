@@ -49,7 +49,7 @@ pub struct Shared {
     pub state_changed: Mutex<Option<StateNotifier>>,
     /// Where the quick panel opens from (the notch's rect, in screen pixels), set by
     /// the notch; `None`: near the tray.
-    pub panel_anchor: Mutex<Option<PxRect>>,
+    pub panel_anchor: Mutex<Option<crate::popups::PanelAnchor>>,
     /// How the engine asks the shell to bring a view of the UI window forward. Set
     /// once by the Tauri setup; `None` where there is no window (unit tests).
     pub open_view: Mutex<Option<ViewOpener>>,

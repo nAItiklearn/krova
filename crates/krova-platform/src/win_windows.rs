@@ -224,6 +224,45 @@ pub fn top_level() -> Vec<WindowId> {
     out
 }
 
+/// Give a window (by its raw handle) the system's blurred "acrylic" backdrop, with
+/// "mica" as the fallback, and the dark or light title colours. Windows 11 22H2 or
+/// later; returns `false` where the system has neither, so the page keeps its own
+/// opaque background.
+pub fn apply_backdrop(raw: isize, dark: bool) -> bool {
+    use windows::Win32::Graphics::Dwm::{
+        DwmSetWindowAttribute, DWMSBT_MAINWINDOW, DWMSBT_TRANSIENTWINDOW,
+        DWMWA_SYSTEMBACKDROP_TYPE, DWMWA_USE_IMMERSIVE_DARK_MODE,
+    };
+    let h = HWND(raw as *mut c_void);
+    // SAFETY: plain attribute writes on a window of this process; each value lives
+    // on the stack for the duration of its call.
+    unsafe {
+        if !IsWindow(h).as_bool() {
+            return false;
+        }
+        let dark_mode = i32::from(dark);
+        let _ = DwmSetWindowAttribute(
+            h,
+            DWMWA_USE_IMMERSIVE_DARK_MODE,
+            (&dark_mode as *const i32).cast(),
+            std::mem::size_of::<i32>() as u32,
+        );
+        for kind in [DWMSBT_TRANSIENTWINDOW, DWMSBT_MAINWINDOW] {
+            let value = kind.0;
+            if DwmSetWindowAttribute(
+                h,
+                DWMWA_SYSTEMBACKDROP_TYPE,
+                (&value as *const i32).cast(),
+                std::mem::size_of::<i32>() as u32,
+            )
+            .is_ok()
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
 /// Whether Windows is set to dark mode for apps.
 pub fn prefers_dark() -> bool {
     RegKey::predef(HKEY_CURRENT_USER)

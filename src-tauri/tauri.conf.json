@@ -23,6 +23,7 @@
       },
       {
         "label": "panel",
+        "url": "panel.html",
         "title": "Krova",
         "width": 360,
         "height": 520,
@@ -38,6 +39,7 @@
       },
       {
         "label": "switcher",
+        "url": "switcher.html",
         "title": "Krova",
         "width": 820,
         "height": 560,

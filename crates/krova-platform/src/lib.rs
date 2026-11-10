@@ -269,6 +269,18 @@ pub fn modifier_from_code(code: u8) -> Modifier {
     }
 }
 
+/// Blurred system backdrop (acrylic, else mica) for one of Krova's own windows, by
+/// its raw native handle. `false` where the OS has none (macOS today, Windows 10).
+#[cfg(windows)]
+pub fn apply_backdrop(native_window: isize, dark: bool) -> bool {
+    win_windows::apply_backdrop(native_window, dark)
+}
+
+/// Blurred system backdrop: not available on this OS.
+#[cfg(not(windows))]
+pub fn apply_backdrop(_native_window: isize, _dark: bool) -> bool {
+    false
+}
 /// Command line stored in the Windows `Run` key: the quoted executable path.
 pub fn autostart_command(exe: &Path) -> String {
     format!("\"{}\"", exe.display())

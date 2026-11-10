@@ -84,6 +84,12 @@ export interface Backend {
   setPaused(paused: boolean): Promise<void>;
   /** Hide the panel or the switcher window (on Esc). They stay warm. */
   hidePopup(label: PopupLabel): Promise<void>;
+  /**
+   * Open a view from a popup: `switcher` / `cheat_sheet` open the switcher window,
+   * anything else the editor window with that view or settings section
+   * (`settings`, `editor`, `corners`, ...: lower-case letters, digits, _ and -).
+   */
+  openMain(view: string): Promise<void>;
   /** Backend event "panel-anchor": the panel was opened from this rect (the notch). */
   onPanelAnchor(cb: (anchor: PanelAnchor) => void): Promise<Unlisten>;
   /**
@@ -164,6 +170,7 @@ export const tauriBackend: Backend = {
   resetShortcuts: () => invoke<AppState>('reset_shortcuts'),
   setPaused: (paused) => invoke<void>('set_paused', { paused }),
   hidePopup: (label) => invoke<void>('hide_popup', { label }),
+  openMain: (view) => invoke<void>('open_main', { view }),
   onPanelAnchor: (cb) => listen<PanelAnchor>('panel-anchor', (e) => cb(e.payload)),
   switcherMonitor: () => invoke<string | null>('switcher_monitor'),
 

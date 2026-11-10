@@ -74,7 +74,8 @@ describe('mock shortcuts (wave 2)', () => {
     await expect(b.hidePopup('panel')).resolves.toBeUndefined();
     let anchor = null as unknown;
     await b.onPanelAnchor((a) => (anchor = a));
-    b.demo.anchorPanel({ rect: { x: 1, y: 2, w: 3, h: 4 } });
-    expect(anchor).toEqual({ rect: { x: 1, y: 2, w: 3, h: 4 } });
+    const a = { x: 1, y: 2, w: 3, h: 4, corner: 'top_center' as const, monitor_id: 'monitor-1' };
+    b.demo.anchorPanel(a);
+    expect(anchor).toEqual(a);
   });
 });

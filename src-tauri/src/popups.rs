@@ -21,6 +21,9 @@ use tauri::{
     WebviewWindowBuilder, Wry,
 };
 
+use krova_core::PxRect;
+use serde::{Deserialize, Serialize};
+
 use crate::model::{lock, Shared};
 
 pub const PANEL: &str = "panel";
@@ -133,6 +136,7 @@ fn loaded(window: &WebviewWindow<Wry>, label: &'static str) {
         .entry(label)
         .or_default()
         .ready = true;
+    backdrop(&app, window);
     place(&app, window, label);
     reveal(&app, window, label);
     let spawned = thread::Builder::new()
@@ -165,55 +169,113 @@ fn deliver(app: &AppHandle, label: &'static str) {
         let _ = app.emit_to(label, "navigate", view);
     }
     if label == PANEL {
-        let anchor = *lock(&app.state::<Arc<Shared>>().panel_anchor);
-        if let Some(rect) = anchor {
-            let _ = app.emit_to(PANEL, "panel-anchor", serde_json::json!({ "rect": rect }));
+        let anchor = lock(&app.state::<Arc<Shared>>().panel_anchor).clone();
+        if let Some(anchor) = anchor {
+            let _ = app.emit_to(PANEL, "panel-anchor", anchor);
         }
     }
 }
 
-/// Where a popup goes: the switcher in the middle of the monitor it is for, the
-/// panel near the bottom-right corner of the primary monitor's work area (where the
-/// tray is), or at the rect a `panel-anchor` set (the notch).
+/// Where the quick panel was opened from: the notch's rect (physical pixels), the
+/// screen corner it sits in and the monitor (profile id). Sent to the panel as the
+/// `panel-anchor` event, unchanged.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PanelAnchor {
+    pub x: i32,
+    pub y: i32,
+    pub w: i32,
+    pub h: i32,
+    /// `"top_center"`, `"top_left"`, `"top_right"`, `"bottom_left"`, `"bottom_right"`.
+    pub corner: String,
+    pub monitor_id: String,
+}
+
+/// The panel's top-left corner for a panel of `w` x `h` on a monitor with work area
+/// `work`: next to the anchor (below a top notch, above a bottom one, centred on it,
+/// kept on screen), or near the tray (bottom right, `margin` from the edges).
+pub fn panel_position(
+    work: PxRect,
+    w: i32,
+    h: i32,
+    anchor: Option<&PanelAnchor>,
+    margin: i32,
+) -> (i32, i32) {
+    let Some(a) = anchor else {
+        return (work.right() - w - margin, work.bottom() - h - margin);
+    };
+    let max_x = (work.right() - w).max(work.x);
+    let max_y = (work.bottom() - h).max(work.y);
+    let x = match a.corner.as_str() {
+        "top_left" | "bottom_left" => a.x,
+        "top_right" | "bottom_right" => a.x + a.w - w,
+        _ => a.x + a.w / 2 - w / 2,
+    }
+    .clamp(work.x, max_x);
+    let y = if a.corner.starts_with("bottom") {
+        a.y - margin - h
+    } else {
+        a.y + a.h + margin
+    }
+    .clamp(work.y, max_y);
+    (x, y)
+}
+
+/// Where a popup goes. The switcher covers the whole monitor it is for (the page
+/// draws its own backdrop and deck); the panel opens next to its anchor (the notch)
+/// or near the tray on the primary monitor.
 fn place(app: &AppHandle, window: &WebviewWindow<Wry>, label: &'static str) {
     let shared = app.state::<Arc<Shared>>();
-    let size = window.outer_size().unwrap_or(PhysicalSize::new(360, 520));
-    let (w, h) = (
-        i32::try_from(size.width).unwrap_or(360),
-        i32::try_from(size.height).unwrap_or(520),
-    );
     let monitors = lock(&shared.model).snapshots();
-    let target = if label == SWITCHER {
-        let id = crate::commands::switcher_monitor_of(&shared);
-        monitors.iter().find(|m| Some(&m.profile_id) == id.as_ref())
-    } else {
-        monitors.iter().find(|m| m.primary)
+    let anchor = lock(&shared.panel_anchor).clone();
+    let target = match label {
+        SWITCHER => {
+            let id = crate::commands::switcher_monitor_of(&shared);
+            monitors.iter().find(|m| Some(&m.profile_id) == id.as_ref())
+        }
+        _ => anchor
+            .as_ref()
+            .and_then(|a| monitors.iter().find(|m| m.profile_id == a.monitor_id))
+            .or_else(|| monitors.iter().find(|m| m.primary)),
     }
     .or(monitors.first());
     let Some(m) = target else {
         return;
     };
-    let work = m.work;
-    let anchor = *lock(&shared.panel_anchor);
-    let (x, y) = match (label, anchor) {
-        (PANEL, Some(a)) => {
-            // Below the anchor (a notch at the top), centred on it, kept on screen.
-            let x = (a.x + a.w / 2 - w / 2).clamp(work.x, (work.right() - w).max(work.x));
-            let below = a.bottom() + 8;
-            let y = if below + h <= work.bottom() {
-                below
-            } else {
-                (a.y - 8 - h).max(work.y)
-            };
-            (x, y)
-        }
-        (PANEL, None) => {
-            let margin = (12.0 * m.scale).round() as i32;
-            (work.right() - w - margin, work.bottom() - h - margin)
-        }
-        _ => (work.x + (work.w - w) / 2, work.y + (work.h - h) / 3),
-    };
+    if label == SWITCHER {
+        let r = m.rect;
+        let _ = window.set_size(PhysicalSize::new(
+            u32::try_from(r.w).unwrap_or(1),
+            u32::try_from(r.h).unwrap_or(1),
+        ));
+        let _ = window.set_position(PhysicalPosition::new(r.x, r.y));
+        return;
+    }
+    let size = window.outer_size().unwrap_or(PhysicalSize::new(360, 520));
+    let (w, h) = (
+        i32::try_from(size.width).unwrap_or(360),
+        i32::try_from(size.height).unwrap_or(520),
+    );
+    let margin = (12.0 * m.scale).round() as i32;
+    let (x, y) = panel_position(m.work, w, h, anchor.as_ref(), margin);
     let _ = window.set_position(PhysicalPosition::new(x, y));
+}
+
+/// The blurred system backdrop for a popup, once, after its page loaded.
+fn backdrop(app: &AppHandle, window: &WebviewWindow<Wry>) {
+    #[cfg(windows)]
+    {
+        let shared = app.state::<Arc<Shared>>();
+        let dark = match lock(&shared.model).config.settings.theme {
+            krova_core::Theme::Dark => true,
+            krova_core::Theme::Light => false,
+            krova_core::Theme::System => shared.platform.prefers_dark(),
+        };
+        if let Ok(hwnd) = window.hwnd() {
+            let _ = krova_platform::apply_backdrop(hwnd.0 as isize, dark);
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = (app, window);
 }
 
 /// Hide a popup (Esc, a click outside, the close button). It stays warm.
@@ -263,5 +325,51 @@ mod tests {
         lock(&s.inner).entry(PANEL).or_default().last_open_ms = Some(42);
         assert_eq!(s.last_open_ms(PANEL), Some(42));
         assert_eq!(s.last_open_ms(SWITCHER), None);
+    }
+
+    fn anchor(corner: &str, x: i32, y: i32) -> PanelAnchor {
+        PanelAnchor {
+            x,
+            y,
+            w: 36,
+            h: 10,
+            corner: corner.into(),
+            monitor_id: "monitor-1".into(),
+        }
+    }
+
+    const WORK: PxRect = PxRect::new(0, 0, 1920, 1040);
+
+    #[test]
+    fn without_an_anchor_the_panel_sits_by_the_tray() {
+        assert_eq!(panel_position(WORK, 360, 520, None, 12), (1548, 508));
+    }
+
+    #[test]
+    fn a_top_notch_opens_the_panel_below_it_centred() {
+        let a = anchor("top_center", 942, 0);
+        assert_eq!(panel_position(WORK, 360, 520, Some(&a), 12), (780, 22));
+        // Kept on screen at the left and right.
+        let a = anchor("top_left", 0, 0);
+        assert_eq!(panel_position(WORK, 360, 520, Some(&a), 12).0, 0);
+        let a = anchor("top_right", 1884, 0);
+        assert_eq!(panel_position(WORK, 360, 520, Some(&a), 12).0, 1920 - 360);
+    }
+
+    #[test]
+    fn a_bottom_notch_opens_the_panel_above_it() {
+        let a = anchor("bottom_right", 1884, 1030);
+        let (x, y) = panel_position(WORK, 360, 520, Some(&a), 12);
+        assert_eq!(y, 1030 - 12 - 520);
+        assert_eq!(x, 1884 + 36 - 360);
+    }
+
+    #[test]
+    fn the_anchor_travels_to_the_panel_as_is() {
+        let json = serde_json::to_value(anchor("top_center", 1, 2)).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({"x":1,"y":2,"w":36,"h":10,"corner":"top_center","monitor_id":"monitor-1"})
+        );
     }
 }

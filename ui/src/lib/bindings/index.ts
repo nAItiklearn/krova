@@ -293,7 +293,14 @@ export type PopupLabel = 'panel' | 'switcher';
 
 /** Payload of the `panel-anchor` event: where the panel was opened from (the notch). */
 export interface PanelAnchor {
-  rect: PxRect;
+  /** The notch rect in physical pixels. */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  corner: 'top_center' | 'top_left' | 'top_right' | 'bottom_left' | 'bottom_right';
+  /** `MonitorProfile.id` of the monitor the notch is on. */
+  monitor_id: string;
 }
 
 // ---------------------------------------------------------------- appearance

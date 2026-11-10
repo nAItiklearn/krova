@@ -59,6 +59,7 @@ pub fn run() {
             shortcut_cmds::set_paused,
             popups::hide_popup,
             popups::popup_open_ms,
+            ui_window::open_main,
             ui_window::take_pending_view,
         ])
         .on_window_event(|window, event| {
