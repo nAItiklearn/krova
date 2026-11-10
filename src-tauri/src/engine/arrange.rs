@@ -104,16 +104,6 @@ pub fn strip_key(profile_id: &str, zone: u32) -> u64 {
     h.finish()
 }
 
-/// `#rrggbb` to RGB; the default accent if it does not parse.
-pub fn parse_accent(hex: &str) -> [u8; 3] {
-    let h = hex.trim().trim_start_matches('#');
-    let byte = |i: usize| u8::from_str_radix(h.get(i..i + 2)?, 16).ok();
-    match (h.len(), byte(0), byte(2), byte(4)) {
-        (6, Some(r), Some(g), Some(b)) => [r, g, b],
-        _ => [0xff, 0x5b, 0x1f],
-    }
-}
-
 /// Why a window is not arranged, as the short code `FrontApp.reason` carries.
 pub fn skip_code(reason: SkipReason) -> &'static str {
     match reason {
@@ -734,14 +724,15 @@ impl Engine<'_> {
         let Some(host) = self.strips else {
             return;
         };
-        let (monitors, gap, theme, accent) = {
+        let (monitors, gap, theme, accent, radius) = {
             let model = lock(&self.shared.model);
             let s = &model.config.settings;
             (
                 model.monitor_ctxs(),
                 s.zone_gap_px,
                 s.theme,
-                parse_accent(&s.highlight_color),
+                s.appearance.accent_rgb(),
+                s.appearance.corner_radius_px,
             )
         };
         let dark = match theme {
@@ -761,7 +752,7 @@ impl Engine<'_> {
                     StripTheme::Light
                 },
                 accent,
-                radius_px: 10,
+                radius_px: radius,
                 hide_names: self.shared.hide_app_names(),
             },
         );
@@ -799,14 +790,6 @@ mod tests {
             exe_path: Some(format!("C:\\Apps\\{exe}")),
             owner: None,
         }
-    }
-
-    #[test]
-    fn accents_parse_and_fall_back() {
-        assert_eq!(parse_accent("#3b82f6"), [0x3b, 0x82, 0xf6]);
-        assert_eq!(parse_accent("ff5b1f"), [0xff, 0x5b, 0x1f]);
-        assert_eq!(parse_accent("nope"), [0xff, 0x5b, 0x1f]);
-        assert_eq!(parse_accent("#12345"), [0xff, 0x5b, 0x1f]);
     }
 
     #[test]

@@ -103,6 +103,54 @@ impl ShortcutModifier {
 /// Largest gap (in pixels) between zones and around the screen edge.
 pub const MAX_ZONE_GAP_PX: i32 = 32;
 
+
+/// Default accent colour of every native overlay (zones, stack tabs, the notch).
+pub const DEFAULT_ACCENT: &str = "#ff5b1f";
+/// Largest corner radius, in logical pixels.
+pub const MAX_CORNER_RADIUS_PX: i32 = 16;
+/// Border width range of the zone overlay, in logical pixels.
+pub const MIN_BORDER_WIDTH_PX: i32 = 1;
+pub const MAX_BORDER_WIDTH_PX: i32 = 6;
+
+/// How Krova's native overlays look. `highlight_opacity` stays the opacity.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Appearance {
+    /// `#rrggbb`, lower case.
+    pub accent: String,
+    /// `0..=16`.
+    pub corner_radius_px: i32,
+    /// `1..=6`; the highlighted zone uses twice this.
+    pub border_width_px: i32,
+}
+
+impl Default for Appearance {
+    fn default() -> Self {
+        Self {
+            accent: DEFAULT_ACCENT.to_owned(),
+            corner_radius_px: 10,
+            border_width_px: 2,
+        }
+    }
+}
+
+impl Appearance {
+    pub fn sanitized(mut self) -> Self {
+        self.accent = normalize_hex_color(&self.accent).unwrap_or_else(|| DEFAULT_ACCENT.to_owned());
+        self.corner_radius_px = self.corner_radius_px.clamp(0, MAX_CORNER_RADIUS_PX);
+        self.border_width_px = self
+            .border_width_px
+            .clamp(MIN_BORDER_WIDTH_PX, MAX_BORDER_WIDTH_PX);
+        self
+    }
+
+    /// The accent as RGB.
+    pub fn accent_rgb(&self) -> [u8; 3] {
+        let hex = normalize_hex_color(&self.accent).unwrap_or_else(|| DEFAULT_ACCENT.to_owned());
+        let byte = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).unwrap_or(0);
+        [byte(1), byte(3), byte(5)]
+    }
+}
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -132,6 +180,8 @@ pub struct Settings {
     /// Changes to the default shortcut map (`action id -> chord | null`). Replaces
     /// `shortcut_modifier`, which is kept only so an older file can be migrated.
     pub shortcuts: ShortcutMap,
+    /// Accent, corner radius and border width of the native overlays.
+    pub appearance: Appearance,
 }
 
 /// `#rrggbb` (any case, optional `#`, surrounding spaces ignored) as lowercase `#rrggbb`.
@@ -159,6 +209,7 @@ impl Settings {
             normalize_hex_color(&self.highlight_color).unwrap_or(defaults.highlight_color);
         self.app_rules = self.app_rules.sanitized();
         self.shortcuts = self.shortcuts.sanitized();
+        self.appearance = self.appearance.sanitized();
         self
     }
 }
@@ -168,7 +219,7 @@ impl Default for Settings {
         Self {
             enabled: true,
             modifier: Modifier::Shift,
-            highlight_color: "#3b82f6".to_owned(),
+            highlight_color: DEFAULT_ACCENT.to_owned(),
             highlight_opacity: 0.35,
             move_mode: MoveMode::Animate,
             edge_snapping: false,
@@ -183,6 +234,7 @@ impl Default for Settings {
             layout_switcher_shortcut: true,
             app_rules: AppRules::default(),
             shortcuts: ShortcutMap::default(),
+            appearance: Appearance::default(),
         }
     }
 }
@@ -341,11 +393,23 @@ impl Config {
             .get("settings")
             .and_then(|s| s.get("shortcuts"))
             .is_some();
+        let value_had_appearance = value
+            .get("settings")
+            .and_then(|s| s.get("appearance"))
+            .is_some();
         let mut cfg: Config = match serde_json::from_value(value) {
             Ok(c) => c,
             Err(_) => return Self::quarantine(path),
         };
         // Migrations from older versions would run here, keyed on `found`.
+        // Before `appearance`, the zone overlay used `highlight_color`: a colour the
+        // user picked then (anything but the old blue default) becomes the accent.
+        let had_appearance = value_had_appearance;
+        if !had_appearance && !cfg.settings.highlight_color.eq_ignore_ascii_case("#3b82f6") {
+            if let Some(c) = normalize_hex_color(&cfg.settings.highlight_color) {
+                cfg.settings.appearance.accent = c;
+            }
+        }
         if !had_shortcut_map {
             cfg.settings.shortcuts = ShortcutMap::migrated_from(cfg.settings.shortcut_modifier);
         }
@@ -954,7 +1018,7 @@ mod hardening_tests {
         assert_eq!(st, LoadStatus::Loaded);
         assert_eq!(c.settings.highlight_opacity, 1.0);
         assert_eq!(c.settings.edge_size_px, 64);
-        assert_eq!(c.settings.highlight_color, "#3b82f6");
+        assert_eq!(c.settings.highlight_color, "#ff5b1f");
     }
 
     #[test]
@@ -1549,5 +1613,60 @@ mod tests {
         use crate::shortcuts::ShortcutAction;
         assert_eq!(c.settings.shortcuts.chord(ShortcutAction::Focus), None);
         assert!(c.settings.shortcuts.chord(ShortcutAction::Pause).is_some());
+    }
+
+    #[test]
+    fn appearance_defaults_and_limits() {
+        let a = Appearance::default();
+        assert_eq!(a.accent, "#ff5b1f");
+        assert_eq!((a.corner_radius_px, a.border_width_px), (10, 2));
+        assert_eq!(a.accent_rgb(), [0xff, 0x5b, 0x1f]);
+        assert_eq!(Settings::default().highlight_color, "#ff5b1f");
+        let wild = Appearance {
+            accent: "  #ABCDEF ".into(),
+            corner_radius_px: 99,
+            border_width_px: 0,
+        }
+        .sanitized();
+        assert_eq!(wild.accent, "#abcdef");
+        assert_eq!((wild.corner_radius_px, wild.border_width_px), (16, 1));
+        let bad = Appearance {
+            accent: "orange".into(),
+            corner_radius_px: -3,
+            border_width_px: 40,
+        }
+        .sanitized();
+        assert_eq!(bad.accent, "#ff5b1f");
+        assert_eq!((bad.corner_radius_px, bad.border_width_px), (0, 6));
+    }
+
+    #[test]
+    fn a_highlight_colour_picked_before_appearance_becomes_the_accent() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        std::fs::write(
+            &path,
+            r##"{"schema_version":1,"settings":{"highlight_color":"#22AA44"}}"##,
+        )
+        .unwrap();
+        let (c, _) = Config::load(&path).unwrap();
+        assert_eq!(c.settings.appearance.accent, "#22aa44");
+        // The old blue default is not a choice: the new accent applies.
+        std::fs::write(
+            &path,
+            r##"{"schema_version":1,"settings":{"highlight_color":"#3b82f6"}}"##,
+        )
+        .unwrap();
+        let (c, _) = Config::load(&path).unwrap();
+        assert_eq!(c.settings.appearance.accent, "#ff5b1f");
+        // Once an appearance is stored it wins.
+        std::fs::write(
+            &path,
+            r##"{"schema_version":1,"settings":{"highlight_color":"#22aa44","appearance":{"accent":"#0000ff"}}}"##,
+        )
+        .unwrap();
+        let (c, _) = Config::load(&path).unwrap();
+        assert_eq!(c.settings.appearance.accent, "#0000ff");
+        assert_eq!(c.settings.appearance.corner_radius_px, 10);
     }
 }

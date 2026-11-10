@@ -109,3 +109,6 @@ Run on a real Windows PC with the app built from the `engine` branch (automated 
 15. `Ctrl+Alt+T`: the tray icon dims, its tooltip says "Krova (paused)", the tray item is checked, new windows are not arranged; again: resumes.
 16. `Ctrl+Alt+Space` opens the switcher window on the monitor under the cursor; Esc or a click outside hides it; the second open is instant (warm). `Ctrl+Alt+/` opens the cheat sheet in the same window. A left click on the tray icon opens the quick panel near the tray. Record the latencies in `docs/measurements/popup-open-latency.md`.
 17. Rebind `pause` to a chord another app holds: the sheet shows it as in use with up to three suggestions; reset brings the defaults back. An old config with `"shortcut_modifier":"win_alt"` keeps Win+Alt for the zone shortcuts.
+
+**Appearance**
+18. Change the accent and the corner radius in Settings: the drag zones and the stack tabs use the new colour and radius at once; on a 150 % monitor the radius and borders are 1.5 times as many pixels. Border width 6: the highlighted zone's border is clearly thicker than the idle ones.

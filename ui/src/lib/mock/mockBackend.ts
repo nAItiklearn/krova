@@ -16,6 +16,7 @@ import type {
   Permission,
   Settings,
   AppRule,
+  Appearance,
   ArrangeSettings,
   FrontApp,
   PanelAnchor,
@@ -91,7 +92,7 @@ export function defaultSettings(): Settings {
   return {
     enabled: true,
     modifier: 'shift',
-    highlight_color: '#3b82f6',
+    highlight_color: '#ff5b1f',
     highlight_opacity: 0.35,
     move_mode: 'animate',
     edge_snapping: false,
@@ -106,6 +107,7 @@ export function defaultSettings(): Settings {
     layout_switcher_shortcut: true,
     app_rules: [],
     shortcuts: {},
+    appearance: { accent: '#ff5b1f', corner_radius_px: 10, border_width_px: 2 },
   };
 }
 
@@ -145,6 +147,20 @@ function initialConfig(): Config {
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
+/** Like `Appearance::sanitized`: bad colours fall back, numbers are clamped. */
+function sanitizeAppearance(a: Partial<Appearance> | undefined): Appearance {
+  const accent =
+    typeof a?.accent === 'string' && /^\s*#?[0-9a-fA-F]{6}\s*$/.test(a.accent)
+      ? `#${a.accent.trim().replace('#', '').toLowerCase()}`
+      : '#ff5b1f';
+  const int = (v: unknown, def: number, lo: number, hi: number) =>
+    typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.round(v))) : def;
+  return {
+    accent,
+    corner_radius_px: int(a?.corner_radius_px, 10, 0, 16),
+    border_width_px: int(a?.border_width_px, 2, 1, 6),
+  };
+}
 export function defaultArrange(): ArrangeSettings {
   return {
     enabled: true,
@@ -259,6 +275,7 @@ function sanitizeSettings(s: Settings): Settings {
     layout_switcher_shortcut: flag(s.layout_switcher_shortcut, defaults.layout_switcher_shortcut),
     app_rules: Array.isArray(s.app_rules) ? sanitizeRules(s.app_rules) : [],
     shortcuts: sanitizeMap(s.shortcuts),
+    appearance: sanitizeAppearance(s.appearance),
   };
 }
 

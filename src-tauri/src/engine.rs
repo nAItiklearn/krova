@@ -87,9 +87,16 @@ impl SceneState {
             zones: self.zones.clone(),
             highlight: self.highlight,
             preview: self.preview.filter(|(m, _)| *m == index).map(|(_, r)| r),
+            // The accent and the shape come from the appearance; the engine scales the
+            // shape to the monitor before showing it.
             style: OverlayStyle::from_settings(
-                &settings.highlight_color,
+                &settings.appearance.accent,
                 settings.highlight_opacity,
+            )
+            .with_shape(
+                settings.appearance.corner_radius_px,
+                settings.appearance.border_width_px,
+                1.0,
             ),
             // The zone rects already carry the gap: draw them exactly.
             gapped: settings.zone_gap_px > 0,
@@ -569,6 +576,23 @@ impl<'a> Engine<'a> {
         for (effect, slot) in planned {
             match effect {
                 Effect::Scene(s) => {
+                    let s = s.map(|mut scene| {
+                        let (appearance, scale) = {
+                            let model = lock(&shared.model);
+                            let scale = model
+                                .snapshots()
+                                .iter()
+                                .find(|m| m.rect == scene.monitor)
+                                .map_or(1.0, |m| m.scale);
+                            (model.config.settings.appearance.clone(), scale)
+                        };
+                        scene.style = scene.style.with_shape(
+                            appearance.corner_radius_px,
+                            appearance.border_width_px,
+                            scale,
+                        );
+                        scene
+                    });
                     if let Some(o) = self.overlay {
                         o.set_scene(s);
                     }

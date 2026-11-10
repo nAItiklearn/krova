@@ -28,8 +28,8 @@ test.describe('defaults', () => {
     await expect(page.getByTestId('setting-edge_snapping')).not.toBeChecked();
     await expect(page.getByTestId('setting-edge_size_px')).toBeDisabled();
     await expect(page.getByTestId('setting-edge_size_px')).toHaveValue('8');
-    await expect(page.getByTestId('setting-highlight_color')).toHaveValue('#3b82f6');
-    await expect(page.getByTestId('setting-highlight_color-picker')).toHaveValue('#3b82f6');
+    await expect(page.getByTestId('setting-highlight_color')).toHaveValue('#ff5b1f');
+    await expect(page.getByTestId('setting-highlight_color-picker')).toHaveValue('#ff5b1f');
     await expect(page.getByTestId('setting-highlight_opacity')).toHaveValue('0.35');
     await expect(page.getByText('35%', { exact: true })).toBeVisible();
     await expect(page.getByTestId('setting-theme-system')).toBeChecked();
@@ -203,7 +203,7 @@ test.describe('highlight colour validation', () => {
       await expect(page.getByText('Use a color like #3b82f6')).toBeVisible();
       await expect(hex).toHaveAccessibleDescription('Use a color like #3b82f6');
       // The picker still holds the last good colour.
-      await expect(page.getByTestId('setting-highlight_color-picker')).toHaveValue('#3b82f6');
+      await expect(page.getByTestId('setting-highlight_color-picker')).toHaveValue('#ff5b1f');
       await expect(indicator(page)).not.toHaveAttribute('data-state', 'saved');
     });
   }

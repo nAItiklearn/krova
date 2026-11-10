@@ -77,6 +77,8 @@ export interface Settings {
   app_rules: AppRule[];
   /** Changes to the default shortcut map (see `ShortcutMap`). Default {}. */
   shortcuts: ShortcutMap;
+  /** Accent, corner radius and border width of the native overlays. */
+  appearance: Appearance;
 }
 
 export interface MonitorProfile {
@@ -292,4 +294,20 @@ export type PopupLabel = 'panel' | 'switcher';
 /** Payload of the `panel-anchor` event: where the panel was opened from (the notch). */
 export interface PanelAnchor {
   rect: PxRect;
+}
+
+// ---------------------------------------------------------------- appearance
+
+/**
+ * How Krova's native overlays (zones, stack tabs, the notch) look. `highlight_opacity`
+ * stays the opacity. `highlight_color` is the old name of the accent (kept; a colour
+ * picked there before `appearance` existed was migrated to `accent`).
+ */
+export interface Appearance {
+  /** `#rrggbb`. Default `#ff5b1f`. */
+  accent: string;
+  /** Integer 0..16, logical px. Default 10. */
+  corner_radius_px: number;
+  /** Integer 1..6, logical px; the highlighted zone uses twice this. Default 2. */
+  border_width_px: number;
 }

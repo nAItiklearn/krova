@@ -186,6 +186,18 @@ Two more windows in `tauri.conf.json` (`create: false`, undecorated, transparent
 
 TS: `ShortcutMap`, `ShortcutActionState`, `ShortcutGroup`, `ShortcutStatusCode`, `ProbeResult`, `PopupLabel`, `PanelAnchor`; `NavigateTarget` gained `cheat_sheet` and `panel`.
 
+## Appearance (engine branch)
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `appearance.accent` | `#rrggbb` | `#ff5b1f` | Validated like `highlight_color` (bad values fall back to the default). Used by every native overlay: the drag zones, the stack tab strips' underline, and the notch. |
+| `appearance.corner_radius_px` | int | `10` | `0..=16` logical px; zone tiles and tabs are rounded with it (scaled to each monitor's DPI). |
+| `appearance.border_width_px` | int | `2` | `1..=6` logical px; idle zones use it, the highlighted zone twice it. |
+| `highlight_opacity` | float | `0.35` | Unchanged: still the fill opacity. |
+| `highlight_color` | `#rrggbb` | **`#ff5b1f`** (was `#3b82f6`) | Old name of the accent. Kept so older UIs and files load; the overlays read `appearance.accent`. A config written before `appearance` existed whose `highlight_color` is not the old blue default has that colour migrated into `appearance.accent`. |
+
+TS: `Appearance`.
+
 ## Engine hooks (for the wave 3 / wave 4 / notch / corners branches)
 
 `src-tauri/src/hooks.rs`. Register once at start-up: `shared.hooks.register(Arc::new(|event| { ... }))`. A hook runs on the engine thread right after the event and must return at once (send to a channel, flip a flag); never call back into the engine synchronously. No event carries a title.

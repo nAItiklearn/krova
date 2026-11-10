@@ -22,7 +22,7 @@ pub mod zone;
 
 pub use config::{
     Config, ConfigError, LoadStatus, Modifier, MonitorProfile, MoveMode, ProfileError, Settings,
-    ShortcutModifier, Theme,
+    ShortcutModifier, Theme, Appearance,
 };
 pub use edge::{edge_snap, EdgeSnap};
 pub use edit::{Axis, EditError};
