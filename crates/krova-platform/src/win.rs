@@ -822,6 +822,10 @@ impl Platform for WindowsPlatform {
     fn open_url(&self, url: &str) -> Result<(), PlatformError> {
         crate::win_shell::open_url(url)
     }
+
+    fn ui_language(&self) -> Option<u16> {
+        crate::win_shell::ui_language()
+    }
     // --- end wave4 ---
 }
 

@@ -369,6 +369,12 @@ pub trait Platform: Send + Sync {
     fn open_url(&self, _url: &str) -> Result<(), PlatformError> {
         Err(PlatformError::Unsupported)
     }
+
+    /// The OS user-interface language as a Windows LANGID (`GetUserDefaultUILanguage`),
+    /// for `Settings.language = "system"`. `None` when unknown (English is used).
+    fn ui_language(&self) -> Option<u16> {
+        None
+    }
     // --- end wave4 ---
 }
 

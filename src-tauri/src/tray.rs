@@ -17,28 +17,31 @@ pub struct TrayItems {
 }
 
 pub fn build(app: &AppHandle, state: &AppState) -> tauri::Result<()> {
+    // --- wave4 ---: labels come from the native string table (src-tauri/i18n).
+    let lang = state.wave4.language.as_str();
+    let t = |key: &str| crate::i18n::tr(lang, key);
     let enabled = CheckMenuItem::with_id(
         app,
         "enabled",
-        "Enabled",
+        t("tray.enabled"),
         true,
         state.config.settings.enabled,
         None::<&str>,
     )?;
-    let edit = MenuItem::with_id(app, "edit", "Edit layouts…", true, None::<&str>)?;
-    let settings = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
+    let edit = MenuItem::with_id(app, "edit", t("tray.edit"), true, None::<&str>)?;
+    let settings = MenuItem::with_id(app, "settings", t("tray.settings"), true, None::<&str>)?;
     let autostart = CheckMenuItem::with_id(
         app,
         "autostart",
-        "Launch at login",
+        t("tray.autostart"),
         true,
         state.autostart,
         None::<&str>,
     )?;
     // --- wave4 ---
-    let updates = MenuItem::with_id(app, "updates", "Check for updates…", true, None::<&str>)?;
+    let updates = MenuItem::with_id(app, "updates", t("tray.updates"), true, None::<&str>)?;
     // --- end wave4 ---
-    let quit = MenuItem::with_id(app, "quit", "Quit Krova", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", t("tray.quit"), true, None::<&str>)?;
     let sep_top = PredefinedMenuItem::separator(app)?;
     let sep_bottom = PredefinedMenuItem::separator(app)?;
     let menu = Menu::with_items(
@@ -56,7 +59,7 @@ pub fn build(app: &AppHandle, state: &AppState) -> tauri::Result<()> {
     )?;
 
     let mut tray = TrayIconBuilder::with_id("krova")
-        .tooltip("Krova")
+        .tooltip(t("tray.tooltip"))
         .menu(&menu)
         .on_menu_event(handle_menu_event);
     if let Some(icon) = app.default_window_icon() {
@@ -64,6 +67,21 @@ pub fn build(app: &AppHandle, state: &AppState) -> tauri::Result<()> {
     }
     tray.build(app)?;
 
+    // --- wave4 ---
+    use crate::wave4::TrayEntry::{Check, Plain};
+    crate::wave4::manage_tray_labels(
+        app,
+        lang,
+        vec![
+            ("tray.enabled", Check(enabled.clone())),
+            ("tray.edit", Plain(edit)),
+            ("tray.settings", Plain(settings)),
+            ("tray.autostart", Check(autostart.clone())),
+            ("tray.updates", Plain(updates)),
+            ("tray.quit", Plain(quit)),
+        ],
+    );
+    // --- end wave4 ---
     app.manage(TrayItems { enabled, autostart });
     Ok(())
 }
@@ -107,4 +125,7 @@ pub fn sync(app: &AppHandle, state: &AppState) {
         let _ = items.enabled.set_checked(state.config.settings.enabled);
         let _ = items.autostart.set_checked(state.autostart);
     }
+    // --- wave4 ---
+    crate::wave4::relabel_tray(app, state);
+    // --- end wave4 ---
 }

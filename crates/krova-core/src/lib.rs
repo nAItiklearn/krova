@@ -9,6 +9,7 @@ pub mod edge;
 // --- wave4 ---
 pub mod edges;
 pub mod ffm;
+pub mod i18n;
 // --- end wave4 ---
 pub mod edit;
 pub mod geometry;

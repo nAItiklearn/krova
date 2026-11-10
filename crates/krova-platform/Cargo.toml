@@ -18,6 +18,8 @@ version = "0.58"
 features = [
     "Win32_Foundation",
     "Win32_Graphics_Dwm",
+    # wave4: GetUserDefaultUILanguage (native string language)
+    "Win32_Globalization",
     "Win32_Graphics_Gdi",
     "Win32_Security",
     "Win32_System_LibraryLoader",

@@ -14,7 +14,8 @@ use krova_core::{MoveMode, PxRect, Settings};
 use krova_platform::pointer::{PointerConfig, PointerEvent, Wave4Capabilities};
 use krova_platform::{EventSink, WatchHandle, WindowId};
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, State};
+use tauri::menu::{CheckMenuItem, MenuItem};
+use tauri::{AppHandle, Emitter, Manager, State, Wry};
 
 use crate::commands::commit;
 use crate::model::{lock, AppModel, AppState, Shared};
@@ -103,10 +104,23 @@ pub struct HoverZone {
 }
 
 /// Wave 4 additions to `AppState` (flattened into it).
-#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct Wave4State {
     pub wave4_capabilities: Wave4CapabilitiesState,
     pub pointer: PointerStatus,
+    /// The language the native strings are shown in now (never `"system"`).
+    pub language: String,
+    /// What `Settings.language` may be set to, `"system"` first.
+    pub languages: Vec<LanguageOption>,
+}
+
+/// One entry of the language picker.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct LanguageOption {
+    /// The `Settings.language` value.
+    pub id: String,
+    /// The language's own name ("Deutsch", "日本語"); `"System"` for `"system"`.
+    pub name: String,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
@@ -139,6 +153,14 @@ pub fn state_extras(shared: &Shared) -> Wave4State {
             active,
             focus_refused: FOCUS_REFUSED.load(Ordering::Relaxed),
         },
+        language: crate::i18n::current_language(shared).to_owned(),
+        languages: krova_core::i18n::LANGUAGES
+            .iter()
+            .map(|(id, name)| LanguageOption {
+                id: (*id).to_owned(),
+                name: (*name).to_owned(),
+            })
+            .collect(),
     }
 }
 
@@ -378,6 +400,58 @@ pub fn open_releases_page(shared: State<'_, Arc<Shared>>) -> Result<(), String> 
     open_releases(&shared)
 }
 
+// ------------------------------------------------------------- tray labels
+
+/// Every tray entry with its string id, so the labels can follow the language.
+pub struct TrayLabels {
+    items: Vec<(&'static str, TrayEntry)>,
+    shown: Mutex<String>,
+}
+
+/// A tray entry whose text can change.
+pub enum TrayEntry {
+    Plain(MenuItem<Wry>),
+    Check(CheckMenuItem<Wry>),
+}
+
+impl TrayEntry {
+    fn set_text(&self, text: &str) {
+        let _ = match self {
+            TrayEntry::Plain(i) => i.set_text(text),
+            TrayEntry::Check(i) => i.set_text(text),
+        };
+    }
+}
+
+/// Remember the tray entries (built in `language`) for [`relabel_tray`].
+pub fn manage_tray_labels(app: &AppHandle, language: &str, items: Vec<(&'static str, TrayEntry)>) {
+    app.manage(TrayLabels {
+        items,
+        shown: Mutex::new(language.to_owned()),
+    });
+}
+
+/// After a state change: if the language changed, re-label the tray.
+pub fn relabel_tray(app: &AppHandle, state: &AppState) {
+    let Some(labels) = app.try_state::<TrayLabels>() else {
+        return;
+    };
+    let language = &state.wave4.language;
+    {
+        let mut shown = lock(&labels.shown);
+        if *shown == *language {
+            return;
+        }
+        shown.clone_from(language);
+    }
+    for (key, entry) in &labels.items {
+        entry.set_text(&crate::i18n::tr(language, key));
+    }
+    if let Some(tray) = app.tray_by_id("krova") {
+        let _ = tray.set_tooltip(Some(crate::i18n::tr(language, "tray.tooltip")));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
@@ -543,5 +617,27 @@ mod tests {
         let s = lock(&shared.model).config.settings.clone();
         assert!(s.focus_follows_mouse);
         assert_eq!(s.focus_follows_mouse_delay_ms, 150);
+    }
+
+    #[test]
+    fn the_state_names_the_language_in_use_and_the_choices() {
+        let shared = shared_with(vec![monitor("A", 0, 1.0)]);
+        let json = serde_json::to_value(crate::commands::build_state(&shared)).unwrap();
+        assert_eq!(json["config"]["settings"]["language"], "system");
+        // "system" on a platform that cannot tell: English.
+        assert_eq!(json["language"], "en");
+        let ids: Vec<&str> = json["languages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|l| l["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(ids, ["system", "en", "es", "de", "ja", "zh-Hans"]);
+        assert_eq!(json["languages"][3]["name"], "Deutsch");
+
+        crate::commands::change_settings(&shared, |s| s.language = "de".into()).unwrap();
+        assert_eq!(crate::commands::build_state(&shared).wave4.language, "de");
+        crate::commands::change_settings(&shared, |s| s.language = "fr".into()).unwrap();
+        assert_eq!(lock(&shared.model).config.settings.language, "system");
     }
 }

@@ -1,4 +1,5 @@
-//! Windows shell glue for wave 4: opening the releases page in the browser.
+//! Windows shell glue for wave 4: opening the releases page in the browser, and
+//! the display language for the native strings.
 
 use windows::core::{w, HSTRING, PCWSTR};
 use windows::Win32::UI::Shell::ShellExecuteW;
@@ -35,6 +36,12 @@ pub(crate) fn open_url(url: &str) -> Result<(), PlatformError> {
     }
 }
 
+/// The user's Windows display language (a LANGID; 0 means unknown).
+pub(crate) fn ui_language() -> Option<u16> {
+    let id = unsafe { windows::Win32::Globalization::GetUserDefaultUILanguage() };
+    (id != 0).then_some(id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -49,6 +56,11 @@ mod tests {
             open_url("http://example.com"),
             Err(PlatformError::Refused(_))
         ));
+    }
+
+    #[test]
+    fn the_display_language_is_known() {
+        assert!(ui_language().is_some());
     }
 
     /// Opens the default browser on the Krova releases page.

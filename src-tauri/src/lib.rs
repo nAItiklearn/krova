@@ -10,6 +10,9 @@ mod desktop_reconnect_tests;
 #[cfg(all(test, windows))]
 mod desktop_tests;
 mod engine;
+// --- wave4 ---
+mod i18n;
+// --- end wave4 ---
 mod model;
 mod tray;
 mod ui_window;

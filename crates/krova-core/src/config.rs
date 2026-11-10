@@ -126,6 +126,8 @@ pub struct Settings {
     pub focus_follows_mouse_delay_ms: i32,
     /// The activation modifier held over a title bar opens a small zone picker.
     pub hover_picker: bool,
+    /// Language of the native strings: "system", "en", "es", "de", "ja", "zh-Hans".
+    pub language: String,
     // --- end wave4 ---
 }
 
@@ -153,6 +155,7 @@ impl Settings {
         // --- wave4 ---
         self.focus_follows_mouse_delay_ms =
             crate::ffm::clamp_delay(self.focus_follows_mouse_delay_ms);
+        self.language = crate::i18n::sanitize_language(&self.language);
         // --- end wave4 ---
         self.highlight_color =
             normalize_hex_color(&self.highlight_color).unwrap_or(defaults.highlight_color);
@@ -182,6 +185,7 @@ impl Default for Settings {
             focus_follows_mouse: false,
             focus_follows_mouse_delay_ms: crate::ffm::DEFAULT_DELAY_MS,
             hover_picker: false,
+            language: crate::i18n::SYSTEM.to_owned(),
             // --- end wave4 ---
         }
     }
