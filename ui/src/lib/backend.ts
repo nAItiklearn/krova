@@ -7,7 +7,16 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { AppState, Axis, Layout, NavigateTarget, RestoreReport, Settings } from './bindings';
+import type {
+  AppState,
+  Axis,
+  HoverPicker,
+  Layout,
+  NavigateTarget,
+  ReservedEdges,
+  RestoreReport,
+  Settings,
+} from './bindings';
 import { createMockBackend, type DemoControls, type MockBackend } from './mock/mockBackend';
 
 export type Unlisten = () => void;
@@ -96,6 +105,21 @@ export interface Backend {
    */
   restoreWorkspace(id: string, launch: boolean): Promise<RestoreReport>;
   // --- end wave3 ---
+  // --- wave4 ---
+  /** Store a monitor's reserved edges (logical px, each clamped to 0..400). */
+  setReservedEdges(monitorId: string, reserved: ReservedEdges): Promise<AppState>;
+  /**
+   * Put the window under the hover picker into a zone of its monitor's active layout.
+   * Rejects if no picker is open or the window can no longer be moved.
+   */
+  placeHovered(zoneId: number): Promise<void>;
+  /** Open the releases page in the browser (Krova itself makes no network request). */
+  openReleasesPage(): Promise<void>;
+  /** Backend event "hover-picker": the modifier is held on a window's title bar. */
+  onHoverPicker(cb: (picker: HoverPicker) => void): Promise<Unlisten>;
+  /** Backend event "hover-picker-end": close the picker. */
+  onHoverPickerEnd(cb: () => void): Promise<Unlisten>;
+  // --- end wave4 ---
 }
 
 /** Commands reject with a string; be tolerant of Error objects too. */
@@ -150,6 +174,14 @@ export const tauriBackend: Backend = {
   deleteWorkspace: (id) => invoke<AppState>('delete_workspace', { id }),
   restoreWorkspace: (id, launch) => invoke<RestoreReport>('restore_workspace', { id, launch }),
   // --- end wave3 ---
+  // --- wave4 ---
+  setReservedEdges: (monitorId, reserved) =>
+    invoke<AppState>('set_reserved_edges', { monitorId, reserved }),
+  placeHovered: (zoneId) => invoke<void>('place_hovered', { zoneId }),
+  openReleasesPage: () => invoke<void>('open_releases_page'),
+  onHoverPicker: (cb) => listen<HoverPicker>('hover-picker', (e) => cb(e.payload)),
+  onHoverPickerEnd: (cb) => listen<null>('hover-picker-end', () => cb()),
+  // --- end wave4 ---
 };
 
 /** True when running inside the Tauri webview. */

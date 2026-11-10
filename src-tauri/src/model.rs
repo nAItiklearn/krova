@@ -149,6 +149,12 @@ pub struct AppState {
     /// Wave-3 status: capabilities, calm desk, focus dim, share-safe, restore.
     pub wave3: crate::wave3::Wave3State,
     // --- end wave3 ---
+    // --- wave4 ---
+    /// Wave 4 fields (`wave4_capabilities`, `pointer`, `language`, `languages`),
+    /// flattened into the top level. Filled in by `commands::build_state`.
+    #[serde(flatten)]
+    pub wave4: crate::wave4::Wave4State,
+    // --- end wave4 ---
 }
 
 pub struct AppModel {
@@ -197,6 +203,17 @@ impl AppModel {
         }
     }
 
+    // --- wave4 ---
+    /// The work area Krova uses on a connected monitor: the OS work area minus
+    /// the profile's reserved edges (`krova_core::edges`). This is the only place
+    /// it is computed; views, snapshots and the reconnect list all read it here.
+    fn work_of(&self, m: &MonitorInfo, profile: usize) -> PxRect {
+        self.config.monitors[profile]
+            .reserved
+            .apply(m.work, m.scale)
+    }
+    // --- end wave4 ---
+
     /// Monitors with their active layouts, in the shape the snap session wants.
     pub fn views(&self) -> Vec<MonitorView<'_>> {
         self.monitors
@@ -204,7 +221,7 @@ impl AppModel {
             .zip(&self.profile_idx)
             .map(|(m, &p)| MonitorView {
                 rect: m.descriptor.rect,
-                work: m.work,
+                work: self.work_of(m, p),
                 layout: self.config.monitors[p].active(),
             })
             .collect()
@@ -218,7 +235,7 @@ impl AppModel {
                 profile_id: self.config.monitors[p].id.clone(),
                 label: m.label.clone(),
                 rect: m.descriptor.rect,
-                work: m.work,
+                work: self.work_of(m, p),
                 scale: m.scale,
                 primary: m.primary,
             })
@@ -245,6 +262,9 @@ impl AppModel {
             // --- wave3 ---
             wave3: crate::wave3::Wave3State::default(),
             // --- end wave3 ---
+            // --- wave4 ---
+            wave4: Default::default(),
+            // --- end wave4 ---
         }
     }
 
@@ -263,7 +283,7 @@ impl AppModel {
             .zip(&self.profile_idx)
             .map(|(m, &p)| ConnectedMonitor {
                 profile_id: self.config.monitors[p].id.clone(),
-                work: m.work,
+                work: self.work_of(m, p),
             })
             .collect()
     }

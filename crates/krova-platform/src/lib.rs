@@ -33,6 +33,15 @@ pub mod win_desk;
 #[cfg(windows)]
 pub mod win_visuals;
 // --- end wave3 ---
+// --- wave4 ---
+pub mod pointer;
+#[cfg(windows)]
+pub mod win_ffm;
+#[cfg(windows)]
+pub mod win_hover;
+#[cfg(windows)]
+pub mod win_shell;
+// --- end wave4 ---
 
 pub use hotkeys::{HotkeyEvent, HotkeySpec};
 
@@ -345,6 +354,35 @@ pub trait Platform: Send + Sync {
     fn start_watcher(&self, _sink: EventSink<WatchEvent>) -> Result<WatchHandle, PlatformError> {
         Err(PlatformError::Unsupported)
     }
+
+    // --- wave4 ---
+    /// What the wave 4 features can do here (all false by default).
+    fn wave4_capabilities(&self) -> pointer::Wave4Capabilities {
+        pointer::Wave4Capabilities::default()
+    }
+
+    /// Watch for the cursor coming to rest (focus follows mouse, hover zone
+    /// picker) until the handle is dropped. `config` is read at every rest.
+    fn start_pointer_watch(
+        &self,
+        _config: Arc<pointer::PointerConfig>,
+        _sink: EventSink<pointer::PointerEvent>,
+    ) -> Result<WatchHandle, PlatformError> {
+        Err(PlatformError::Unsupported)
+    }
+
+    /// Open an `https://` URL in the default browser (the "Check for updates"
+    /// releases page). Anything that is not a plain https URL is refused.
+    fn open_url(&self, _url: &str) -> Result<(), PlatformError> {
+        Err(PlatformError::Unsupported)
+    }
+
+    /// The OS user-interface language as a Windows LANGID (`GetUserDefaultUILanguage`),
+    /// for `Settings.language = "system"`. `None` when unknown (English is used).
+    fn ui_language(&self) -> Option<u16> {
+        None
+    }
+    // --- end wave4 ---
 }
 
 /// Platform for OSes Krova does not support; every operation fails cleanly.

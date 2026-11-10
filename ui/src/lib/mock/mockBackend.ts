@@ -9,11 +9,13 @@ import type {
   AppState,
   Capabilities,
   Config,
+  HoverPicker,
   Layout,
   MonitorProfile,
   MonitorSnapshot,
   NavigateTarget,
   Permission,
+  ReservedEdges,
   Settings,
   ShortcutStatus,
 } from '../bindings';
@@ -29,6 +31,18 @@ import { templates } from './templates';
 // --- wave3 ---
 import { createWave3Mock, defaultWave3Settings, sanitizeWave3Settings } from './wave3Mock';
 // --- end wave3 ---
+// --- wave4 ---
+import {
+  DEFAULT_FOCUS_DELAY_MS,
+  LANGUAGES,
+  NO_RESERVE,
+  applyReserved,
+  clampFocusDelay,
+  resolveLanguage,
+  sanitizeLanguage,
+  sanitizeReserved,
+} from './wave4';
+// --- end wave4 ---
 
 /** localStorage key used for the optional persistence of demo edits. */
 export const STORAGE_KEY = 'krova-demo';
@@ -76,6 +90,16 @@ export interface DemoControls {
   setCapabilities(mode: CapabilitiesMode): void;
   /** Back to the initial demo state (also clears localStorage). */
   reset(): void;
+  // --- wave4 ---
+  /** As if the modifier were held on a window's title bar on that monitor. */
+  hoverPicker(monitorId?: string): HoverPicker | null;
+  /** As if the cursor had left the title bar. */
+  hoverPickerEnd(): void;
+  /** Where the last `placeHovered` put the fake window. */
+  lastPlaced(): { monitorId: string; zoneId: number } | null;
+  /** How often `openReleasesPage` was called (the demo opens nothing). */
+  releasesOpened(): number;
+  // --- end wave4 ---
 }
 
 export type MockBackend = Backend & { demo: DemoControls };
@@ -100,6 +124,12 @@ export function defaultSettings(): Settings {
     // --- wave3 ---
     ...defaultWave3Settings(),
     // --- end wave3 ---
+    // --- wave4 ---
+    focus_follows_mouse: false,
+    focus_follows_mouse_delay_ms: DEFAULT_FOCUS_DELAY_MS,
+    hover_picker: false,
+    language: 'system',
+    // --- end wave4 ---
   };
 }
 
@@ -131,6 +161,7 @@ function initialConfig(): Config {
     last_rect: { ...m.rect },
     layouts: templates(),
     active_layout: i === 0 ? 'halves' : 'thirds',
+    reserved: { ...NO_RESERVE }, // --- wave4 ---
   }));
   return {
     schema_version: 1,
@@ -187,6 +218,12 @@ function sanitizeSettings(s: Settings): Settings {
     // --- wave3 ---
     ...sanitizeWave3Settings(s),
     // --- end wave3 ---
+    // --- wave4 ---
+    focus_follows_mouse: flag(s.focus_follows_mouse, defaults.focus_follows_mouse),
+    focus_follows_mouse_delay_ms: clampFocusDelay(s.focus_follows_mouse_delay_ms),
+    hover_picker: flag(s.hover_picker, defaults.hover_picker),
+    language: sanitizeLanguage(s.language),
+    // --- end wave4 ---
   };
 }
 
@@ -289,10 +326,41 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
     };
   }
 
+  // --- wave4 ---
+  /** The demo's monitors, with each profile's reserved edges taken off the work area. */
+  function monitorSnapshots(): MonitorSnapshot[] {
+    return MONITORS.map((m) => {
+      const p = config.monitors.find((mp) => mp.id === m.profile_id);
+      return { ...m, work: applyReserved(m.work, m.scale, p?.reserved) };
+    });
+  }
+
+  function wave4State() {
+    const on = capabilitiesMode === 'all';
+    const s = config.settings;
+    const browser = typeof navigator === 'undefined' ? undefined : navigator.language;
+    return {
+      wave4_capabilities: { focus_follows_mouse: on, hover_picker: on, open_releases_page: on },
+      pointer: {
+        active: on && s.enabled && (s.focus_follows_mouse || s.hover_picker),
+        focus_refused: 0,
+      },
+      language: resolveLanguage(s.language, browser),
+      languages: LANGUAGES,
+    };
+  }
+
+  const hoverListeners = new Set<(p: HoverPicker) => void>();
+  const hoverEndListeners = new Set<() => void>();
+  let hovered: HoverPicker | null = null;
+  let lastPlaced: { monitorId: string; zoneId: number } | null = null;
+  let releasesOpened = 0;
+  // --- end wave4 ---
+
   function snapshot(): AppState {
     return clone({
       config,
-      monitors: MONITORS,
+      monitors: monitorSnapshots(),
       autostart,
       permission,
       version: '0.1.0',
@@ -302,6 +370,9 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
       // --- wave3 ---
       wave3: wave3.status(),
       // --- end wave3 ---
+      // --- wave4 ---
+      ...wave4State(),
+      // --- end wave4 ---
     });
   }
 
@@ -382,6 +453,54 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
       reset(true);
       emitState();
     },
+    // --- wave4 ---
+    hoverPicker(monitorId = MONITORS[0].profile_id) {
+      const snap = monitorSnapshots().find((m) => m.profile_id === monitorId);
+      const p = config.monitors.find((m) => m.id === monitorId);
+      const layout = p?.layouts.find((l) => l.id === p.active_layout);
+      if (!snap || !layout) return null;
+      const gap = Math.min(32, Math.max(0, config.settings.zone_gap_px));
+      const w = snap.work;
+      // krova-core zone.rs: margin of `lo` around the work area, then every zone
+      // gives up `hi` on its left/top and the rest on its right/bottom.
+      const lo = Math.floor(gap / 2);
+      const hi = gap - lo;
+      const inner = gap
+        ? { x: w.x + lo, y: w.y + lo, w: Math.max(1, w.w - gap), h: Math.max(1, w.h - gap) }
+        : w;
+      const edge = (o: number, size: number, n: number) => o + Math.round(n * size);
+      const zones = layout.zones.map((z) => {
+        const l = edge(inner.x, inner.w, z.rect.x);
+        const t = edge(inner.y, inner.h, z.rect.y);
+        const r = edge(inner.x, inner.w, z.rect.x + z.rect.w);
+        const b = edge(inner.y, inner.h, z.rect.y + z.rect.h);
+        const rect = gap
+          ? { x: l + hi, y: t + hi, w: Math.max(1, r - l - gap), h: Math.max(1, b - t - gap) }
+          : { x: l, y: t, w: r - l, h: b - t };
+        return { id: z.id, rect };
+      });
+      const window_rect = { x: w.x + 200, y: w.y + 120, w: 900, h: 600 };
+      hovered = {
+        monitor_id: monitorId,
+        window_rect,
+        cursor: [window_rect.x + 300, window_rect.y + 12],
+        layout_id: layout.id,
+        zones,
+      };
+      for (const cb of hoverListeners) cb(clone(hovered));
+      return clone(hovered);
+    },
+    hoverPickerEnd() {
+      hovered = null;
+      for (const cb of hoverEndListeners) cb();
+    },
+    lastPlaced() {
+      return lastPlaced ? { ...lastPlaced } : null;
+    },
+    releasesOpened() {
+      return releasesOpened;
+    },
+    // --- end wave4 ---
   };
 
   const backend: MockBackend = {
@@ -567,6 +686,39 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
       return report;
     },
     // --- end wave3 ---
+    // --- wave4 ---
+    async setReservedEdges(monitorId: string, reserved: ReservedEdges) {
+      profile(monitorId).reserved = sanitizeReserved(reserved);
+      persist();
+      const s = snapshot();
+      for (const cb of stateListeners) cb(clone(s));
+      return s;
+    },
+
+    async placeHovered(zoneId) {
+      if (!hovered) throw 'no window is under the picker';
+      if (!hovered.zones.some((z) => z.id === zoneId)) {
+        throw `zone ${zoneId} is not in the active layout`;
+      }
+      lastPlaced = { monitorId: hovered.monitor_id, zoneId };
+      demo.hoverPickerEnd();
+    },
+
+    // The demo never opens anything: it only counts, so tests can check the call.
+    async openReleasesPage() {
+      releasesOpened += 1;
+    },
+
+    async onHoverPicker(cb): Promise<Unlisten> {
+      hoverListeners.add(cb);
+      return () => hoverListeners.delete(cb);
+    },
+
+    async onHoverPickerEnd(cb): Promise<Unlisten> {
+      hoverEndListeners.add(cb);
+      return () => hoverEndListeners.delete(cb);
+    },
+    // --- end wave4 ---
   };
 
   return backend;

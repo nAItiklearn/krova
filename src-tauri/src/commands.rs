@@ -50,6 +50,9 @@ pub fn build_state(shared: &Shared) -> AppState {
     // --- wave3 ---
     crate::wave3::fill_state(shared, &mut state);
     // --- end wave3 ---
+    // --- wave4 ---
+    state.wave4 = crate::wave4::state_extras(shared);
+    // --- end wave4 ---
     state
 }
 
@@ -104,6 +107,9 @@ pub fn change_settings(shared: &Shared, edit: impl FnOnce(&mut Settings)) -> Res
             return Err(format!("could not change launch at login: {e}"));
         }
     }
+    // --- wave4 ---
+    crate::wave4::settings_changed(shared);
+    // --- end wave4 ---
     Ok(())
 }
 

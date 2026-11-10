@@ -10,12 +10,18 @@ mod desktop_reconnect_tests;
 #[cfg(all(test, windows))]
 mod desktop_tests;
 mod engine;
+// --- wave4 ---
+mod i18n;
+// --- end wave4 ---
 mod model;
 mod tray;
 mod ui_window;
 // --- wave3 ---
 mod wave3;
 // --- end wave3 ---
+// --- wave4 ---
+mod wave4;
+// --- end wave4 ---
 
 use std::sync::Arc;
 
@@ -57,6 +63,11 @@ pub fn run() {
             wave3::cmd::delete_workspace,
             wave3::cmd::restore_workspace,
             // --- end wave3 ---
+            // --- wave4 ---
+            wave4::set_reserved_edges,
+            wave4::place_hovered,
+            wave4::open_releases_page,
+            // --- end wave4 ---
         ])
         .on_window_event(|window, event| match event {
             // The tray keeps the app alive. By default closing the window destroys
@@ -133,5 +144,8 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // --- wave3 ---
     wave3::start(&shared);
     // --- end wave3 ---
+    // --- wave4 ---
+    wave4::start(app.handle(), &shared);
+    // --- end wave4 ---
     Ok(())
 }

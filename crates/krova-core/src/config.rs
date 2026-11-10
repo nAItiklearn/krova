@@ -129,6 +129,16 @@ pub struct Settings {
     /// Window highlight (none by default).
     pub highlight: crate::focus::HighlightSettings,
     // --- end wave3 ---
+    // --- wave4 ---
+    /// Activate the window under the cursor once it rests (opt-in).
+    pub focus_follows_mouse: bool,
+    /// How long the cursor rests first, in ms (150..=800).
+    pub focus_follows_mouse_delay_ms: i32,
+    /// The activation modifier held over a title bar opens a small zone picker.
+    pub hover_picker: bool,
+    /// Language of the native strings: "system", "en", "es", "de", "ja", "zh-Hans".
+    pub language: String,
+    // --- end wave4 ---
 }
 
 /// `#rrggbb` (any case, optional `#`, surrounding spaces ignored) as lowercase `#rrggbb`.
@@ -152,6 +162,11 @@ impl Settings {
         };
         self.edge_size_px = self.edge_size_px.clamp(2, 64);
         self.zone_gap_px = self.zone_gap_px.clamp(0, MAX_ZONE_GAP_PX);
+        // --- wave4 ---
+        self.focus_follows_mouse_delay_ms =
+            crate::ffm::clamp_delay(self.focus_follows_mouse_delay_ms);
+        self.language = crate::i18n::sanitize_language(&self.language);
+        // --- end wave4 ---
         self.highlight_color =
             normalize_hex_color(&self.highlight_color).unwrap_or(defaults.highlight_color);
         // --- wave3 ---
@@ -186,6 +201,12 @@ impl Default for Settings {
             share_safe: false,
             highlight: crate::focus::HighlightSettings::default(),
             // --- end wave3 ---
+            // --- wave4 ---
+            focus_follows_mouse: false,
+            focus_follows_mouse_delay_ms: crate::ffm::DEFAULT_DELAY_MS,
+            hover_picker: false,
+            language: crate::i18n::SYSTEM.to_owned(),
+            // --- end wave4 ---
         }
     }
 }
@@ -199,6 +220,11 @@ pub struct MonitorProfile {
     pub last_rect: PxRect,
     pub layouts: Vec<Layout>,
     pub active_layout: String,
+    // --- wave4 ---
+    /// Edges kept free for third-party docks and bars (logical px, `edges.rs`).
+    #[serde(default)]
+    pub reserved: crate::edges::ReservedEdges,
+    // --- end wave4 ---
 }
 
 impl MonitorProfile {
@@ -211,6 +237,9 @@ impl MonitorProfile {
             last_rect: d.rect,
             layouts: templates(),
             active_layout: "halves".to_owned(),
+            // --- wave4 ---
+            reserved: crate::edges::ReservedEdges::default(),
+            // --- end wave4 ---
         }
     }
 
@@ -236,6 +265,9 @@ impl MonitorProfile {
         if self.active().is_none() {
             self.active_layout = self.layouts[0].id.clone();
         }
+        // --- wave4 ---
+        self.reserved = self.reserved.sanitized();
+        // --- end wave4 ---
     }
 }
 

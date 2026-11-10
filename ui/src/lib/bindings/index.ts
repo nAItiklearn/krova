@@ -82,6 +82,16 @@ export interface Settings {
   /** Window highlight. Mode `none` by default. */
   highlight: HighlightSettings;
   // --- end wave3 ---
+  // --- wave4 ---
+  /** Activate the window under the cursor once it rests. Default false. */
+  focus_follows_mouse: boolean;
+  /** How long the cursor rests first, in ms, integer 150..800. Default 350. */
+  focus_follows_mouse_delay_ms: number;
+  /** The activation modifier held over a title bar opens a zone picker. Default false. */
+  hover_picker: boolean;
+  /** Language of the native strings (tray, notifications). Default `system`. */
+  language: Language;
+  // --- end wave4 ---
 }
 
 export interface MonitorProfile {
@@ -92,6 +102,10 @@ export interface MonitorProfile {
   last_rect: PxRect;
   layouts: Layout[];
   active_layout: string;
+  // --- wave4 ---
+  /** Edges kept free for third-party docks and bars. Missing in old configs. */
+  reserved?: ReservedEdges;
+  // --- end wave4 ---
 }
 
 export interface Config {
@@ -150,6 +164,15 @@ export interface AppState {
   // --- wave3 ---
   wave3: Wave3State;
   // --- end wave3 ---
+  // --- wave4 ---
+  wave4_capabilities: Wave4Capabilities;
+  /** The resting-cursor watcher behind focus follows mouse and the hover picker. */
+  pointer: PointerStatus;
+  /** The language the native strings are shown in now (never `system`). */
+  language: Exclude<Language, 'system'>;
+  /** The choices for `Settings.language`, `system` first. */
+  languages: LanguageOption[];
+  // --- end wave4 ---
 }
 
 /**
@@ -265,3 +288,57 @@ export interface Wave3State {
   restoring: string | null;
 }
 // --- end wave3 ---
+// --- wave4 ---
+
+/** `system` follows the Windows display language (English if Krova has no table for it). */
+export type Language = 'system' | 'en' | 'es' | 'de' | 'ja' | 'zh-Hans';
+
+export interface LanguageOption {
+  id: Language;
+  /** The language's own name ("Deutsch", "日本語"); "System" for `system`. */
+  name: string;
+}
+
+/**
+ * Logical pixels (96 dpi) kept free on each side of a monitor, integers 0..400.
+ * Krova multiplies them by the monitor scale and subtracts them from the OS work
+ * area; `MonitorSnapshot.work` is already the reduced area. If the two sides of an
+ * axis would leave less than 200 px, that axis is ignored.
+ */
+export interface ReservedEdges {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+export interface Wave4Capabilities {
+  focus_follows_mouse: boolean;
+  hover_picker: boolean;
+  open_releases_page: boolean;
+}
+
+export interface PointerStatus {
+  /** The watcher runs: a pointer feature is on and Krova is enabled. */
+  active: boolean;
+  /** Times Windows refused to activate a window since Krova started. */
+  focus_refused: number;
+}
+
+/** A zone of the hover picker, in physical pixels, gap applied. */
+export interface HoverZone {
+  id: number;
+  rect: PxRect;
+}
+
+/** Payload of the backend "hover-picker" event. Never carries a window title. */
+export interface HoverPicker {
+  /** `MonitorProfile.id` of the monitor under the cursor. */
+  monitor_id: string;
+  window_rect: PxRect;
+  /** `[x, y]`, virtual-screen pixels. */
+  cursor: [number, number];
+  layout_id: string;
+  zones: HoverZone[];
+}
+// --- end wave4 ---
