@@ -68,6 +68,11 @@ export interface Settings {
   linked_dividers: boolean;
   /** Space between zones in px, integer 0..32. Default 0. May be inert in early backends. */
   zone_gap_px: number;
+  /**
+   * Global `<shortcut_modifier>+Space` opens the layout switcher on the monitor under
+   * the cursor. Independent of `keyboard_shortcuts`. Default true.
+   */
+  layout_switcher_shortcut: boolean;
 }
 
 export interface MonitorProfile {
@@ -120,8 +125,15 @@ export interface AppState {
   autostart: boolean;
   permission: Permission;
   version: string;
+  /** The twelve shortcuts that move the focused window (`keyboard_shortcuts`). */
   shortcuts: ShortcutStatus;
   capabilities: Capabilities;
+  /**
+   * The layout switcher's own shortcut (`<shortcut_modifier>+Space`,
+   * `layout_switcher_shortcut`): `active` once the OS accepted it, `failed` has at most
+   * one sentence, e.g. "Ctrl+Alt+Shift+Space is already used by another app".
+   */
+  layout_switcher: ShortcutStatus;
 }
 
 /**
@@ -132,3 +144,11 @@ export type Axis = 'vertical' | 'horizontal';
 
 /** Payload of the backend "navigate" event. */
 export type View = 'editor' | 'settings';
+
+/**
+ * What a "navigate" event or `take_pending_view` can carry: the two views of the
+ * editor window, or `switcher` (the layout switcher, opened by its global shortcut;
+ * the monitor it is for comes from `switcher_monitor`). A UI that does not know
+ * `switcher` yet must ignore it.
+ */
+export type NavigateTarget = View | 'switcher';

@@ -21,6 +21,7 @@ use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 
+use krova_core::registry::KeyAction;
 use krova_core::ShortcutModifier;
 use windows::core::{HRESULT, PCWSTR};
 use windows::Win32::Foundation::{
@@ -32,7 +33,7 @@ use windows::Win32::System::Threading::{CreateEventW, SetEvent, INFINITE};
 use windows::Win32::UI::Accessibility::{SetWinEventHook, UnhookWinEvent, HWINEVENTHOOK};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     RegisterHotKey, UnregisterHotKey, HOT_KEY_MODIFIERS, MOD_ALT, MOD_CONTROL, MOD_NOREPEAT,
-    MOD_SHIFT, MOD_WIN, VK_LEFT, VK_RIGHT, VK_UP,
+    MOD_SHIFT, MOD_WIN, VK_LEFT, VK_RIGHT, VK_SPACE, VK_UP,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, MsgWaitForMultipleObjectsEx,
@@ -44,9 +45,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WS_POPUP,
 };
 
-use crate::hotkeys::{
-    action_for_id, refusal_message, HotkeyEvent, HotkeySpec, Key, Refusal, HOTKEYS,
-};
+use crate::hotkeys::{action_for_id, refusal_message, HotkeyEvent, HotkeySpec, Key, Refusal};
 use crate::{EventSink, HotkeyHandle, PlatformError, WatchEvent, WatchHandle, WindowId};
 
 fn os_err(e: windows::core::Error) -> PlatformError {
@@ -137,12 +136,13 @@ pub fn virtual_key(key: Key) -> u32 {
         Key::Up => u32::from(VK_UP.0),
         // '1'..'9' on the main row have the virtual-key codes of their ASCII digits.
         Key::Digit(n) => u32::from(b'0') + u32::from(n.min(9)),
+        Key::Space => u32::from(VK_SPACE.0),
     }
 }
 
 struct HotkeyReport {
-    registered: usize,
-    failed: Vec<String>,
+    accepted: Vec<KeyAction>,
+    refused: Vec<(KeyAction, String)>,
 }
 
 fn hotkey_thread(
@@ -160,26 +160,27 @@ fn hotkey_thread(
     let _ = unsafe { PeekMessageW(&mut probe, HWND::default(), 0, 0, PM_NOREMOVE) };
 
     let mut registered = Vec::new();
-    let mut failed = Vec::new();
-    for def in HOTKEYS {
+    let mut accepted = Vec::new();
+    let mut refused = Vec::new();
+    for def in spec.defs() {
         // SAFETY: a thread-bound hot key (no window); unregistered below on this thread.
         let result = unsafe { RegisterHotKey(HWND::default(), def.id, mods, virtual_key(def.key)) };
         match result {
-            Ok(()) => registered.push(def.id),
+            Ok(()) => {
+                registered.push(def.id);
+                accepted.push(def.action);
+            }
             Err(e) => {
                 let why = if e.code() == HRESULT::from_win32(ERROR_HOTKEY_ALREADY_REGISTERED.0) {
                     Refusal::InUse
                 } else {
                     Refusal::Other((e.code().0 & 0xFFFF) as u32)
                 };
-                failed.push(refusal_message(spec.modifier, def.key, why));
+                refused.push((def.action, refusal_message(spec.modifier, def.key, why)));
             }
         }
     }
-    let _ = ready.send(HotkeyReport {
-        registered: registered.len(),
-        failed,
-    });
+    let _ = ready.send(HotkeyReport { accepted, refused });
 
     pump(stop, |msg| {
         if msg.message == WM_HOTKEY {
@@ -197,8 +198,9 @@ fn hotkey_thread(
     }
 }
 
-/// Register the twelve shortcuts on a dedicated thread. Shortcuts the OS refuses
-/// are listed in the returned handle; the others work regardless.
+/// Register the requested shortcuts (the window-move group, `<mods>+Space`, or both)
+/// on a dedicated thread. Shortcuts the OS refuses are listed in the returned
+/// handle; the others work regardless.
 pub fn start_hotkeys(
     spec: HotkeySpec,
     sink: EventSink<HotkeyEvent>,
@@ -213,8 +215,8 @@ pub fn start_hotkeys(
 
     match ready_rx.recv_timeout(Duration::from_secs(2)) {
         Ok(report) => Ok(HotkeyHandle::new(
-            report.registered,
-            report.failed,
+            report.accepted,
+            report.refused,
             move || {
                 stop.signal();
                 let _ = join.join();
@@ -438,6 +440,16 @@ pub fn start_watcher(sink: EventSink<WatchEvent>) -> Result<WatchHandle, Platfor
 mod tests {
     use super::*;
 
+    /// Hot keys are per process: two tests registering the same chord at the same
+    /// time would refuse each other, so the tests that register take turns.
+    static ONE_AT_A_TIME: Mutex<()> = Mutex::new(());
+
+    fn take_turn() -> std::sync::MutexGuard<'static, ()> {
+        ONE_AT_A_TIME
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
     #[test]
     fn modifier_chords_map_to_the_right_bits() {
         assert_eq!(
@@ -473,6 +485,7 @@ mod tests {
         assert_eq!(virtual_key(Key::Right), 0x27);
         assert_eq!(virtual_key(Key::Digit(1)), 0x31);
         assert_eq!(virtual_key(Key::Digit(9)), 0x39);
+        assert_eq!(virtual_key(Key::Space), 0x20);
     }
 
     #[test]
@@ -496,12 +509,19 @@ mod tests {
     #[test]
     fn hotkeys_register_and_unregister_cleanly() {
         use std::sync::Arc;
+        let _turn = take_turn();
         // Whatever the OS refuses is reported, never an error; dropping stops the thread.
         let spec = HotkeySpec {
             modifier: ShortcutModifier::CtrlAltShift,
+            window_moves: true,
+            switcher: true,
         };
         let handle = start_hotkeys(spec, Arc::new(|_| {})).expect("thread starts");
-        assert_eq!(handle.registered() + handle.failed().len(), HOTKEYS.len());
+        assert_eq!(
+            handle.registered() + handle.failed().len(),
+            spec.defs().len()
+        );
+        assert_eq!(spec.defs().len(), 13);
         let refused_first = handle.failed().len();
         drop(handle);
         // The same chord can be registered again right away: the first
@@ -513,5 +533,70 @@ mod tests {
             "{:?}",
             handle.failed()
         );
+    }
+
+    #[test]
+    fn each_group_registers_on_its_own() {
+        use std::sync::Arc;
+        let _turn = take_turn();
+        let only = |window_moves, switcher| {
+            let spec = HotkeySpec {
+                modifier: ShortcutModifier::CtrlAltShift,
+                window_moves,
+                switcher,
+            };
+            let handle = start_hotkeys(spec, Arc::new(|_| {})).expect("thread starts");
+            let (moves, space) = (handle.window_moves(), handle.switcher());
+            // Whatever the OS refuses is reported; a group that was not asked for is empty.
+            assert_eq!(
+                moves.registered + moves.failed.len(),
+                usize::from(window_moves) * 12
+            );
+            assert_eq!(space.registered + space.failed.len(), usize::from(switcher));
+            drop(handle);
+        };
+        only(true, false);
+        only(false, true);
+        only(false, false);
+    }
+
+    /// Which `<mods>+Space` chords this PC's Windows lets a program register. Prints
+    /// a table (`-- --ignored --nocapture`); it asserts only for the default chord,
+    /// and is ignored because another running program may legitimately own it.
+    #[test]
+    #[ignore = "depends on the programs running on this PC; run by hand"]
+    fn space_chords_probe() {
+        use std::sync::Arc;
+        let _turn = take_turn();
+        for modifier in [
+            ShortcutModifier::CtrlAlt,
+            ShortcutModifier::WinAlt,
+            ShortcutModifier::CtrlAltShift,
+            ShortcutModifier::WinCtrl,
+        ] {
+            let spec = HotkeySpec {
+                modifier,
+                window_moves: false,
+                switcher: true,
+            };
+            let handle = start_hotkeys(spec, Arc::new(|_| {})).expect("thread starts");
+            let report = handle.switcher();
+            println!(
+                "{:>15}+Space: {}",
+                modifier.label(),
+                if report.registered == 1 {
+                    "registered".to_owned()
+                } else {
+                    report.failed.join("; ")
+                }
+            );
+            if modifier == ShortcutModifier::CtrlAltShift {
+                assert_eq!(
+                    report.registered, 1,
+                    "the default chord: {:?}",
+                    report.failed
+                );
+            }
+        }
     }
 }

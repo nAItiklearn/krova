@@ -49,12 +49,12 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     GetAsyncKeyState, VIRTUAL_KEY, VK_CONTROL, VK_ESCAPE, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CallNextHookEx, DispatchMessageW, GetAncestor, GetClassNameW, GetForegroundWindow, GetMessageW,
-    GetWindowLongW, GetWindowRect, GetWindowThreadProcessId, IsIconic, IsWindow, IsWindowVisible,
-    IsZoomed, PostThreadMessageW, SetWindowPos, SetWindowsHookExW, ShowWindow, TranslateMessage,
-    UnhookWindowsHookEx, WindowFromPoint, GA_ROOT, GWL_STYLE, HHOOK, MSG, MSLLHOOKSTRUCT,
-    SWP_NOACTIVATE, SWP_NOZORDER, SW_RESTORE, WH_MOUSE_LL, WM_LBUTTONDOWN, WM_LBUTTONUP,
-    WM_MOUSEMOVE, WM_QUIT, WS_CAPTION,
+    CallNextHookEx, DispatchMessageW, GetAncestor, GetClassNameW, GetCursorPos,
+    GetForegroundWindow, GetMessageW, GetWindowLongW, GetWindowRect, GetWindowThreadProcessId,
+    IsIconic, IsWindow, IsWindowVisible, IsZoomed, PostThreadMessageW, SetWindowPos,
+    SetWindowsHookExW, ShowWindow, TranslateMessage, UnhookWindowsHookEx, WindowFromPoint, GA_ROOT,
+    GWL_STYLE, HHOOK, MSG, MSLLHOOKSTRUCT, SWP_NOACTIVATE, SWP_NOZORDER, SW_RESTORE, WH_MOUSE_LL,
+    WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_QUIT, WS_CAPTION,
 };
 use winreg::enums::HKEY_CURRENT_USER;
 use winreg::RegKey;
@@ -769,6 +769,14 @@ impl Platform for WindowsPlatform {
         }
     }
 
+    fn cursor_position(&self) -> Option<(i32, i32)> {
+        let mut p = POINT::default();
+        // SAFETY: `p` is a valid out-pointer; the call fails (rather than faults)
+        // when there is no input desktop.
+        unsafe { GetCursorPos(&mut p) }.ok()?;
+        Some((p.x, p.y))
+    }
+
     fn is_movable_target(&self, window: WindowId) -> bool {
         let h = hwnd(window);
         unsafe { IsWindow(h) }.as_bool()
@@ -805,6 +813,22 @@ mod tests {
     fn window_ids_round_trip() {
         let id = WindowId(0x1234_5678);
         assert_eq!(window_id(hwnd(id)), id);
+    }
+
+    #[test]
+    fn the_cursor_is_on_one_of_the_monitors() {
+        // Needs an input desktop: a headless session reports no cursor or no monitor.
+        let p = WindowsPlatform::new();
+        let (Some((x, y)), Ok(monitors)) = (p.cursor_position(), p.monitors()) else {
+            return;
+        };
+        if monitors.is_empty() {
+            return;
+        }
+        assert!(
+            monitors.iter().any(|m| m.descriptor.rect.contains(x, y)),
+            "cursor ({x}, {y}) is on no monitor"
+        );
     }
 
     #[test]

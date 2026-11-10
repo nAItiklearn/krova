@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
 
+use krova_core::registry::KeyAction;
 use krova_core::{DragEvent, Modifier, MonitorDescriptor, PxRect};
 
 pub mod hotkeys;
@@ -54,35 +55,69 @@ pub enum WatchEvent {
     DisplayChanged,
 }
 
+/// What happened to one group of shortcuts when they were registered.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ChordReport {
+    /// How many the OS accepted.
+    pub registered: usize,
+    /// One sentence per shortcut the OS refused, ready for the settings page.
+    pub failed: Vec<String>,
+}
+
 /// Keeps the global shortcuts registered; dropping it unregisters them and stops
 /// their thread.
 pub struct HotkeyHandle {
-    registered: usize,
-    failed: Vec<String>,
+    /// What each accepted shortcut asks for.
+    accepted: Vec<KeyAction>,
+    /// What each refused shortcut asked for, and the sentence that says why.
+    refused: Vec<(KeyAction, String)>,
     stop: Option<Box<dyn FnOnce() + Send>>,
 }
 
 impl HotkeyHandle {
     pub fn new(
-        registered: usize,
-        failed: Vec<String>,
+        accepted: Vec<KeyAction>,
+        refused: Vec<(KeyAction, String)>,
         stop: impl FnOnce() + Send + 'static,
     ) -> Self {
         Self {
-            registered,
-            failed,
+            accepted,
+            refused,
             stop: Some(Box::new(stop)),
         }
     }
 
-    /// How many shortcuts the OS accepted.
+    /// How many shortcuts the OS accepted, in both groups.
     pub fn registered(&self) -> usize {
-        self.registered
+        self.accepted.len()
     }
 
-    /// One sentence per shortcut the OS refused, ready for the settings page.
-    pub fn failed(&self) -> &[String] {
-        &self.failed
+    /// One sentence per shortcut the OS refused, in both groups.
+    pub fn failed(&self) -> Vec<String> {
+        self.refused.iter().map(|(_, why)| why.clone()).collect()
+    }
+
+    fn report(&self, switcher: bool) -> ChordReport {
+        let in_group = |action: &KeyAction| (*action == KeyAction::OpenSwitcher) == switcher;
+        ChordReport {
+            registered: self.accepted.iter().filter(|a| in_group(a)).count(),
+            failed: self
+                .refused
+                .iter()
+                .filter(|(a, _)| in_group(a))
+                .map(|(_, why)| why.clone())
+                .collect(),
+        }
+    }
+
+    /// The twelve shortcuts that move the focused window.
+    pub fn window_moves(&self) -> ChordReport {
+        self.report(false)
+    }
+
+    /// `<mods>+Space`, which opens the layout switcher.
+    pub fn switcher(&self) -> ChordReport {
+        self.report(true)
     }
 }
 
@@ -277,6 +312,12 @@ pub trait Platform: Send + Sync {
         None
     }
 
+    /// Where the mouse cursor is, in the pixels of [`MonitorInfo::descriptor`]'s rect
+    /// (virtual-screen coordinates). `None` when it cannot be read.
+    fn cursor_position(&self) -> Option<(i32, i32)> {
+        None
+    }
+
     /// Whether Krova may move this window: an ordinary, visible, un-minimized
     /// application window of another program that is not protected (elevated).
     fn is_movable_target(&self, _window: WindowId) -> bool {
@@ -435,9 +476,12 @@ mod tests {
         assert!(!p.is_minimized(w));
         assert!(!p.is_maximized(w));
         assert_eq!(p.foreground_window(), None);
+        assert_eq!(p.cursor_position(), None);
         assert!(!p.is_movable_target(w));
         let spec = HotkeySpec {
             modifier: krova_core::ShortcutModifier::WinAlt,
+            window_moves: true,
+            switcher: true,
         };
         assert!(matches!(
             p.start_hotkeys(spec, Arc::new(|_| {})),
@@ -454,8 +498,11 @@ mod tests {
         let stops = Arc::new(AtomicU8::new(0));
         let s = Arc::clone(&stops);
         let hotkeys = HotkeyHandle::new(
-            2,
-            vec!["Win+Alt+3 is already used by another app".into()],
+            vec![KeyAction::PrevZone, KeyAction::NextZone],
+            vec![(
+                KeyAction::Zone(3),
+                "Win+Alt+3 is already used by another app".into(),
+            )],
             move || {
                 s.fetch_add(1, Ordering::SeqCst);
             },
@@ -472,5 +519,52 @@ mod tests {
         assert_eq!(stops.load(Ordering::SeqCst), 1);
         drop(watch);
         assert_eq!(stops.load(Ordering::SeqCst), 11);
+    }
+
+    #[test]
+    fn a_hotkey_handle_reports_the_two_groups_apart() {
+        let chord = |what: &str| format!("Ctrl+Alt+Shift+{what} is already used by another app");
+        let handle = HotkeyHandle::new(
+            vec![
+                KeyAction::PrevZone,
+                KeyAction::Zone(1),
+                KeyAction::OpenSwitcher,
+            ],
+            vec![
+                (KeyAction::Zone(2), chord("2")),
+                (KeyAction::Zone(3), chord("3")),
+            ],
+            || {},
+        );
+        assert_eq!(handle.registered(), 3);
+        assert_eq!(handle.failed(), [chord("2"), chord("3")]);
+        assert_eq!(
+            handle.window_moves(),
+            ChordReport {
+                registered: 2,
+                failed: vec![chord("2"), chord("3")]
+            }
+        );
+        assert_eq!(
+            handle.switcher(),
+            ChordReport {
+                registered: 1,
+                failed: vec![]
+            }
+        );
+
+        // The switcher chord refused while the moves are fine.
+        let handle = HotkeyHandle::new(
+            vec![KeyAction::NextZone],
+            vec![(KeyAction::OpenSwitcher, chord("Space"))],
+            || {},
+        );
+        assert_eq!(handle.window_moves().failed, Vec::<String>::new());
+        assert_eq!(handle.switcher().registered, 0);
+        assert_eq!(handle.switcher().failed, [chord("Space")]);
+
+        // Nothing requested for a group: its report is empty, not an error.
+        let handle = HotkeyHandle::new(vec![KeyAction::OpenSwitcher], vec![], || {});
+        assert_eq!(handle.window_moves(), ChordReport::default());
     }
 }

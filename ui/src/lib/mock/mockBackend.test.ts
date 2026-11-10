@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Layout } from '../bindings';
 import {
   DEMO_FAILED_SHORTCUTS,
+  DEMO_FAILED_SWITCHER_SHORTCUT,
   STORAGE_KEY,
   createMockBackend,
   defaultSettings,
@@ -205,6 +206,7 @@ describe('mock backend: new settings', () => {
     expect(s.restore_on_reconnect).toBe(true);
     expect(s.linked_dividers).toBe(true);
     expect(s.zone_gap_px).toBe(0);
+    expect(s.layout_switcher_shortcut).toBe(true);
     expect(defaultSettings()).toEqual(s);
   });
 
@@ -272,7 +274,9 @@ describe('mock backend: new settings', () => {
     delete old.linked_dividers;
     delete old.zone_gap_px;
     delete old.shortcut_modifier;
+    delete old.layout_switcher_shortcut;
     const s = (await b.saveSettings(old as typeof cur)).config.settings;
+    expect(s.layout_switcher_shortcut).toBe(true);
     expect(s.keyboard_shortcuts).toBe(true);
     expect(s.restore_on_reconnect).toBe(true);
     expect(s.linked_dividers).toBe(true);
@@ -309,7 +313,7 @@ describe('mock backend: new settings', () => {
     const persisted = JSON.parse(m.get(STORAGE_KEY) ?? '{}') as {
       config: { settings: Record<string, unknown> };
     };
-    for (const k of ['keyboard_shortcuts', 'shortcut_modifier', 'restore_on_reconnect', 'linked_dividers', 'zone_gap_px']) {
+    for (const k of ['keyboard_shortcuts', 'shortcut_modifier', 'restore_on_reconnect', 'linked_dividers', 'zone_gap_px', 'layout_switcher_shortcut']) {
       delete persisted.config.settings[k];
     }
     m.set(STORAGE_KEY, JSON.stringify(persisted));
@@ -655,5 +659,166 @@ describe('mock backend: import_layout', () => {
     const s = await b.importLayout('monitor-1', await b.exportLayout(customLayout('z')));
     s.config.monitors[0].layouts.at(-1)!.zones.length = 0;
     expect((await b.getState()).config.monitors[0].layouts.at(-1)?.zones).toHaveLength(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Layout switcher: reorder, undo of delete, target monitor, its own shortcut
+// ---------------------------------------------------------------------------
+
+describe('mock backend: layout switcher', () => {
+  const ids = async (b: ReturnType<typeof fresh>, monitor = 'monitor-1') =>
+    (await b.getState()).config.monitors.find((m) => m.id === monitor)!.layouts.map((l) => l.id);
+  const mine = (id: string): Layout => ({
+    id,
+    name: id,
+    zones: [{ id: 1, rect: { x: 0, y: 0, w: 1, h: 1 } }],
+  });
+
+  it('moveLayout puts the layout at the final index and leaves the rest in order', async () => {
+    const b = fresh();
+    expect(await ids(b)).toEqual(['halves', 'thirds', 'grid', 'priority']);
+    await b.moveLayout('monitor-1', 'priority', 0);
+    expect(await ids(b)).toEqual(['priority', 'halves', 'thirds', 'grid']);
+    await b.moveLayout('monitor-1', 'priority', 3);
+    expect(await ids(b)).toEqual(['halves', 'thirds', 'grid', 'priority']);
+    await b.moveLayout('monitor-1', 'thirds', 2);
+    expect(await ids(b)).toEqual(['halves', 'grid', 'thirds', 'priority']);
+    // Another monitor is untouched.
+    expect(await ids(b, 'monitor-2')).toEqual(['halves', 'thirds', 'grid', 'priority']);
+  });
+
+  it('moveLayout to where the layout already is succeeds and keeps the active layout', async () => {
+    const b = fresh();
+    const before = await b.getState();
+    const after = await b.moveLayout('monitor-1', 'thirds', 1);
+    expect(after.config.monitors[0].layouts).toEqual(before.config.monitors[0].layouts);
+    expect(after.config.monitors[0].active_layout).toBe('halves');
+    const moved = await b.moveLayout('monitor-1', 'halves', 3);
+    expect(moved.config.monitors[0].active_layout).toBe('halves');
+  });
+
+  it('moveLayout refuses unknown ids and positions out of range, changing nothing', async () => {
+    const b = fresh();
+    const before = await b.getState();
+    await expect(b.moveLayout('nope', 'halves', 0)).rejects.toBe('monitor nope not found');
+    await expect(b.moveLayout('monitor-1', 'ghost', 0)).rejects.toBe('layout ghost not found');
+    for (const bad of [4, 5, -1, 1.5, Number.NaN]) {
+      await expect(b.moveLayout('monitor-1', 'halves', bad)).rejects.toBe(
+        `position ${bad} is out of range (the monitor has 4 layouts)`,
+      );
+    }
+    expect(await b.getState()).toEqual(before);
+  });
+
+  it('insertLayout undoes a delete: same index, and the active layout when asked', async () => {
+    const b = fresh();
+    const profile = (await b.getState()).config.monitors[0];
+    const index = profile.layouts.findIndex((l) => l.id === 'halves');
+    const deleted = profile.layouts[index];
+    expect(profile.active_layout).toBe('halves');
+
+    const after = await b.deleteLayout('monitor-1', 'halves');
+    expect(after.config.monitors[0].active_layout).toBe('thirds');
+    const restored = await b.insertLayout('monitor-1', deleted, index, true);
+    expect(restored.config.monitors[0].layouts).toEqual(profile.layouts);
+    expect(restored.config.monitors[0].active_layout).toBe('halves');
+
+    await b.deleteLayout('monitor-1', 'grid');
+    const again = await b.insertLayout('monitor-1', profile.layouts[2], 2, false);
+    expect(again.config.monitors[0].layouts.map((l) => l.id)).toEqual([
+      'halves',
+      'thirds',
+      'grid',
+      'priority',
+    ]);
+    expect(again.config.monitors[0].active_layout).toBe('halves');
+  });
+
+  it('insertLayout accepts index == length (append) and refuses beyond it', async () => {
+    const b = fresh();
+    await b.insertLayout('monitor-1', mine('last'), 4, false);
+    expect((await ids(b)).at(-1)).toBe('last');
+    await expect(b.insertLayout('monitor-1', mine('far'), 6, false)).rejects.toBe(
+      'position 6 is out of range (the monitor has 5 layouts)',
+    );
+    await expect(b.insertLayout('monitor-1', mine('neg'), -1, false)).rejects.toMatch(
+      /out of range/,
+    );
+  });
+
+  it('insertLayout never replaces, validates the layout and respects the 64 cap', async () => {
+    const b = fresh();
+    const before = await b.getState();
+    await expect(b.insertLayout('monitor-1', mine('halves'), 0, false)).rejects.toBe(
+      'layout halves already exists',
+    );
+    const bad = { ...mine('bad'), zones: [] };
+    await expect(b.insertLayout('monitor-1', bad, 0, false)).rejects.toMatch(/no zones/);
+    await expect(b.insertLayout('nope', mine('x'), 0, false)).rejects.toBe(
+      'monitor nope not found',
+    );
+    expect(await b.getState()).toEqual(before);
+    for (let i = 4; i < 64; i += 1) await b.insertLayout('monitor-1', mine(`l${i}`), i, false);
+    await expect(b.insertLayout('monitor-1', mine('one-too-many'), 0, false)).rejects.toBe(
+      'a monitor can hold at most 64 layouts',
+    );
+  });
+
+  it('switcherMonitor reports the demo cursor monitor, or null for an unknown one', async () => {
+    const b = fresh();
+    expect(await b.switcherMonitor()).toBe('monitor-1');
+    b.demo.setSwitcherMonitor('monitor-2');
+    expect(await b.switcherMonitor()).toBe('monitor-2');
+    b.demo.setSwitcherMonitor('monitor-9');
+    expect(await b.switcherMonitor()).toBeNull();
+    b.demo.setSwitcherMonitor(null);
+    expect(await b.switcherMonitor()).toBeNull();
+  });
+
+  it('the demo can send a navigate to the switcher', async () => {
+    const b = fresh();
+    const seen: string[] = [];
+    const off = await b.onNavigate((v) => seen.push(v));
+    b.demo.navigate('switcher');
+    b.demo.navigate('settings');
+    off();
+    b.demo.navigate('editor');
+    expect(seen).toEqual(['switcher', 'settings']);
+  });
+
+  it('the switcher shortcut has its own status, apart from the window-move shortcuts', async () => {
+    const b = fresh();
+    const cur = (await b.getState()).config.settings;
+    expect((await b.getState()).layout_switcher).toEqual({ active: true, failed: [] });
+    const both = async (move: boolean, switcher: boolean) => {
+      const s = await b.saveSettings({
+        ...cur,
+        keyboard_shortcuts: move,
+        layout_switcher_shortcut: switcher,
+      });
+      return [s.shortcuts.active, s.layout_switcher.active];
+    };
+    expect(await both(true, true)).toEqual([true, true]);
+    expect(await both(false, true)).toEqual([false, true]);
+    expect(await both(true, false)).toEqual([true, false]);
+    expect(await both(false, false)).toEqual([false, false]);
+    const s = await b.saveSettings({ ...cur, layout_switcher_shortcut: false });
+    expect(s.config.settings.layout_switcher_shortcut).toBe(false);
+  });
+
+  it('shortcuts=failed also refuses the switcher chord, with one sentence', async () => {
+    const failed = createMockBackend({ persist: false, shortcuts: 'failed' });
+    const s = await failed.getState();
+    expect(s.layout_switcher).toEqual({ active: false, failed: [DEMO_FAILED_SWITCHER_SHORTCUT] });
+    const cur = s.config.settings;
+    const off = await failed.saveSettings({ ...cur, layout_switcher_shortcut: false });
+    expect(off.layout_switcher).toEqual({ active: false, failed: [] });
+    expect(off.shortcuts.failed).toEqual(DEMO_FAILED_SHORTCUTS);
+    // No platform support, or shortcuts=off: nothing registers, nothing is refused.
+    const none = createMockBackend({ persist: false, capabilities: 'none' });
+    expect((await none.getState()).layout_switcher).toEqual({ active: false, failed: [] });
+    const quiet = createMockBackend({ persist: false, shortcuts: 'off' });
+    expect((await quiet.getState()).layout_switcher).toEqual({ active: false, failed: [] });
   });
 });

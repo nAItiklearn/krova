@@ -12,10 +12,10 @@ import type {
   Layout,
   MonitorProfile,
   MonitorSnapshot,
+  NavigateTarget,
   Permission,
   Settings,
   ShortcutStatus,
-  View,
 } from '../bindings';
 import { editMoveDivider, editRemoveZone, editSplitZone, validateLayout } from './edit';
 import {
@@ -39,6 +39,8 @@ export type CapabilitiesMode = 'all' | 'none';
 
 /** What `?shortcuts=failed` reports as the shortcuts that could not be registered. */
 export const DEMO_FAILED_SHORTCUTS = ['Ctrl+Alt+Shift+3 is already used by another app'];
+/** The same, for the layout switcher's `Ctrl+Alt+Shift+Space`. */
+export const DEMO_FAILED_SWITCHER_SHORTCUT = 'Ctrl+Alt+Shift+Space is already used by another app';
 
 export interface MockOptions {
   /** Persist config edits to localStorage (default true when it is available). */
@@ -57,8 +59,10 @@ export interface MockOptions {
 
 /** Hooks for design review / e2e tests, exposed as `window.__krovaDemo`. */
 export interface DemoControls {
-  /** Behaves like the tray menu sending the "navigate" event. */
-  navigate(view: View): void;
+  /** Behaves like the tray menu (or the switcher shortcut) sending the "navigate" event. */
+  navigate(view: NavigateTarget): void;
+  /** Which monitor `switcherMonitor()` reports, as if the cursor were on it. */
+  setSwitcherMonitor(profileId: string | null): void;
   /** Change the fake permission and emit "state-changed". */
   setPermission(permission: Permission): void;
   /** Behaves like the tray "Enable/Disable" item. */
@@ -89,6 +93,7 @@ export function defaultSettings(): Settings {
     restore_on_reconnect: true,
     linked_dividers: true,
     zone_gap_px: 0,
+    layout_switcher_shortcut: true,
   };
 }
 
@@ -165,6 +170,7 @@ function sanitizeSettings(s: Settings): Settings {
     restore_on_reconnect: flag(s.restore_on_reconnect, defaults.restore_on_reconnect),
     linked_dividers: flag(s.linked_dividers, defaults.linked_dividers),
     zone_gap_px: Math.min(32, Math.max(0, gap)),
+    layout_switcher_shortcut: flag(s.layout_switcher_shortcut, defaults.layout_switcher_shortcut),
   };
 }
 
@@ -221,7 +227,9 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
   let shortcutsMode: ShortcutsMode = opts.shortcuts ?? 'ok';
   let capabilitiesMode: CapabilitiesMode = opts.capabilities ?? 'all';
 
-  const navigateListeners = new Set<(v: View) => void>();
+  const navigateListeners = new Set<(v: NavigateTarget) => void>();
+  // The demo's "cursor" is on the first monitor until a test says otherwise.
+  let switcherMonitorId: string | null = MONITORS[0].profile_id;
   const stateListeners = new Set<(s: AppState) => void>();
 
   function persist(): void {
@@ -252,6 +260,16 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
     };
   }
 
+  /** The switcher's `<mods>+Space` has its own switch and its own (single) conflict. */
+  function layoutSwitcherStatus(): ShortcutStatus {
+    const registering =
+      capabilities().shortcuts && config.settings.layout_switcher_shortcut && shortcutsMode !== 'off';
+    return {
+      active: registering && shortcutsMode !== 'failed',
+      failed: registering && shortcutsMode === 'failed' ? [DEMO_FAILED_SWITCHER_SHORTCUT] : [],
+    };
+  }
+
   function snapshot(): AppState {
     return clone({
       config,
@@ -261,6 +279,7 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
       version: '0.1.0',
       shortcuts: shortcutStatus(),
       capabilities: capabilities(),
+      layout_switcher: layoutSwitcherStatus(),
     });
   }
 
@@ -274,6 +293,7 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
     autostart = false;
     shortcutsMode = opts.shortcuts ?? 'ok';
     capabilitiesMode = opts.capabilities ?? 'all';
+    switcherMonitorId = MONITORS[0].profile_id;
     if (clearStorage && storage) {
       try {
         storage.removeItem(STORAGE_KEY);
@@ -312,6 +332,9 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
   const demo: DemoControls = {
     navigate(view) {
       for (const cb of navigateListeners) cb(view);
+    },
+    setSwitcherMonitor(profileId) {
+      switcherMonitorId = profileId;
     },
     setPermission(p) {
       permission = p;
@@ -386,8 +409,47 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
       return snapshot();
     },
 
+    async moveLayout(monitorId, layoutId, toIndex) {
+      const p = profile(monitorId);
+      const from = p.layouts.findIndex((l) => l.id === layoutId);
+      if (from < 0) throw `layout ${layoutId} not found`;
+      if (!Number.isInteger(toIndex) || toIndex < 0 || toIndex >= p.layouts.length) {
+        throw positionOutOfRange(toIndex, p.layouts.length);
+      }
+      const [moved] = p.layouts.splice(from, 1);
+      p.layouts.splice(toIndex, 0, moved);
+      persist();
+      return snapshot();
+    },
+
+    async insertLayout(monitorId, layout, index, activate) {
+      try {
+        validateLayout(layout);
+      } catch (e) {
+        throw e instanceof Error ? e.message : String(e);
+      }
+      const p = profile(monitorId);
+      if (p.layouts.some((l) => l.id === layout.id)) {
+        throw `layout ${layout.id} already exists`;
+      }
+      if (p.layouts.length >= MAX_LAYOUTS_PER_MONITOR) throw exchangeMessages.tooManyLayouts;
+      if (!Number.isInteger(index) || index < 0 || index > p.layouts.length) {
+        throw positionOutOfRange(index, p.layouts.length);
+      }
+      p.layouts.splice(index, 0, clone(layout));
+      if (activate) p.active_layout = layout.id;
+      persist();
+      return snapshot();
+    },
+
     async listTemplates() {
       return templates();
+    },
+
+    async switcherMonitor() {
+      return switcherMonitorId !== null && config.monitors.some((m) => m.id === switcherMonitorId)
+        ? switcherMonitorId
+        : null;
     },
 
     async exportLayout(layout) {
@@ -445,6 +507,11 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
   };
 
   return backend;
+}
+
+/** The wording of krova-core's `ProfileError::OutOfRange`. */
+function positionOutOfRange(index: number, len: number): string {
+  return `position ${index} is out of range (the monitor has ${len} layouts)`;
 }
 
 /** Run an edit and turn EditError into a plain string rejection, like Tauri. */

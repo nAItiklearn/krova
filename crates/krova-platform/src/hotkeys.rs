@@ -2,7 +2,10 @@
 //! one asks for, and how a refusal is worded for the user.
 //!
 //! The chord is `<modifiers>+<key>` where the modifiers come from
-//! [`krova_core::ShortcutModifier`]. Twelve shortcuts: Left, Right, Up and 1 to 9.
+//! [`krova_core::ShortcutModifier`]. Thirteen shortcuts in two groups: the twelve
+//! that move the focused window (Left, Right, Up and 1 to 9) and `Space`, which
+//! opens the layout switcher. The two groups are switched on and off separately
+//! ([`HotkeySpec`]).
 
 use krova_core::registry::KeyAction;
 use krova_core::ShortcutModifier;
@@ -15,16 +18,18 @@ pub enum Key {
     Up,
     /// `1` to `9` on the main keyboard row.
     Digit(u8),
+    Space,
 }
 
 impl Key {
-    /// Name as shown to the user (`Left`, `3`).
+    /// Name as shown to the user (`Left`, `3`, `Space`).
     pub fn label(self) -> String {
         match self {
             Key::Left => "Left".to_owned(),
             Key::Right => "Right".to_owned(),
             Key::Up => "Up".to_owned(),
             Key::Digit(n) => n.to_string(),
+            Key::Space => "Space".to_owned(),
         }
     }
 }
@@ -41,8 +46,8 @@ const fn def(id: i32, key: Key, action: KeyAction) -> HotkeyDef {
     HotkeyDef { id, key, action }
 }
 
-/// Every shortcut Krova registers, in the order it registers them.
-pub const HOTKEYS: [HotkeyDef; 12] = [
+/// Every shortcut Krova can register, in the order it registers them.
+pub const HOTKEYS: [HotkeyDef; 13] = [
     def(1, Key::Left, KeyAction::PrevZone),
     def(2, Key::Right, KeyAction::NextZone),
     def(3, Key::Up, KeyAction::NextMonitor),
@@ -55,6 +60,7 @@ pub const HOTKEYS: [HotkeyDef; 12] = [
     def(10, Key::Digit(7), KeyAction::Zone(7)),
     def(11, Key::Digit(8), KeyAction::Zone(8)),
     def(12, Key::Digit(9), KeyAction::Zone(9)),
+    def(13, Key::Space, KeyAction::OpenSwitcher),
 ];
 
 /// Which action the OS identifier `id` stands for.
@@ -85,10 +91,35 @@ pub fn refusal_message(modifier: ShortcutModifier, key: Key, why: Refusal) -> St
     }
 }
 
-/// What the app asked for when it started the shortcuts.
+/// What the app asked for when it started the shortcuts: the chord's modifiers and
+/// which of the two groups to register.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HotkeySpec {
     pub modifier: ShortcutModifier,
+    /// The twelve chords that move the focused window.
+    pub window_moves: bool,
+    /// `<mods>+Space`: open the layout switcher.
+    pub switcher: bool,
+}
+
+impl HotkeySpec {
+    /// Whether the shortcut that asks for `action` belongs to a requested group.
+    pub fn wants(self, action: KeyAction) -> bool {
+        if action == KeyAction::OpenSwitcher {
+            self.switcher
+        } else {
+            self.window_moves
+        }
+    }
+
+    /// The shortcuts to register for this request, in registration order.
+    pub fn defs(self) -> Vec<HotkeyDef> {
+        HOTKEYS
+            .iter()
+            .copied()
+            .filter(|h| self.wants(h.action))
+            .collect()
+    }
 }
 
 /// A shortcut was pressed.
@@ -103,13 +134,50 @@ mod tests {
     use std::collections::HashSet;
 
     #[test]
-    fn there_are_twelve_unique_shortcuts() {
-        assert_eq!(HOTKEYS.len(), 12);
+    fn there_are_thirteen_unique_shortcuts() {
+        assert_eq!(HOTKEYS.len(), 13);
         let ids: HashSet<i32> = HOTKEYS.iter().map(|h| h.id).collect();
-        assert_eq!(ids.len(), 12, "ids are unique");
+        assert_eq!(ids.len(), 13, "ids are unique");
         assert!(ids.iter().all(|&i| i > 0), "ids are positive");
         let labels: HashSet<String> = HOTKEYS.iter().map(|h| h.key.label()).collect();
-        assert_eq!(labels.len(), 12, "keys are unique");
+        assert_eq!(labels.len(), 13, "keys are unique");
+    }
+
+    fn spec(window_moves: bool, switcher: bool) -> HotkeySpec {
+        HotkeySpec {
+            modifier: ShortcutModifier::CtrlAltShift,
+            window_moves,
+            switcher,
+        }
+    }
+
+    #[test]
+    fn the_two_groups_are_requested_separately() {
+        let both = spec(true, true).defs();
+        assert_eq!(both.len(), 13);
+        assert_eq!(both, HOTKEYS.to_vec(), "registration order is unchanged");
+
+        let moves = spec(true, false).defs();
+        assert_eq!(moves.len(), 12);
+        assert!(moves.iter().all(|h| h.action != KeyAction::OpenSwitcher));
+        assert!(moves.iter().all(|h| h.key != Key::Space));
+
+        let switcher = spec(false, true).defs();
+        assert_eq!(switcher.len(), 1);
+        assert_eq!(switcher[0].key, Key::Space);
+        assert_eq!(switcher[0].action, KeyAction::OpenSwitcher);
+
+        assert!(spec(false, false).defs().is_empty());
+    }
+
+    #[test]
+    fn wants_follows_the_group_of_the_action() {
+        assert!(spec(true, false).wants(KeyAction::NextZone));
+        assert!(spec(true, false).wants(KeyAction::Zone(3)));
+        assert!(!spec(true, false).wants(KeyAction::OpenSwitcher));
+        assert!(spec(false, true).wants(KeyAction::OpenSwitcher));
+        assert!(!spec(false, true).wants(KeyAction::PrevZone));
+        assert!(!spec(false, true).wants(KeyAction::NextMonitor));
     }
 
     #[test]
@@ -118,6 +186,7 @@ mod tests {
         assert_eq!(find(Key::Left), KeyAction::PrevZone);
         assert_eq!(find(Key::Right), KeyAction::NextZone);
         assert_eq!(find(Key::Up), KeyAction::NextMonitor);
+        assert_eq!(find(Key::Space), KeyAction::OpenSwitcher);
         for n in 1..=9u8 {
             assert_eq!(find(Key::Digit(n)), KeyAction::Zone(n));
         }
@@ -131,7 +200,8 @@ mod tests {
             assert_eq!(action_for_id(h.id), Some(h.action));
         }
         assert_eq!(action_for_id(0), None);
-        assert_eq!(action_for_id(13), None);
+        assert_eq!(action_for_id(13), Some(KeyAction::OpenSwitcher));
+        assert_eq!(action_for_id(14), None);
         assert_eq!(action_for_id(-1), None);
     }
 
@@ -153,6 +223,10 @@ mod tests {
             chord_label(ShortcutModifier::WinCtrl, Key::Right),
             "Win+Ctrl+Right"
         );
+        assert_eq!(
+            chord_label(ShortcutModifier::CtrlAltShift, Key::Space),
+            "Ctrl+Alt+Shift+Space"
+        );
     }
 
     #[test]
@@ -164,6 +238,10 @@ mod tests {
         assert_eq!(
             refusal_message(ShortcutModifier::WinCtrl, Key::Left, Refusal::Other(87)),
             "Win+Ctrl+Left could not be registered (error 87)"
+        );
+        assert_eq!(
+            refusal_message(ShortcutModifier::CtrlAlt, Key::Space, Refusal::InUse),
+            "Ctrl+Alt+Space is already used by another app"
         );
     }
 }

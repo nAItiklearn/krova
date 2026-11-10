@@ -116,6 +116,9 @@ pub struct Settings {
     pub linked_dividers: bool,
     /// Space between zones and around the work area, in pixels (0..=32).
     pub zone_gap_px: i32,
+    /// `<shortcut_modifier>+Space` opens the layout switcher on the monitor under
+    /// the cursor. Independent of `keyboard_shortcuts`.
+    pub layout_switcher_shortcut: bool,
 }
 
 /// `#rrggbb` (any case, optional `#`, surrounding spaces ignored) as lowercase `#rrggbb`.
@@ -162,6 +165,7 @@ impl Default for Settings {
             restore_on_reconnect: true,
             linked_dividers: true,
             zone_gap_px: 0,
+            layout_switcher_shortcut: true,
         }
     }
 }
@@ -380,6 +384,68 @@ impl Config {
         Ok(())
     }
 
+    /// Reorder: the layout ends up at `to_index` (a position in the current list,
+    /// so `to_index < len`) and the ones in between shift by one. Moving a layout
+    /// to where it already is succeeds and changes nothing. The active layout is
+    /// tracked by id, so it stays active. An index outside the list is refused: the
+    /// caller's picture of the list is stale.
+    pub fn move_layout(
+        &mut self,
+        monitor_id: &str,
+        layout_id: &str,
+        to_index: usize,
+    ) -> Result<(), ProfileError> {
+        let p = self.profile_mut(monitor_id)?;
+        let from = p
+            .layouts
+            .iter()
+            .position(|l| l.id == layout_id)
+            .ok_or_else(|| ProfileError::NoSuchLayout(layout_id.to_owned()))?;
+        if to_index >= p.layouts.len() {
+            return Err(ProfileError::OutOfRange {
+                index: to_index,
+                len: p.layouts.len(),
+            });
+        }
+        let layout = p.layouts.remove(from);
+        p.layouts.insert(to_index, layout);
+        Ok(())
+    }
+
+    /// Put a layout at `index` (`index <= len`; `len` appends), optionally making it
+    /// the active one in the same step. This is the undo of [`Config::delete_layout`]:
+    /// the caller keeps the deleted layout and its old position. Unlike
+    /// [`Config::save_layout`] it never replaces: a layout id the monitor already has
+    /// is refused. The layout is validated and the layouts-per-monitor cap applies.
+    /// On any error nothing changes.
+    pub fn insert_layout(
+        &mut self,
+        monitor_id: &str,
+        layout: Layout,
+        index: usize,
+        activate: bool,
+    ) -> Result<(), ProfileError> {
+        layout.validate()?;
+        let p = self.profile_mut(monitor_id)?;
+        if p.layouts.iter().any(|l| l.id == layout.id) {
+            return Err(ProfileError::LayoutExists(layout.id));
+        }
+        if p.layouts.len() >= MAX_LAYOUTS_PER_MONITOR {
+            return Err(ProfileError::TooManyLayouts);
+        }
+        if index > p.layouts.len() {
+            return Err(ProfileError::OutOfRange {
+                index,
+                len: p.layouts.len(),
+            });
+        }
+        if activate {
+            p.active_layout.clone_from(&layout.id);
+        }
+        p.layouts.insert(index, layout);
+        Ok(())
+    }
+
     pub fn set_active_layout(
         &mut self,
         monitor_id: &str,
@@ -404,6 +470,10 @@ pub enum ProfileError {
     LastLayout,
     #[error("a monitor can hold at most 64 layouts")]
     TooManyLayouts,
+    #[error("layout {0} already exists")]
+    LayoutExists(String),
+    #[error("position {index} is out of range (the monitor has {len} layouts)")]
+    OutOfRange { index: usize, len: usize },
     #[error("invalid layout: {0}")]
     Invalid(#[from] crate::zone::LayoutError),
 }
@@ -484,6 +554,199 @@ mod profile_tests {
         assert_eq!(
             c.delete_layout(&m, "ghost"),
             Err(ProfileError::NoSuchLayout("ghost".to_owned()))
+        );
+    }
+
+    fn order(c: &Config) -> Vec<String> {
+        c.monitors[0].layouts.iter().map(|l| l.id.clone()).collect()
+    }
+
+    fn one(id: &str) -> Layout {
+        Layout::new(id, id, &[Rect::new(0.0, 0.0, 1.0, 1.0)])
+    }
+
+    #[test]
+    fn move_layout_puts_the_layout_at_the_final_index() {
+        let mut c = config_with_one_monitor();
+        let m = id(&c);
+        assert_eq!(order(&c), ["halves", "thirds", "grid", "priority"]);
+        c.move_layout(&m, "priority", 0).unwrap();
+        assert_eq!(order(&c), ["priority", "halves", "thirds", "grid"]);
+        c.move_layout(&m, "priority", 3).unwrap();
+        assert_eq!(order(&c), ["halves", "thirds", "grid", "priority"]);
+        c.move_layout(&m, "halves", 2).unwrap();
+        assert_eq!(order(&c), ["thirds", "grid", "halves", "priority"]);
+        c.move_layout(&m, "priority", 1).unwrap();
+        assert_eq!(order(&c), ["thirds", "priority", "grid", "halves"]);
+    }
+
+    #[test]
+    fn move_layout_keeps_every_layout_and_the_active_one() {
+        let mut c = config_with_one_monitor();
+        let m = id(&c);
+        c.set_active_layout(&m, "grid").unwrap();
+        let mut before = c.monitors[0].layouts.clone();
+        c.move_layout(&m, "grid", 0).unwrap();
+        c.move_layout(&m, "halves", 3).unwrap();
+        assert_eq!(c.monitors[0].active_layout, "grid");
+        let mut after = c.monitors[0].layouts.clone();
+        before.sort_by(|a, b| a.id.cmp(&b.id));
+        after.sort_by(|a, b| a.id.cmp(&b.id));
+        assert_eq!(before, after, "reordering loses and changes nothing");
+    }
+
+    #[test]
+    fn moving_a_layout_to_where_it_is_succeeds_and_changes_nothing() {
+        let mut c = config_with_one_monitor();
+        let m = id(&c);
+        let before = c.clone();
+        for (i, l) in before.monitors[0].layouts.iter().enumerate() {
+            c.move_layout(&m, &l.id, i).unwrap();
+            assert_eq!(c, before);
+        }
+    }
+
+    #[test]
+    fn move_layout_refuses_bad_input_and_changes_nothing() {
+        let mut c = config_with_one_monitor();
+        let m = id(&c);
+        let before = c.clone();
+        let len = before.monitors[0].layouts.len();
+        assert_eq!(
+            c.move_layout("nope", "halves", 0),
+            Err(ProfileError::NoSuchMonitor("nope".to_owned()))
+        );
+        assert_eq!(
+            c.move_layout(&m, "ghost", 0),
+            Err(ProfileError::NoSuchLayout("ghost".to_owned()))
+        );
+        for bad in [len, len + 1, usize::MAX] {
+            assert_eq!(
+                c.move_layout(&m, "halves", bad),
+                Err(ProfileError::OutOfRange { index: bad, len })
+            );
+        }
+        assert_eq!(c, before);
+        let err = c.move_layout(&m, "halves", 9).unwrap_err().to_string();
+        assert_eq!(
+            err,
+            "position 9 is out of range (the monitor has 4 layouts)"
+        );
+    }
+
+    #[test]
+    fn move_layout_only_touches_the_named_monitor() {
+        let mut c = config_with_one_monitor();
+        let at = |hw: &str, x: i32| MonitorDescriptor {
+            hardware_id: Some(hw.to_owned()),
+            device_path: None,
+            rect: PxRect::new(x, 0, 1920, 1080),
+        };
+        c.resolve_monitors(&[at("A", 0), at("B", 1920)]);
+        assert_eq!(c.monitors.len(), 2);
+        let first = c.monitors[0].id.clone();
+        c.move_layout(&first, "grid", 0).unwrap();
+        assert_eq!(c.monitors[0].layouts[0].id, "grid");
+        assert_eq!(c.monitors[1].layouts[0].id, "halves");
+    }
+
+    #[test]
+    fn a_delete_is_undone_by_insert_layout_at_the_old_index() {
+        let mut c = config_with_one_monitor();
+        let m = id(&c);
+        c.set_active_layout(&m, "thirds").unwrap();
+        let before = c.clone();
+        let index = 1;
+        let deleted = before.monitors[0].layouts[index].clone();
+        c.delete_layout(&m, "thirds").unwrap();
+        assert_eq!(
+            c.monitors[0].active_layout, "halves",
+            "fell back to the first"
+        );
+        c.insert_layout(&m, deleted, index, true).unwrap();
+        assert_eq!(c, before, "layouts, order and the active layout are back");
+    }
+
+    #[test]
+    fn insert_layout_without_activate_keeps_the_active_layout() {
+        let mut c = config_with_one_monitor();
+        let m = id(&c);
+        c.insert_layout(&m, one("mine"), 0, false).unwrap();
+        assert_eq!(order(&c), ["mine", "halves", "thirds", "grid", "priority"]);
+        assert_eq!(c.monitors[0].active_layout, "halves");
+    }
+
+    #[test]
+    fn insert_layout_accepts_the_end_of_the_list_and_nothing_past_it() {
+        let mut c = config_with_one_monitor();
+        let m = id(&c);
+        c.insert_layout(&m, one("last"), 4, false).unwrap();
+        assert_eq!(c.monitors[0].layouts.last().unwrap().id, "last");
+        let before = c.clone();
+        assert_eq!(
+            c.insert_layout(&m, one("far"), 6, false),
+            Err(ProfileError::OutOfRange { index: 6, len: 5 })
+        );
+        assert_eq!(
+            c.insert_layout(&m, one("max"), usize::MAX, true),
+            Err(ProfileError::OutOfRange {
+                index: usize::MAX,
+                len: 5
+            })
+        );
+        assert_eq!(c, before, "a refused insert does not even activate");
+    }
+
+    #[test]
+    fn insert_layout_never_replaces_and_validates() {
+        let mut c = config_with_one_monitor();
+        let m = id(&c);
+        let before = c.clone();
+        let same_id = Layout::new("halves", "Other", &[Rect::new(0.0, 0.0, 1.0, 1.0)]);
+        assert_eq!(
+            c.insert_layout(&m, same_id, 0, true),
+            Err(ProfileError::LayoutExists("halves".to_owned()))
+        );
+        let bad = Layout::new("bad", "Bad", &[Rect::new(0.9, 0.0, 0.5, 1.0)]);
+        assert!(matches!(
+            c.insert_layout(&m, bad, 0, false),
+            Err(ProfileError::Invalid(_))
+        ));
+        assert_eq!(
+            c.insert_layout("nope", one("ok"), 0, false),
+            Err(ProfileError::NoSuchMonitor("nope".to_owned()))
+        );
+        assert_eq!(c, before);
+    }
+
+    #[test]
+    fn insert_layout_respects_the_layouts_per_monitor_cap() {
+        let mut c = config_with_one_monitor();
+        let m = id(&c);
+        for i in c.monitors[0].layouts.len()..MAX_LAYOUTS_PER_MONITOR {
+            c.insert_layout(&m, one(&format!("l{i}")), 0, false)
+                .unwrap();
+        }
+        assert_eq!(c.monitors[0].layouts.len(), MAX_LAYOUTS_PER_MONITOR);
+        let before = c.clone();
+        assert_eq!(
+            c.insert_layout(&m, one("one-too-many"), 0, true),
+            Err(ProfileError::TooManyLayouts)
+        );
+        assert_eq!(c, before);
+    }
+
+    #[test]
+    fn duplicate_layout_ids_from_a_hand_edited_file_move_the_first_match() {
+        // Ids are not forced unique on load; the first one wins everywhere.
+        let mut c = config_with_one_monitor();
+        let m = id(&c);
+        let dup = c.monitors[0].layouts[0].clone();
+        c.monitors[0].layouts.push(dup);
+        c.move_layout(&m, "halves", 2).unwrap();
+        assert_eq!(
+            order(&c),
+            ["thirds", "grid", "halves", "priority", "halves"]
         );
     }
 
@@ -581,6 +844,7 @@ mod hardening_tests {
         assert!(d.restore_on_reconnect);
         assert!(d.linked_dividers);
         assert_eq!(d.zone_gap_px, 0);
+        assert!(d.layout_switcher_shortcut);
         // Settings that are already valid are left alone by sanitising.
         assert_eq!(d.clone().sanitized(), d);
     }
@@ -606,6 +870,33 @@ mod hardening_tests {
         assert_eq!(c.settings.restore_on_reconnect, d.restore_on_reconnect);
         assert_eq!(c.settings.linked_dividers, d.linked_dividers);
         assert_eq!(c.settings.zone_gap_px, d.zone_gap_px);
+        assert_eq!(
+            c.settings.layout_switcher_shortcut,
+            d.layout_switcher_shortcut
+        );
+    }
+
+    #[test]
+    fn the_switcher_shortcut_is_its_own_switch() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("config.json");
+        fs::write(
+            &p,
+            r#"{"schema_version":1,"settings":{"layout_switcher_shortcut":false}}"#,
+        )
+        .unwrap();
+        let (c, _) = Config::load(&p).unwrap();
+        assert!(!c.settings.layout_switcher_shortcut);
+        assert!(
+            c.settings.keyboard_shortcuts,
+            "the move shortcuts are unaffected"
+        );
+        let s = Settings {
+            keyboard_shortcuts: false,
+            ..Settings::default()
+        }
+        .sanitized();
+        assert!(s.layout_switcher_shortcut, "and the other way round");
     }
 
     #[test]
@@ -624,6 +915,7 @@ mod hardening_tests {
         assert_eq!(json["shortcut_modifier"], "ctrl_alt_shift");
         assert_eq!(json["keyboard_shortcuts"], true);
         assert_eq!(json["zone_gap_px"], 0);
+        assert_eq!(json["layout_switcher_shortcut"], true);
     }
 
     #[test]

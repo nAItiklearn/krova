@@ -27,7 +27,8 @@ use krova_core::{
 };
 use krova_platform::overlay::{Overlay, OverlayScene, OverlayStyle};
 use krova_platform::{
-    EventSink, HotkeyEvent, HotkeySpec, InputEvent, PlatformError, WatchEvent, WindowId,
+    ChordReport, EventSink, HotkeyEvent, HotkeyHandle, HotkeySpec, InputEvent, PlatformError,
+    WatchEvent, WindowId,
 };
 
 use crate::actions::{classify_change, plan_key_move, same_place, Change, Slot};
@@ -272,25 +273,65 @@ fn start_watcher(shared: &Shared, tx: &Sender<Msg>) {
     }
 }
 
-/// (Re)register the global shortcuts to match the settings: on only while Krova is
-/// enabled and `keyboard_shortcuts` is set, with the chosen modifier. Safe to call
-/// whenever settings change; the old registration is released first. The result
-/// (and any chords the OS refused) is stored for the UI.
+/// Which shortcut groups the settings ask for: the twelve that move the focused
+/// window (`keyboard_shortcuts`) and `<mods>+Space` for the layout switcher
+/// (`layout_switcher_shortcut`), each only while Krova is enabled, both with the
+/// chosen modifier. `None` when neither is wanted.
+pub fn hotkey_request(settings: &Settings) -> Option<HotkeySpec> {
+    let window_moves = settings.enabled && settings.keyboard_shortcuts;
+    let switcher = settings.enabled && settings.layout_switcher_shortcut;
+    (window_moves || switcher).then_some(HotkeySpec {
+        modifier: settings.shortcut_modifier,
+        window_moves,
+        switcher,
+    })
+}
+
+/// What the UI is told after the OS answered: the status of the window-move
+/// shortcuts and of the switcher's shortcut. A group that was not requested has
+/// nothing registered and nothing refused, so it reads as inactive and empty.
+pub fn shortcut_statuses(handle: &HotkeyHandle) -> (ShortcutStatus, ShortcutStatus) {
+    let status = |report: ChordReport| ShortcutStatus {
+        active: report.registered > 0,
+        failed: report.failed,
+    };
+    (status(handle.window_moves()), status(handle.switcher()))
+}
+
+/// Statuses for the case that the shortcut thread could not even be started.
+fn unstarted_statuses(spec: HotkeySpec, why: &str) -> (ShortcutStatus, ShortcutStatus) {
+    let failed = |wanted: bool, what: &str| ShortcutStatus {
+        active: false,
+        failed: if wanted {
+            vec![format!("{what} could not be started: {why}")]
+        } else {
+            Vec::new()
+        },
+    };
+    (
+        failed(spec.window_moves, "Keyboard shortcuts"),
+        failed(spec.switcher, "The layout switcher shortcut"),
+    )
+}
+
+/// (Re)register the global shortcuts to match the settings (see [`hotkey_request`]).
+/// Safe to call whenever settings change; the old registration is released first.
+/// The result (and any chords the OS refused) is stored for the UI.
 pub fn apply_shortcuts(shared: &Shared) {
     let _one_at_a_time = lock(&shared.shortcut_gate);
-    let (wanted, modifier) = {
-        let model = lock(&shared.model);
-        let s = &model.config.settings;
-        (s.enabled && s.keyboard_shortcuts, s.shortcut_modifier)
-    };
+    let spec = hotkey_request(&lock(&shared.model).config.settings);
     // Release the old chords before taking the new ones (they may overlap).
     let old = {
         let mut features = lock(&shared.features);
         features.shortcuts = ShortcutStatus::default();
+        features.layout_switcher = ShortcutStatus::default();
         features.hotkeys.take()
     };
     drop(old);
-    if !wanted || !shared.platform.capabilities().shortcuts {
+    let Some(spec) = spec else {
+        return;
+    };
+    if !shared.platform.capabilities().shortcuts {
         return;
     }
     let Some(tx) = lock(&shared.engine_tx).clone() else {
@@ -299,22 +340,20 @@ pub fn apply_shortcuts(shared: &Shared) {
     let sink: EventSink<HotkeyEvent> = Arc::new(move |ev| {
         let _ = tx.send(Msg::Hotkey(ev.action));
     });
-    match shared.platform.start_hotkeys(HotkeySpec { modifier }, sink) {
+    match shared.platform.start_hotkeys(spec, sink) {
         Ok(handle) => {
-            let status = ShortcutStatus {
-                active: handle.registered() > 0,
-                failed: handle.failed().to_vec(),
-            };
+            let (shortcuts, layout_switcher) = shortcut_statuses(&handle);
             let mut features = lock(&shared.features);
-            features.shortcuts = status;
+            features.shortcuts = shortcuts;
+            features.layout_switcher = layout_switcher;
             features.hotkeys = Some(handle);
         }
         Err(e) => {
             eprintln!("krova: keyboard shortcuts are unavailable: {e}");
-            lock(&shared.features).shortcuts = ShortcutStatus {
-                active: false,
-                failed: vec![format!("Keyboard shortcuts could not be started: {e}")],
-            };
+            let (shortcuts, layout_switcher) = unstarted_statuses(spec, &e.to_string());
+            let mut features = lock(&shared.features);
+            features.shortcuts = shortcuts;
+            features.layout_switcher = layout_switcher;
         }
     }
 }
@@ -476,6 +515,10 @@ impl<'a> Engine<'a> {
     // ------------------------------------------------------------ keyboard
 
     fn on_hotkey(&mut self, action: KeyAction) {
+        if action == KeyAction::OpenSwitcher {
+            self.open_switcher();
+            return;
+        }
         let shared = self.shared;
         let (active, gap, animate) = {
             let model = lock(&shared.model);
@@ -521,6 +564,33 @@ impl<'a> Engine<'a> {
         match platform.place_window(window, planned.target, planned.work, animate) {
             Ok(done) => self.remember(window, planned.slot, done),
             Err(e) => eprintln!("krova: could not move the window: {e}"),
+        }
+    }
+
+    /// `<mods>+Space`: remember the monitor under the cursor and ask the shell to
+    /// show the layout switcher. Nothing happens while the feature is off, and
+    /// with no monitor connected there is nothing to switch.
+    fn open_switcher(&mut self) {
+        let shared = self.shared;
+        let wanted = {
+            let model = lock(&shared.model);
+            let s = &model.config.settings;
+            s.enabled && s.layout_switcher_shortcut
+        };
+        if !wanted {
+            return;
+        }
+        // A monitor plugged in a moment ago must count: refresh the list first.
+        self.notice_monitor_changes();
+        let cursor = shared.platform.cursor_position();
+        let Some(target) = lock(&shared.model).monitor_for_switcher(cursor) else {
+            return;
+        };
+        *lock(&shared.switcher_monitor) = Some(target);
+        // Take the opener out of its lock first: opening can create the window.
+        let open = lock(&shared.open_view).clone();
+        if let Some(open) = open {
+            open("switcher");
         }
     }
 
@@ -1016,5 +1086,322 @@ mod tests {
             &Settings::default(),
         );
         assert!(fx.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod switcher_tests {
+    use super::*;
+    use crate::model::AppModel;
+    use krova_core::{Config, Modifier, MonitorDescriptor, ShortcutModifier};
+    use krova_platform::{Capabilities, InputHandle, MonitorInfo, Permission, Platform};
+    use std::path::PathBuf;
+    use std::sync::Mutex;
+
+    /// A desk with monitors and a cursor that tests move around, and shortcuts that
+    /// are "registered" by recording what was asked for.
+    struct Desk {
+        monitors: Mutex<Vec<MonitorInfo>>,
+        cursor: Mutex<Option<(i32, i32)>>,
+        hotkey_requests: Mutex<Vec<HotkeySpec>>,
+        refuse_space: bool,
+    }
+
+    impl Platform for Desk {
+        fn monitors(&self) -> Result<Vec<MonitorInfo>, PlatformError> {
+            Ok(lock(&self.monitors).clone())
+        }
+        fn place_window(
+            &self,
+            _: WindowId,
+            _: PxRect,
+            _: PxRect,
+            _: bool,
+        ) -> Result<PxRect, PlatformError> {
+            Err(PlatformError::Unsupported)
+        }
+        fn start_input(
+            &self,
+            _: Modifier,
+            _: Sender<InputEvent>,
+        ) -> Result<InputHandle, PlatformError> {
+            Err(PlatformError::Unsupported)
+        }
+        fn autostart_enabled(&self) -> Result<bool, PlatformError> {
+            Ok(false)
+        }
+        fn set_autostart(&self, _: bool) -> Result<(), PlatformError> {
+            Ok(())
+        }
+        fn create_overlay(&self) -> Result<Box<dyn Overlay>, PlatformError> {
+            Err(PlatformError::Unsupported)
+        }
+        fn permission(&self) -> Permission {
+            Permission::NotRequired
+        }
+        fn capabilities(&self) -> Capabilities {
+            Capabilities {
+                shortcuts: true,
+                window_memory: false,
+            }
+        }
+        fn cursor_position(&self) -> Option<(i32, i32)> {
+            *lock(&self.cursor)
+        }
+        fn start_hotkeys(
+            &self,
+            spec: HotkeySpec,
+            _: EventSink<HotkeyEvent>,
+        ) -> Result<HotkeyHandle, PlatformError> {
+            lock(&self.hotkey_requests).push(spec);
+            let mut accepted: Vec<KeyAction> = Vec::new();
+            let mut refused = Vec::new();
+            for def in spec.defs() {
+                if self.refuse_space && def.action == KeyAction::OpenSwitcher {
+                    refused.push((def.action, "Ctrl+Alt+Shift+Space is taken".to_owned()));
+                } else {
+                    accepted.push(def.action);
+                }
+            }
+            Ok(HotkeyHandle::new(accepted, refused, || {}))
+        }
+    }
+
+    fn monitor(hw: &str, x: i32, primary: bool) -> MonitorInfo {
+        MonitorInfo {
+            descriptor: MonitorDescriptor {
+                hardware_id: Some(hw.to_owned()),
+                device_path: None,
+                rect: PxRect::new(x, 0, 1920, 1080),
+            },
+            work: PxRect::new(x, 0, 1920, 1040),
+            scale: 1.0,
+            label: format!("Display {hw}"),
+            primary,
+        }
+    }
+
+    fn two() -> Vec<MonitorInfo> {
+        vec![monitor("A", 0, true), monitor("B", 1920, false)]
+    }
+
+    fn desk(
+        monitors: Vec<MonitorInfo>,
+        cursor: Option<(i32, i32)>,
+        refuse_space: bool,
+    ) -> Arc<Desk> {
+        Arc::new(Desk {
+            monitors: Mutex::new(monitors),
+            cursor: Mutex::new(cursor),
+            hotkey_requests: Mutex::new(Vec::new()),
+            refuse_space,
+        })
+    }
+
+    type Opened = Arc<Mutex<Vec<&'static str>>>;
+
+    /// Shared state whose model already knows `known`, plus a recorder for the
+    /// views the engine asks the shell to open.
+    fn shared_on(desk: &Arc<Desk>, known: Vec<MonitorInfo>) -> (Shared, Opened) {
+        let mut model = AppModel::new(Config::default(), PathBuf::from("unused.json"), false);
+        model.refresh_monitors(known).unwrap();
+        let shared = Shared::new(model, desk.clone());
+        let opened: Opened = Arc::new(Mutex::new(Vec::new()));
+        let record = Arc::clone(&opened);
+        *lock(&shared.open_view) = Some(Arc::new(move |view| lock(&record).push(view)));
+        (shared, opened)
+    }
+
+    fn press(shared: &Shared) {
+        Engine::new(shared, None).on_hotkey(KeyAction::OpenSwitcher);
+    }
+
+    #[test]
+    fn the_shortcut_opens_the_switcher_on_the_monitor_under_the_cursor() {
+        let desk = desk(two(), Some((2500, 300)), false);
+        let (shared, opened) = shared_on(&desk, two());
+        press(&shared);
+        assert_eq!(lock(&shared.switcher_monitor).as_deref(), Some("monitor-2"));
+        assert_eq!(*lock(&opened), ["switcher"]);
+
+        *lock(&desk.cursor) = Some((100, 100));
+        press(&shared);
+        assert_eq!(lock(&shared.switcher_monitor).as_deref(), Some("monitor-1"));
+        assert_eq!(*lock(&opened), ["switcher", "switcher"]);
+    }
+
+    #[test]
+    fn an_unreadable_cursor_means_the_primary_monitor() {
+        let desk = desk(two(), None, false);
+        let (shared, opened) = shared_on(&desk, two());
+        press(&shared);
+        assert_eq!(lock(&shared.switcher_monitor).as_deref(), Some("monitor-1"));
+        assert_eq!(lock(&opened).len(), 1);
+    }
+
+    #[test]
+    fn a_monitor_plugged_in_a_moment_ago_counts() {
+        // The model only knows A; the desk now also has B with the cursor on it.
+        let desk = desk(two(), Some((3000, 10)), false);
+        let (shared, opened) = shared_on(&desk, vec![monitor("A", 0, true)]);
+        press(&shared);
+        assert_eq!(lock(&shared.switcher_monitor).as_deref(), Some("monitor-2"));
+        assert_eq!(lock(&opened).len(), 1);
+    }
+
+    #[test]
+    fn nothing_happens_while_the_feature_or_krova_is_off() {
+        let desk = desk(two(), Some((100, 100)), false);
+        let (shared, opened) = shared_on(&desk, two());
+        lock(&shared.model).config.settings.layout_switcher_shortcut = false;
+        press(&shared);
+        lock(&shared.model).config.settings.layout_switcher_shortcut = true;
+        lock(&shared.model).config.settings.enabled = false;
+        press(&shared);
+        assert!(lock(&opened).is_empty());
+        assert_eq!(*lock(&shared.switcher_monitor), None);
+    }
+
+    #[test]
+    fn the_switcher_does_not_depend_on_the_window_move_shortcuts() {
+        let desk = desk(two(), Some((100, 100)), false);
+        let (shared, opened) = shared_on(&desk, two());
+        lock(&shared.model).config.settings.keyboard_shortcuts = false;
+        press(&shared);
+        assert_eq!(lock(&opened).len(), 1);
+    }
+
+    #[test]
+    fn with_no_monitor_there_is_nothing_to_switch() {
+        let desk = desk(vec![], Some((100, 100)), false);
+        let (shared, opened) = shared_on(&desk, vec![]);
+        press(&shared);
+        assert!(lock(&opened).is_empty());
+        assert_eq!(*lock(&shared.switcher_monitor), None);
+    }
+
+    #[test]
+    fn without_a_shell_the_target_is_still_recorded() {
+        let desk = desk(two(), Some((100, 100)), false);
+        let (shared, _) = shared_on(&desk, two());
+        *lock(&shared.open_view) = None;
+        press(&shared);
+        assert_eq!(lock(&shared.switcher_monitor).as_deref(), Some("monitor-1"));
+    }
+
+    #[test]
+    fn the_settings_decide_which_shortcut_groups_are_requested() {
+        let ask = |enabled, moves, switcher| {
+            hotkey_request(&Settings {
+                enabled,
+                keyboard_shortcuts: moves,
+                layout_switcher_shortcut: switcher,
+                shortcut_modifier: ShortcutModifier::CtrlAlt,
+                ..Settings::default()
+            })
+        };
+        let spec = |window_moves, switcher| {
+            Some(HotkeySpec {
+                modifier: ShortcutModifier::CtrlAlt,
+                window_moves,
+                switcher,
+            })
+        };
+        assert_eq!(ask(true, true, true), spec(true, true));
+        assert_eq!(ask(true, true, false), spec(true, false));
+        assert_eq!(ask(true, false, true), spec(false, true));
+        assert_eq!(ask(true, false, false), None);
+        // Krova disabled switches both off.
+        assert_eq!(ask(false, true, true), None);
+        assert_eq!(
+            hotkey_request(&Settings::default()),
+            Some(HotkeySpec {
+                modifier: ShortcutModifier::CtrlAltShift,
+                window_moves: true,
+                switcher: true,
+            }),
+            "the defaults ask for both, with Ctrl+Alt+Shift"
+        );
+    }
+
+    #[test]
+    fn registration_results_are_reported_per_group() {
+        let desk = desk(two(), None, true);
+        let (shared, _) = shared_on(&desk, two());
+        *lock(&shared.engine_tx) = Some(mpsc::channel::<Msg>().0);
+
+        apply_shortcuts(&shared);
+        {
+            let f = lock(&shared.features);
+            assert_eq!(
+                f.shortcuts,
+                ShortcutStatus {
+                    active: true,
+                    failed: vec![]
+                }
+            );
+            assert_eq!(
+                f.layout_switcher,
+                ShortcutStatus {
+                    active: false,
+                    failed: vec!["Ctrl+Alt+Shift+Space is taken".to_owned()]
+                },
+                "the refused switcher chord does not disturb the move shortcuts"
+            );
+        }
+
+        // Only the switcher wanted: the move group is not requested at all.
+        {
+            let mut model = lock(&shared.model);
+            model.config.settings.keyboard_shortcuts = false;
+            model.config.settings.layout_switcher_shortcut = true;
+        }
+        apply_shortcuts(&shared);
+        let asked = lock(&desk.hotkey_requests).clone();
+        assert_eq!(asked.len(), 2);
+        assert!(asked[0].window_moves && asked[0].switcher);
+        assert!(!asked[1].window_moves && asked[1].switcher);
+        assert_eq!(lock(&shared.features).shortcuts, ShortcutStatus::default());
+
+        // Both off: everything released, nothing requested again.
+        lock(&shared.model).config.settings.layout_switcher_shortcut = false;
+        apply_shortcuts(&shared);
+        assert_eq!(lock(&desk.hotkey_requests).len(), 2);
+        let f = lock(&shared.features);
+        assert!(f.hotkeys.is_none());
+        assert_eq!(f.layout_switcher, ShortcutStatus::default());
+    }
+
+    #[test]
+    fn a_working_switcher_chord_reads_as_active_with_nothing_failed() {
+        let desk = desk(two(), None, false);
+        let (shared, _) = shared_on(&desk, two());
+        *lock(&shared.engine_tx) = Some(mpsc::channel::<Msg>().0);
+        apply_shortcuts(&shared);
+        let f = lock(&shared.features);
+        assert!(f.shortcuts.active && f.shortcuts.failed.is_empty());
+        assert!(f.layout_switcher.active && f.layout_switcher.failed.is_empty());
+    }
+
+    #[test]
+    fn a_shortcut_thread_that_cannot_start_is_reported_for_the_requested_groups() {
+        let spec = HotkeySpec {
+            modifier: ShortcutModifier::CtrlAltShift,
+            window_moves: false,
+            switcher: true,
+        };
+        let (moves, switcher) = unstarted_statuses(spec, "no thread");
+        assert_eq!(moves, ShortcutStatus::default());
+        assert!(!switcher.active);
+        assert_eq!(
+            switcher.failed,
+            ["The layout switcher shortcut could not be started: no thread"]
+        );
+        let both = HotkeySpec {
+            window_moves: true,
+            ..spec
+        };
+        let (moves, _) = unstarted_statuses(both, "x");
+        assert_eq!(moves.failed, ["Keyboard shortcuts could not be started: x"]);
     }
 }

@@ -35,7 +35,7 @@ const DELIVERY_DELAY: Duration = Duration::from_millis(250);
 /// What the window should show next, and whether its page is ready for events.
 #[derive(Default)]
 pub struct UiState {
-    // `&'static str`, not `String`: only the two known views can ever be parked, and
+    // `&'static str`, not `String`: only the known views can ever be parked, and
     // a plain-data type keeps unit-test binaries from linking the whole webview
     // stack (a shared `Option<String>` drop-glue symbol from the `tauri` crate would).
     pending_view: Mutex<Option<&'static str>>,
@@ -44,11 +44,13 @@ pub struct UiState {
     creating: Mutex<()>,
 }
 
-/// The names of the two views the UI has; anything else is not a view.
+/// The names a "navigate" can carry: the editor window's two views and `switcher`,
+/// the layout switcher opened by its global shortcut. Anything else is not a view.
 fn known_view(name: &str) -> Option<&'static str> {
     match name {
         "editor" => Some("editor"),
         "settings" => Some("settings"),
+        "switcher" => Some("switcher"),
         _ => None,
     }
 }
@@ -207,15 +209,29 @@ mod tests {
     }
 
     #[test]
-    fn only_the_two_known_views_can_be_parked() {
+    fn only_the_known_views_can_be_parked() {
         let ui = UiState::default();
         ui.park("settings");
         ui.park("../../etc/passwd");
         ui.park("");
         ui.park("Settings");
+        ui.park("Switcher");
         assert_eq!(ui.take(), Some("settings"), "unknown names change nothing");
         ui.park("<script>");
         assert_eq!(ui.take(), None);
+    }
+
+    #[test]
+    fn the_switcher_can_be_parked_and_the_latest_request_wins() {
+        let ui = UiState::default();
+        ui.park("switcher");
+        assert_eq!(ui.take(), Some("switcher"));
+        ui.park("editor");
+        ui.park("switcher");
+        assert_eq!(ui.take(), Some("switcher"));
+        ui.park("switcher");
+        ui.park("settings");
+        assert_eq!(ui.take(), Some("settings"));
     }
 
     #[test]

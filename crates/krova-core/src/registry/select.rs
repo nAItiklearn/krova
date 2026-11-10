@@ -21,6 +21,9 @@ pub enum KeyAction {
     Zone(u8),
     /// `<mods>+Up`: the next monitor, keeping the zone number.
     NextMonitor,
+    /// `<mods>+Space`: open the layout switcher. It does not move a window, so
+    /// [`plan_keyboard_move`] has nothing to plan for it.
+    OpenSwitcher,
 }
 
 /// A zone on a monitor (index into the monitor list the caller passed in).
@@ -166,6 +169,7 @@ pub fn plan_keyboard_move(
     let here = monitors.get(from)?;
     let layout = here.layout.filter(|l| !l.zones.is_empty());
     match action {
+        KeyAction::OpenSwitcher => None,
         KeyAction::PrevZone | KeyAction::NextZone => {
             let layout = layout?;
             let forward = action == KeyAction::NextZone;
@@ -539,6 +543,20 @@ mod tests {
         let e = [view(0, Some(&empty))];
         assert_eq!(plan_keyboard_move(KeyAction::PrevZone, &e, 0, None), None);
         assert_eq!(plan_keyboard_move(KeyAction::Zone(1), &e, 0, None), None);
+    }
+
+    #[test]
+    fn opening_the_switcher_is_not_a_window_move() {
+        let h = halves();
+        let v = [view(0, Some(&h)), view(1920, Some(&h))];
+        for from in 0..2 {
+            for zone in [None, Some(1), Some(2)] {
+                assert_eq!(
+                    plan_keyboard_move(KeyAction::OpenSwitcher, &v, from, zone),
+                    None
+                );
+            }
+        }
     }
 
     #[test]

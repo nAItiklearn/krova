@@ -35,9 +35,18 @@ impl From<AxisArg> for Axis {
 pub fn build_state(shared: &Shared) -> AppState {
     let autostart = shared.platform.autostart_enabled().unwrap_or(false);
     let permission = shared.platform.permission();
-    let shortcuts = lock(&shared.features).shortcuts.clone();
+    let (shortcuts, layout_switcher) = {
+        let features = lock(&shared.features);
+        (features.shortcuts.clone(), features.layout_switcher.clone())
+    };
     let capabilities = shared.platform.capabilities();
-    lock(&shared.model).state(autostart, permission, shortcuts, capabilities)
+    lock(&shared.model).state(
+        autostart,
+        permission,
+        shortcuts,
+        layout_switcher,
+        capabilities,
+    )
 }
 
 /// Persist the config, refresh the tray, tell every listener, return the state.
@@ -68,10 +77,18 @@ pub fn change_settings(shared: &Shared, edit: impl FnOnce(&mut Settings)) -> Res
             input.set_modifier(new.modifier);
         }
     }
-    // The shortcuts follow the master switch, their own switch and the chord.
-    if (old.enabled, old.keyboard_shortcuts, old.shortcut_modifier)
-        != (new.enabled, new.keyboard_shortcuts, new.shortcut_modifier)
-    {
+    // The shortcuts follow the master switch, their own switches and the chord.
+    if (
+        old.enabled,
+        old.keyboard_shortcuts,
+        old.layout_switcher_shortcut,
+        old.shortcut_modifier,
+    ) != (
+        new.enabled,
+        new.keyboard_shortcuts,
+        new.layout_switcher_shortcut,
+        new.shortcut_modifier,
+    ) {
         engine::apply_shortcuts(shared);
     }
     if old.launch_at_login != new.launch_at_login {
@@ -148,6 +165,60 @@ pub fn set_active_layout(
         .set_active_layout(&monitor_id, &layout_id)
         .map_err(|e| e.to_string())?;
     commit(&app, &shared)
+}
+
+/// Reorder a monitor's layouts: the layout ends up at `to_index`. The active layout
+/// is unchanged. A refused move (unknown ids, index out of range) changes nothing.
+#[tauri::command]
+pub fn move_layout(
+    app: AppHandle,
+    shared: State<'_, Arc<Shared>>,
+    monitor_id: String,
+    layout_id: String,
+    to_index: usize,
+) -> Result<AppState, String> {
+    lock(&shared.model)
+        .config
+        .move_layout(&monitor_id, &layout_id, to_index)
+        .map_err(|e| e.to_string())?;
+    commit(&app, &shared)
+}
+
+/// Put a layout back at `index` (the undo of `delete_layout`), optionally making it
+/// the active layout in the same step. Never replaces a layout with the same id.
+#[tauri::command]
+pub fn insert_layout(
+    app: AppHandle,
+    shared: State<'_, Arc<Shared>>,
+    monitor_id: String,
+    layout: Layout,
+    index: usize,
+    activate: bool,
+) -> Result<AppState, String> {
+    lock(&shared.model)
+        .config
+        .insert_layout(&monitor_id, layout, index, activate)
+        .map_err(|e| e.to_string())?;
+    commit(&app, &shared)
+}
+
+/// The monitor the layout switcher is for: the one under the cursor when its
+/// shortcut was last pressed, if that monitor is still connected; otherwise the
+/// primary (or first connected) monitor. `None` if the switcher was never opened or
+/// no monitor is connected.
+pub fn switcher_monitor_of(shared: &Shared) -> Option<String> {
+    let stored = lock(&shared.switcher_monitor).clone()?;
+    let model = lock(&shared.model);
+    if model.connected_ids().contains(&stored) {
+        Some(stored)
+    } else {
+        model.monitor_for_switcher(None)
+    }
+}
+
+#[tauri::command]
+pub fn switcher_monitor(shared: State<'_, Arc<Shared>>) -> Option<String> {
+    switcher_monitor_of(&shared)
 }
 
 #[tauri::command]
@@ -438,5 +509,94 @@ mod tests {
         // A valid layout whose ids are exhausted is refused cleanly, not with a panic.
         let err = edit_split_zone(max_id, u32::MAX, AxisArg::Vertical, 0.5).unwrap_err();
         assert!(err.contains("another zone"), "{err}");
+    }
+
+    fn connected(hw: &str, x: i32, primary: bool) -> krova_platform::MonitorInfo {
+        krova_platform::MonitorInfo {
+            descriptor: MonitorDescriptor {
+                hardware_id: Some(hw.to_owned()),
+                device_path: None,
+                rect: PxRect::new(x, 0, 1920, 1080),
+            },
+            work: PxRect::new(x, 0, 1920, 1040),
+            scale: 1.0,
+            label: format!("Display {hw}"),
+            primary,
+        }
+    }
+
+    fn shared_with_monitors(infos: Vec<krova_platform::MonitorInfo>) -> Shared {
+        let mut model = AppModel::new(Config::default(), PathBuf::from("unused.json"), false);
+        model.refresh_monitors(infos).unwrap();
+        Shared::new(model, Arc::new(NullPlatform))
+    }
+
+    #[test]
+    fn the_switcher_monitor_is_known_once_opened_and_follows_what_is_connected() {
+        let shared =
+            shared_with_monitors(vec![connected("A", 0, true), connected("B", 1920, false)]);
+        assert_eq!(switcher_monitor_of(&shared), None, "never opened");
+
+        *lock(&shared.switcher_monitor) = Some("monitor-2".to_owned());
+        assert_eq!(switcher_monitor_of(&shared).as_deref(), Some("monitor-2"));
+
+        // The monitor it was opened for has been unplugged since: the primary one.
+        lock(&shared.model)
+            .refresh_monitors(vec![connected("A", 0, true)])
+            .unwrap();
+        assert_eq!(switcher_monitor_of(&shared).as_deref(), Some("monitor-1"));
+
+        lock(&shared.model).refresh_monitors(vec![]).unwrap();
+        assert_eq!(switcher_monitor_of(&shared), None, "nothing is connected");
+    }
+
+    #[test]
+    fn reordering_and_undoing_a_delete_go_through_the_same_validation_as_saving() {
+        // The commands wrap these calls and turn the error into the string asserted here.
+        let shared = shared_with_monitors(vec![connected("A", 0, true)]);
+        let mut model = lock(&shared.model);
+        let text = |r: Result<(), krova_core::ProfileError>| r.unwrap_err().to_string();
+        assert_eq!(
+            text(model.config.move_layout("monitor-1", "halves", 9)),
+            "position 9 is out of range (the monitor has 4 layouts)"
+        );
+        assert_eq!(
+            text(model.config.move_layout("monitor-9", "halves", 0)),
+            "monitor monitor-9 not found"
+        );
+        let dup = templates().remove(0);
+        assert_eq!(
+            text(model.config.insert_layout("monitor-1", dup, 0, true)),
+            "layout halves already exists"
+        );
+        let deleted = templates().remove(1);
+        model.config.delete_layout("monitor-1", "thirds").unwrap();
+        model
+            .config
+            .insert_layout("monitor-1", deleted, 1, false)
+            .unwrap();
+        let ids: Vec<&str> = model.config.monitors[0]
+            .layouts
+            .iter()
+            .map(|l| l.id.as_str())
+            .collect();
+        assert_eq!(ids, ["halves", "thirds", "grid", "priority"]);
+    }
+
+    #[test]
+    fn the_switcher_shortcut_setting_is_applied_without_platform_support() {
+        // The null platform has no shortcuts: the switch is stored, nothing registers,
+        // and the switcher's status stays "inactive, nothing failed".
+        let shared = shared_with_monitors(vec![connected("A", 0, true)]);
+        change_settings(&shared, |s| s.layout_switcher_shortcut = false).unwrap();
+        assert!(!lock(&shared.model).config.settings.layout_switcher_shortcut);
+        let state = build_state(&shared);
+        assert!(!state.layout_switcher.active && state.layout_switcher.failed.is_empty());
+        let json = serde_json::to_value(&state).unwrap();
+        assert_eq!(json["layout_switcher"]["active"], false);
+        assert_eq!(
+            json["config"]["settings"]["layout_switcher_shortcut"],
+            false
+        );
     }
 }

@@ -292,7 +292,14 @@ fn global_hotkeys_register_and_deliver_for_every_modifier() {
             let _ = tx.send(ev.action);
         });
         let handle = platform
-            .start_hotkeys(HotkeySpec { modifier }, sink)
+            .start_hotkeys(
+                HotkeySpec {
+                    modifier,
+                    window_moves: true,
+                    switcher: true,
+                },
+                sink,
+            )
             .expect("hotkey thread starts");
         println!(
             "REGISTRATION {}: {} of {} accepted; refused: {:?}",

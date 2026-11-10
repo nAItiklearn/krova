@@ -36,6 +36,9 @@ pub fn run() {
             commands::save_layout,
             commands::delete_layout,
             commands::set_active_layout,
+            commands::move_layout,
+            commands::insert_layout,
+            commands::switcher_monitor,
             commands::list_templates,
             commands::export_layout,
             commands::import_layout,
@@ -105,6 +108,13 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let shared = Arc::new(Shared::new(model, platform));
     app.manage(Arc::clone(&shared));
     app.manage(ui_window::UiState::default());
+
+    // The layout switcher's shortcut asks the shell to bring its view forward. Set
+    // before the engine starts so the first key press already finds it.
+    let handle = app.handle().clone();
+    *model::lock(&shared.open_view) = Some(Arc::new(move |view| {
+        ui_window::show(&handle, Some(view));
+    }));
 
     let initial = commands::build_state(&shared);
     tray::build(app.handle(), &initial)?;

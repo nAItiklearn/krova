@@ -2,7 +2,7 @@
 // the initial load. Everything that talks to Rust goes through `api`.
 
 import { api, errorMessage } from './backend';
-import type { AppState, View } from './bindings';
+import type { AppState, NavigateTarget, View } from './bindings';
 
 class AppStore {
   /** Replaced wholesale on every backend response, never mutated in place. */
@@ -36,7 +36,8 @@ class AppStore {
     }
   }
 
-  navigate(view: View): void {
+  /** Only the editor window's own views are shown; `switcher` (if sent) is ignored here. */
+  navigate(view: NavigateTarget): void {
     if (view === 'editor' || view === 'settings') this.view = view;
   }
 }

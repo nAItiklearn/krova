@@ -7,7 +7,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { AppState, Axis, Layout, Settings, View } from './bindings';
+import type { AppState, Axis, Layout, NavigateTarget, Settings } from './bindings';
 import { createMockBackend, type DemoControls, type MockBackend } from './mock/mockBackend';
 
 export type Unlisten = () => void;
@@ -22,7 +22,33 @@ export interface Backend {
   saveLayout(monitorId: string, layout: Layout): Promise<AppState>;
   deleteLayout(monitorId: string, layoutId: string): Promise<AppState>;
   setActiveLayout(monitorId: string, layoutId: string): Promise<AppState>;
+  /**
+   * Reorder: the layout ends up at `toIndex` (0-based, a position in the monitor's
+   * current list, so `0 <= toIndex < layouts.length`). Nothing else changes, the
+   * active layout stays active. Rejects for an unknown monitor or layout or an index
+   * out of range; moving a layout to where it already is succeeds.
+   */
+  moveLayout(monitorId: string, layoutId: string, toIndex: number): Promise<AppState>;
+  /**
+   * Put a layout back at `index` (`0 <= index <= layouts.length`): the undo of
+   * `deleteLayout` (keep the deleted Layout and its old index). With `activate` it
+   * also becomes the monitor's active layout, in the same step. Unlike `saveLayout`
+   * it never replaces: rejects if that monitor already has the id. Same validation
+   * and 64-layouts cap as `saveLayout`.
+   */
+  insertLayout(
+    monitorId: string,
+    layout: Layout,
+    index: number,
+    activate: boolean,
+  ): Promise<AppState>;
   listTemplates(): Promise<Layout[]>;
+  /**
+   * `MonitorProfile.id` of the monitor the layout switcher was last opened for (the
+   * one under the cursor when its shortcut was pressed), or null if it was never
+   * opened or no monitor is connected. Read it when a `navigate` to `switcher` arrives.
+   */
+  switcherMonitor(): Promise<string | null>;
 
   /**
    * Pretty JSON text of the envelope `{"krova_layout":1,"layout":{...}}`, for the
@@ -49,8 +75,8 @@ export interface Backend {
    * parks the `navigate` event; call this once after `onNavigate` is registered.
    */
   takePendingView(): Promise<string | null>;
-  /** Backend event "navigate" (from the tray menu). */
-  onNavigate(cb: (view: View) => void): Promise<Unlisten>;
+  /** Backend event "navigate" (from the tray menu or the layout switcher shortcut). */
+  onNavigate(cb: (view: NavigateTarget) => void): Promise<Unlisten>;
   /** Backend event "state-changed". */
   onStateChanged(cb: (state: AppState) => void): Promise<Unlisten>;
 }
@@ -79,7 +105,12 @@ export const tauriBackend: Backend = {
     invoke<AppState>('delete_layout', { monitorId, layoutId }),
   setActiveLayout: (monitorId, layoutId) =>
     invoke<AppState>('set_active_layout', { monitorId, layoutId }),
+  moveLayout: (monitorId, layoutId, toIndex) =>
+    invoke<AppState>('move_layout', { monitorId, layoutId, toIndex }),
+  insertLayout: (monitorId, layout, index, activate) =>
+    invoke<AppState>('insert_layout', { monitorId, layout, index, activate }),
   listTemplates: () => invoke<Layout[]>('list_templates'),
+  switcherMonitor: () => invoke<string | null>('switcher_monitor'),
 
   exportLayout: (layout) => invoke<string>('export_layout', { layout }),
   importLayout: (monitorId, json) => invoke<AppState>('import_layout', { monitorId, json }),
@@ -91,7 +122,7 @@ export const tauriBackend: Backend = {
     invoke<Layout>('edit_move_divider', { layout, axis, from, to }),
 
   takePendingView: () => invoke<string | null>('take_pending_view'),
-  onNavigate: (cb) => listen<View>('navigate', (e) => cb(e.payload)),
+  onNavigate: (cb) => listen<NavigateTarget>('navigate', (e) => cb(e.payload)),
   onStateChanged: (cb) => listen<AppState>('state-changed', (e) => cb(e.payload)),
 };
 

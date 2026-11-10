@@ -28,7 +28,17 @@ pub struct Shared {
     /// Held while the shortcuts are being re-registered, so two settings changes
     /// cannot interleave their stop/start.
     pub shortcut_gate: Mutex<()>,
+    /// Profile id of the monitor the layout switcher was last opened for (the one
+    /// under the cursor at the time). Read by the UI through `switcher_monitor`.
+    pub switcher_monitor: Mutex<Option<String>>,
+    /// How the engine asks the shell to bring a view of the UI window forward. Set
+    /// once by the Tauri setup; `None` where there is no window (unit tests).
+    pub open_view: Mutex<Option<ViewOpener>>,
 }
+
+/// Brings the UI window forward showing a view (`"switcher"`). May create the
+/// window, so it must not be called while a lock the window code needs is held.
+pub type ViewOpener = Arc<dyn Fn(&'static str) + Send + Sync>;
 
 impl Shared {
     pub fn new(model: AppModel, platform: Arc<dyn Platform>) -> Self {
@@ -40,6 +50,8 @@ impl Shared {
             features: Mutex::new(Features::default()),
             engine_tx: Mutex::new(None),
             shortcut_gate: Mutex::new(()),
+            switcher_monitor: Mutex::new(None),
+            open_view: Mutex::new(None),
         }
     }
 }
@@ -49,7 +61,10 @@ impl Shared {
 pub struct Features {
     pub hotkeys: Option<HotkeyHandle>,
     pub watcher: Option<WatchHandle>,
+    /// The twelve shortcuts that move the focused window.
     pub shortcuts: ShortcutStatus,
+    /// `<mods>+Space`, the layout switcher's shortcut.
+    pub layout_switcher: ShortcutStatus,
 }
 
 /// Whether the global shortcuts are registered, and which ones the OS refused.
@@ -118,8 +133,11 @@ pub struct AppState {
     pub autostart: bool,
     pub permission: PermissionState,
     pub version: String,
+    /// The twelve shortcuts that move the focused window.
     pub shortcuts: ShortcutStatus,
     pub capabilities: CapabilitiesState,
+    /// The layout switcher's shortcut (`<mods>+Space`): at most one entry in `failed`.
+    pub layout_switcher: ShortcutStatus,
 }
 
 pub struct AppModel {
@@ -201,6 +219,7 @@ impl AppModel {
         autostart: bool,
         permission: Permission,
         shortcuts: ShortcutStatus,
+        layout_switcher: ShortcutStatus,
         capabilities: Capabilities,
     ) -> AppState {
         AppState {
@@ -211,6 +230,7 @@ impl AppModel {
             version: env!("CARGO_PKG_VERSION").to_owned(),
             shortcuts,
             capabilities: capabilities.into(),
+            layout_switcher,
         }
     }
 
@@ -240,11 +260,32 @@ impl AppModel {
             rect.x.saturating_add(rect.w / 2),
             rect.y.saturating_add(rect.h / 2),
         );
+        self.profile_at_point(cx, cy)
+    }
+
+    /// Profile id of the connected monitor whose rect contains the pixel `(x, y)`.
+    pub fn profile_at_point(&self, x: i32, y: i32) -> Option<String> {
         self.monitors
             .iter()
             .zip(&self.profile_idx)
-            .find(|(m, _)| m.descriptor.rect.contains(cx, cy))
+            .find(|(m, _)| m.descriptor.rect.contains(x, y))
             .map(|(_, &p)| self.config.monitors[p].id.clone())
+    }
+
+    /// The monitor the layout switcher is for: the one under the cursor; if the
+    /// cursor position is unknown (or on no monitor), the primary monitor, then the
+    /// first connected one. `None` only when no monitor is connected.
+    pub fn monitor_for_switcher(&self, cursor: Option<(i32, i32)>) -> Option<String> {
+        cursor
+            .and_then(|(x, y)| self.profile_at_point(x, y))
+            .or_else(|| {
+                self.monitors
+                    .iter()
+                    .zip(&self.profile_idx)
+                    .find(|(m, _)| m.primary)
+                    .map(|(_, &p)| self.config.monitors[p].id.clone())
+            })
+            .or_else(|| self.connected_ids().into_iter().next())
     }
 }
 
@@ -338,6 +379,7 @@ mod tests {
             true,
             Permission::Denied,
             ShortcutStatus::default(),
+            ShortcutStatus::default(),
             Capabilities::default(),
         )
     }
@@ -364,6 +406,10 @@ mod tests {
                 active: true,
                 failed: vec!["Win+Alt+3 is already used by another app".to_owned()],
             },
+            ShortcutStatus {
+                active: false,
+                failed: vec!["Win+Alt+Space is already used by another app".to_owned()],
+            },
             Capabilities {
                 shortcuts: true,
                 window_memory: false,
@@ -375,6 +421,12 @@ mod tests {
             json["shortcuts"]["failed"][0],
             "Win+Alt+3 is already used by another app"
         );
+        // The switcher's shortcut has a status of its own, the same shape.
+        assert_eq!(json["layout_switcher"]["active"], false);
+        assert_eq!(
+            json["layout_switcher"]["failed"][0],
+            "Win+Alt+Space is already used by another app"
+        );
         assert_eq!(json["capabilities"]["shortcuts"], true);
         assert_eq!(json["capabilities"]["window_memory"], false);
         // The new settings travel with the config under their contract names.
@@ -384,6 +436,79 @@ mod tests {
         assert_eq!(settings["restore_on_reconnect"], true);
         assert_eq!(settings["linked_dividers"], true);
         assert_eq!(settings["zone_gap_px"], 0);
+        assert_eq!(settings["layout_switcher_shortcut"], true);
+    }
+
+    fn two_monitors() -> AppModel {
+        let dir = tempfile::tempdir().unwrap();
+        let mut m = AppModel::new(Config::default(), dir.path().join("c.json"), false);
+        // B is the primary one in this arrangement; A sits to its left.
+        let mut a = info("A", -1920);
+        a.primary = false;
+        let mut b = info("B", 0);
+        b.primary = true;
+        m.refresh_monitors(vec![a, b]).unwrap();
+        m
+    }
+
+    #[test]
+    fn the_switcher_opens_on_the_monitor_under_the_cursor() {
+        let m = two_monitors();
+        assert_eq!(m.connected_ids(), vec!["monitor-1", "monitor-2"]);
+        let at = |x, y| m.monitor_for_switcher(Some((x, y))).unwrap();
+        assert_eq!(
+            at(-1920, 0),
+            "monitor-1",
+            "top-left pixel of the left monitor"
+        );
+        assert_eq!(at(-1, 1079), "monitor-1", "last pixel of the left monitor");
+        assert_eq!(
+            at(0, 0),
+            "monitor-2",
+            "the shared edge belongs to the right one"
+        );
+        assert_eq!(at(1919, 1079), "monitor-2");
+    }
+
+    #[test]
+    fn without_a_usable_cursor_the_switcher_uses_the_primary_monitor() {
+        let m = two_monitors();
+        // Unknown position, or a position on no monitor: the primary one (monitor-2).
+        assert_eq!(m.monitor_for_switcher(None).as_deref(), Some("monitor-2"));
+        assert_eq!(
+            m.monitor_for_switcher(Some((50_000, 50_000))).as_deref(),
+            Some("monitor-2")
+        );
+        assert_eq!(
+            m.monitor_for_switcher(Some((i32::MIN, i32::MAX)))
+                .as_deref(),
+            Some("monitor-2")
+        );
+    }
+
+    #[test]
+    fn with_no_primary_the_first_monitor_and_with_none_no_monitor() {
+        let mut m = two_monitors();
+        let mut a = info("A", 0);
+        a.primary = false;
+        m.refresh_monitors(vec![a]).unwrap();
+        assert_eq!(m.monitor_for_switcher(None).as_deref(), Some("monitor-1"));
+        m.refresh_monitors(vec![]).unwrap();
+        assert_eq!(m.monitor_for_switcher(None), None);
+        assert_eq!(m.monitor_for_switcher(Some((10, 10))), None);
+    }
+
+    #[test]
+    fn a_monitor_that_was_unplugged_is_never_the_switcher_target() {
+        let mut m = two_monitors();
+        m.refresh_monitors(vec![info("B", 0)]).unwrap();
+        // The cursor position that used to be on A is on nothing now.
+        assert_eq!(
+            m.monitor_for_switcher(Some((-500, 100))).as_deref(),
+            Some("monitor-2"),
+            "falls back to what is connected (B's profile)"
+        );
+        assert_eq!(m.config.monitors.len(), 2, "A's profile is kept");
     }
 
     #[test]
