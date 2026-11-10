@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 336 336" width="336" height="336" role="img" aria-labelledby="krova-mark-dark-title">
+  <title id="krova-mark-dark-title">Krova</title>
+  <!-- Krova mark without the tile, for dark backgrounds. Off-white #f4f1ea and dark-mode ember #ff7a45. For light backgrounds use krova-mark.svg. -->
+  <g fill="#f4f1ea">
+    <path d="M52 0H112A8 8 0 0 1 120 8V328A8 8 0 0 1 112 336H52A52 52 0 0 1 0 284V52A52 52 0 0 1 52 0Z"/>
+    <path d="M148 0H284A52 52 0 0 1 336 52V188A8 8 0 0 1 328 196H148A8 8 0 0 1 140 188V8A8 8 0 0 1 148 0Z"/>
+    <path d="M148 216H236A8 8 0 0 1 244 224V328A8 8 0 0 1 236 336H148A8 8 0 0 1 140 328V224A8 8 0 0 1 148 216Z"/>
+  </g>
+  <path fill="#ff7a45" d="M272 216H328A8 8 0 0 1 336 224V284A52 52 0 0 1 284 336H272A8 8 0 0 1 264 328V224A8 8 0 0 1 272 216Z"/>
+</svg>

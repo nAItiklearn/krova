@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!--
+    Favicon and small logo: one file, two cuts. Rendered at 40 px or less it shows the pixel-snapped
+    16 px cut (small/krova-16.svg, scaled x32), otherwise the master (krova.svg). Where media queries
+    inside an SVG image are not supported, the master is shown.
+  -->
+  <style>
+    .small { display: none; }
+    @media (max-width: 40px) {
+      .master { display: none; }
+      .small { display: inline; }
+    }
+  </style>
+  <g class="master">
+    <rect width="512" height="512" rx="112" fill="#141413"/>
+    <g fill="#f4f1ea">
+      <path d="M140 88H200A8 8 0 0 1 208 96V416A8 8 0 0 1 200 424H140A52 52 0 0 1 88 372V140A52 52 0 0 1 140 88Z"/>
+      <path d="M236 88H372A52 52 0 0 1 424 140V276A8 8 0 0 1 416 284H236A8 8 0 0 1 228 276V96A8 8 0 0 1 236 88Z"/>
+      <path d="M236 304H324A8 8 0 0 1 332 312V416A8 8 0 0 1 324 424H236A8 8 0 0 1 228 416V312A8 8 0 0 1 236 304Z"/>
+    </g>
+    <path fill="#ff5b1f" d="M360 304H416A8 8 0 0 1 424 312V372A52 52 0 0 1 372 424H360A8 8 0 0 1 352 416V312A8 8 0 0 1 360 304Z"/>
+  </g>
+  <g class="small" transform="scale(32)">
+    <rect width="16" height="16" rx="3.5" fill="#141413"/>
+    <g fill="#f4f1ea">
+      <path d="M4 2H6V14H4A2 2 0 0 1 2 12V4A2 2 0 0 1 4 2Z"/>
+      <path d="M7 2H12A2 2 0 0 1 14 4V9H7V2Z"/>
+      <path d="M7 10H10V14H7V10Z"/>
+    </g>
+    <path fill="#ff5b1f" d="M11 10H14V12A2 2 0 0 1 12 14H11V10Z"/>
+  </g>
+</svg>

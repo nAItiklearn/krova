@@ -7,11 +7,11 @@
     .v { font: 600 13px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #1f2328; }
     .m { font: 11px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #59636e; }
     .track { fill: #8c959f; fill-opacity: .18; }
-    .bar { fill: #4f46e5; }
+    .bar { fill: #ff5b1f; }
     @media (prefers-color-scheme: dark) {
       .h, .l, .v { fill: #e6edf3; }
       .m { fill: #9198a1; }
-      .bar { fill: #7c75f0; }
+      .bar { fill: #ff7a45; }
     }
   </style>
   <text class="h" x="16" y="28">Idle memory (private)</text>
