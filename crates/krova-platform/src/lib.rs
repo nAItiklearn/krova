@@ -19,6 +19,11 @@ pub mod input;
 #[cfg(target_os = "macos")]
 pub mod mac;
 pub mod mac_math;
+// --- notch ---
+pub mod notch;
+#[cfg(windows)]
+pub mod win_notch;
+// --- notch ---
 pub mod overlay;
 #[cfg(windows)]
 pub mod win;
