@@ -8,6 +8,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { AppState, Axis, Layout, NavigateTarget, Settings } from './bindings';
+// --- corners ---
+import type { HotCornerEvent, HotCornerStatus } from './bindings';
 import { createMockBackend, type DemoControls, type MockBackend } from './mock/mockBackend';
 
 export type Unlisten = () => void;
@@ -79,6 +81,15 @@ export interface Backend {
   onNavigate(cb: (view: NavigateTarget) => void): Promise<Unlisten>;
   /** Backend event "state-changed". */
   onStateChanged(cb: (state: AppState) => void): Promise<Unlisten>;
+
+  // --- corners ---
+  /** Whether this OS build can watch the screen corners, and whether it does now. */
+  hotCornersStatus(): Promise<HotCornerStatus>;
+  /**
+   * Backend event "hot-corner": a corner fired. `switcher` and `panel` also arrive
+   * as a `navigate`; the other actions are handled by the parts that own them.
+   */
+  onHotCorner(cb: (event: HotCornerEvent) => void): Promise<Unlisten>;
 }
 
 /** Commands reject with a string; be tolerant of Error objects too. */
@@ -124,6 +135,10 @@ export const tauriBackend: Backend = {
   takePendingView: () => invoke<string | null>('take_pending_view'),
   onNavigate: (cb) => listen<NavigateTarget>('navigate', (e) => cb(e.payload)),
   onStateChanged: (cb) => listen<AppState>('state-changed', (e) => cb(e.payload)),
+
+  // --- corners ---
+  hotCornersStatus: () => invoke<HotCornerStatus>('hot_corners_status'),
+  onHotCorner: (cb) => listen<HotCornerEvent>('hot-corner', (e) => cb(e.payload)),
 };
 
 /** True when running inside the Tauri webview. */

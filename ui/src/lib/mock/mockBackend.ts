@@ -26,6 +26,14 @@ import {
   uniqueLayoutId,
 } from './exchange';
 import { templates } from './templates';
+// --- corners ---
+import type { HotCorner, HotCornerEvent } from '../bindings';
+import {
+  defaultHotCorners,
+  hotCornerEvent,
+  hotCornersStatus,
+  sanitizeHotCorners,
+} from './cornersMock';
 
 /** localStorage key used for the optional persistence of demo edits. */
 export const STORAGE_KEY = 'krova-demo';
@@ -73,6 +81,13 @@ export interface DemoControls {
   setCapabilities(mode: CapabilitiesMode): void;
   /** Back to the initial demo state (also clears localStorage). */
   reset(): void;
+  // --- corners ---
+  /**
+   * Behaves like the cursor resting in `corner` of a monitor (default the first):
+   * sends `hot-corner` and runs the action like the app (switcher, panel).
+   * Returns the event, or null when that corner does nothing.
+   */
+  hotCorner(corner: HotCorner, monitorId?: string): HotCornerEvent | null;
 }
 
 export type MockBackend = Backend & { demo: DemoControls };
@@ -94,6 +109,8 @@ export function defaultSettings(): Settings {
     linked_dividers: true,
     zone_gap_px: 0,
     layout_switcher_shortcut: true,
+    // --- corners ---
+    hot_corners: defaultHotCorners(),
   };
 }
 
@@ -171,6 +188,8 @@ function sanitizeSettings(s: Settings): Settings {
     linked_dividers: flag(s.linked_dividers, defaults.linked_dividers),
     zone_gap_px: Math.min(32, Math.max(0, gap)),
     layout_switcher_shortcut: flag(s.layout_switcher_shortcut, defaults.layout_switcher_shortcut),
+    // --- corners ---
+    hot_corners: sanitizeHotCorners(s.hot_corners),
   };
 }
 
@@ -231,6 +250,8 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
   // The demo's "cursor" is on the first monitor until a test says otherwise.
   let switcherMonitorId: string | null = MONITORS[0].profile_id;
   const stateListeners = new Set<(s: AppState) => void>();
+  // --- corners ---
+  const hotCornerListeners = new Set<(e: HotCornerEvent) => void>();
 
   function persist(): void {
     if (!storage) return;
@@ -356,6 +377,19 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
     reset() {
       reset(true);
       emitState();
+    },
+    // --- corners ---
+    hotCorner(corner, monitorId = MONITORS[0].profile_id) {
+      const ev = hotCornerEvent(config.settings, corner, monitorId, capabilities().shortcuts);
+      if (!ev) return null;
+      for (const cb of hotCornerListeners) cb(ev);
+      if (ev.action === 'switcher') {
+        switcherMonitorId = monitorId;
+        demo.navigate('switcher');
+      } else if (ev.action === 'panel') {
+        demo.navigate('settings');
+      }
+      return ev;
     },
   };
 
@@ -503,6 +537,16 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
     async onStateChanged(cb): Promise<Unlisten> {
       stateListeners.add(cb);
       return () => stateListeners.delete(cb);
+    },
+
+    // --- corners ---
+    async hotCornersStatus() {
+      return hotCornersStatus(config.settings, capabilities().shortcuts);
+    },
+
+    async onHotCorner(cb): Promise<Unlisten> {
+      hotCornerListeners.add(cb);
+      return () => hotCornerListeners.delete(cb);
     },
   };
 

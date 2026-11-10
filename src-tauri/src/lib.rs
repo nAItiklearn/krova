@@ -5,6 +5,8 @@
 
 mod actions;
 mod commands;
+// --- corners ---
+mod corners;
 #[cfg(all(test, windows))]
 mod desktop_reconnect_tests;
 #[cfg(all(test, windows))]
@@ -46,6 +48,8 @@ pub fn run() {
             commands::edit_remove_zone,
             commands::edit_move_divider,
             ui_window::take_pending_view,
+            // --- corners ---
+            corners::hot_corners_status,
         ])
         .on_window_event(|window, event| match event {
             // The tray keeps the app alive. By default closing the window destroys
@@ -119,5 +123,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let initial = commands::build_state(&shared);
     tray::build(app.handle(), &initial)?;
     engine::start(&shared);
+    // --- corners ---
+    corners::start(app.handle(), &shared);
     Ok(())
 }
