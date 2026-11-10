@@ -4,7 +4,6 @@
  * Each panel says whether the feature is in v0.1 or coming. Pictures are a real screenshot where
  * the feature has UI, otherwise a labelled diagram from Krova's zone shapes.
  */
-import Shot from './Shot.astro';
 import ZoneScene from './ZoneScene.astro';
 import SwitcherLoop from './SwitcherLoop.astro';
 
@@ -76,9 +75,7 @@ const tabs: Tab[] = [
           </div>
           <div class="viz">
             {t.id === 'zones' && (
-              <div class="shot">
-                <Shot name="editor" alt="Krova's layout editor with a three-zone layout; the middle zone is selected." />
-              </div>
+              <ZoneScene state="zones" layout="priority" target={1} label="Diagram: a three-zone layout with the wide middle zone selected." />
             )}
             {t.id === 'snap' && (
               <ZoneScene state="drag" layout="thirds" target={1} keyLabel="Shift" label="Diagram: a window dragged over the middle zone while Shift is held." />

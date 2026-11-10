@@ -63,7 +63,7 @@ export const guidePath = (slug: string): string => `/guides/${slug}/`;
 
 /** Header links before the Guides dropdown. */
 export const navBeforeGuides: readonly NavLink[] = [
-  { label: 'How it works', href: '/#how' },
+  { label: 'Try it live', href: '/#live' },
   { label: 'Features', href: '/#features' },
   { label: 'Compare', href: '/#compare' },
   { label: 'Performance', href: '/performance/' },
@@ -85,11 +85,10 @@ export const footerColumns: readonly FooterColumn[] = [
   {
     title: 'Product',
     links: [
-      { label: 'How it works', href: '/#how' },
+      { label: 'Try it live', href: '/#live' },
       { label: 'Features', href: '/#features' },
       { label: 'Compare', href: '/#compare' },
       { label: 'Performance', href: '/performance/' },
-      { label: 'Try the editor', href: '/#try' },
       { label: 'Download', href: '/download/' },
     ],
   },
