@@ -21,6 +21,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use krova_core::registry::WindowOwner;
 use krova_core::window::ANIMATION_MS;
 use krova_core::{
     animate_step, clamp_to_limits, DragEvent, FrameInsets, Modifier, MonitorDescriptor, PxRect,
@@ -28,8 +29,8 @@ use krova_core::{
 };
 use windows::core::{HRESULT, PCWSTR};
 use windows::Win32::Foundation::{
-    CloseHandle, BOOL, ERROR_ACCESS_DENIED, HANDLE, HINSTANCE, HWND, LPARAM, LRESULT, POINT, RECT,
-    TRUE, WPARAM,
+    CloseHandle, BOOL, ERROR_ACCESS_DENIED, FILETIME, HANDLE, HINSTANCE, HWND, LPARAM, LRESULT,
+    POINT, RECT, TRUE, WPARAM,
 };
 use windows::Win32::Graphics::Dwm::{
     DwmGetWindowAttribute, DWMWA_CLOAKED, DWMWA_EXTENDED_FRAME_BOUNDS,
@@ -41,8 +42,8 @@ use windows::Win32::Graphics::Gdi::{
 use windows::Win32::Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::{
-    GetCurrentProcess, GetCurrentProcessId, GetCurrentThreadId, OpenProcess, OpenProcessToken,
-    PROCESS_QUERY_LIMITED_INFORMATION,
+    GetCurrentProcess, GetCurrentProcessId, GetCurrentThreadId, GetProcessTimes, OpenProcess,
+    OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
 };
 use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
@@ -104,13 +105,13 @@ fn px(r: RECT) -> PxRect {
     PxRect::new(r.left, r.top, r.right - r.left, r.bottom - r.top)
 }
 
-fn wide_to_string(w: &[u16]) -> String {
+pub(crate) fn wide_to_string(w: &[u16]) -> String {
     let len = w.iter().position(|&c| c == 0).unwrap_or(w.len());
     String::from_utf16_lossy(&w[..len])
 }
 
 /// Outer window rect (`GetWindowRect`), including the invisible resize borders.
-fn outer_rect(h: HWND) -> Result<PxRect, PlatformError> {
+pub(crate) fn outer_rect(h: HWND) -> Result<PxRect, PlatformError> {
     let mut r = RECT::default();
     unsafe { GetWindowRect(h, &mut r) }.map_err(os_err)?;
     Ok(px(r))
@@ -132,7 +133,7 @@ pub(crate) fn visible_rect(h: HWND) -> Option<PxRect> {
 }
 
 /// Windows on other virtual desktops are cloaked.
-fn is_cloaked(h: HWND) -> bool {
+pub(crate) fn is_cloaked(h: HWND) -> bool {
     let mut cloaked = 0u32;
     let ok = unsafe {
         DwmGetWindowAttribute(
@@ -213,6 +214,31 @@ pub(crate) fn target_is_protected(h: HWND) -> bool {
     let elevated = process_elevated(process).unwrap_or(true);
     let _ = unsafe { CloseHandle(process) };
     elevated
+}
+
+/// The program a window belongs to: process id plus process creation time. The pair
+/// outlives a window handle that the OS reuses for another window.
+pub(crate) fn owner_of(h: HWND) -> Option<WindowOwner> {
+    let mut pid = 0u32;
+    unsafe { GetWindowThreadProcessId(h, Some(&mut pid)) };
+    if pid == 0 {
+        return None;
+    }
+    let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }.ok()?;
+    let (mut created, mut exited, mut kernel, mut user) = (
+        FILETIME::default(),
+        FILETIME::default(),
+        FILETIME::default(),
+        FILETIME::default(),
+    );
+    let read =
+        unsafe { GetProcessTimes(process, &mut created, &mut exited, &mut kernel, &mut user) };
+    let _ = unsafe { CloseHandle(process) };
+    read.ok()?;
+    Some(WindowOwner {
+        pid,
+        started: (u64::from(created.dwHighDateTime) << 32) | u64::from(created.dwLowDateTime),
+    })
 }
 
 /// Is this one of Krova's own windows (the settings window, the overlay)?
@@ -743,6 +769,7 @@ impl Platform for WindowsPlatform {
         Capabilities {
             shortcuts: true,
             window_memory: true,
+            auto_arrange: true,
         }
     }
 
@@ -794,6 +821,45 @@ impl Platform for WindowsPlatform {
             && !target_is_protected(h)
     }
 
+    fn window_owner(&self, window: WindowId) -> Option<WindowOwner> {
+        let h = hwnd(window);
+        if !unsafe { IsWindow(h) }.as_bool() {
+            return None;
+        }
+        owner_of(h)
+    }
+
+    fn probe_window(&self, window: WindowId) -> Option<crate::WindowProbe> {
+        crate::win_windows::probe(window)
+    }
+
+    fn raise_window(&self, window: WindowId) -> Result<(), PlatformError> {
+        crate::win_windows::raise(window)
+    }
+
+    fn activate_window(&self, window: WindowId) -> Result<(), PlatformError> {
+        crate::win_windows::activate(window)
+    }
+
+    fn top_level_windows(&self) -> Vec<WindowId> {
+        crate::win_windows::top_level()
+    }
+
+    fn prefers_dark(&self) -> bool {
+        crate::win_windows::prefers_dark()
+    }
+
+    fn create_strip_host(
+        &self,
+        events: EventSink<crate::StripEvent>,
+    ) -> Result<Box<dyn crate::StripHost>, PlatformError> {
+        crate::win_strips::WinStrips::start(events)
+            .map(|s| Box::new(s) as Box<dyn crate::StripHost>)
+    }
+
+    fn probe_hotkey(&self, chord: krova_core::shortcuts::Chord) -> Result<bool, PlatformError> {
+        crate::win_events::probe_hotkey(chord)
+    }
     fn start_hotkeys(
         &self,
         spec: HotkeySpec,

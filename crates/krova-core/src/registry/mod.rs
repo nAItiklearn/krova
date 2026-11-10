@@ -12,8 +12,13 @@
 //! Rule for keeping it honest: an entry is removed as soon as the user starts
 //! dragging that window or places it somewhere else, and when the window is gone.
 //! The size is bounded ([`MAX_ENTRIES`]); when full, the oldest entry makes room.
+//! An entry also expires after [`MAX_AGE`] (a window left alone for hours is no
+//! longer "where Krova put it" in any way the user remembers), and it carries the
+//! [`WindowOwner`] of the window, so a handle the OS reused for another program is
+//! never moved by mistake.
 
 use std::collections::BTreeMap;
+use std::time::{Duration, Instant};
 
 use crate::geometry::PxRect;
 
@@ -22,7 +27,7 @@ pub mod select;
 
 pub use reconnect::{
     plan_reconnect, ConnectedMonitor, Placement, ReconnectPlan, WindowSnapshot,
-    IN_PLACE_TOLERANCE_PX,
+    IN_PLACE_TOLERANCE_PX, MAX_RESTORED_PER_RECONNECT,
 };
 pub use select::{
     monitor_for_rect, monitor_order, plan_keyboard_move, reading_order, zone_by_number,
@@ -33,9 +38,26 @@ pub use select::{
 /// so that a runaway caller cannot grow the map without limit.
 pub const MAX_ENTRIES: usize = 1024;
 
+/// How long an entry is kept without being refreshed. Six hours is longer than any
+/// work session that leaves a monitor unplugged, and short enough that a stale
+/// handle does not linger for days.
+pub const MAX_AGE: Duration = Duration::from_secs(6 * 60 * 60);
+
 /// Opaque identity of a window, as handed over by the platform layer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct WindowKey(pub u64);
+
+/// The program a window belongs to, as the OS knows it: the process id and the
+/// moment the process was created (in the OS's own tick unit). A window handle can be
+/// reused by the OS for a different window after the first one closed; the pair
+/// `(pid, started)` tells the two apart, because a process id is reused only for a
+/// process created later. No name, path or title is ever part of it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct WindowOwner {
+    pub pid: u32,
+    /// Process creation time (Windows: `FILETIME` ticks of 100 ns).
+    pub started: u64,
+}
 
 /// Where a window was put.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,6 +71,10 @@ pub struct SnapRecord {
     /// size), in which case it is what the window really ended up with. Linked
     /// dividers update it when a neighbour's edge is moved.
     pub rect: PxRect,
+    /// Whose window it was when Krova placed it; `None` where the platform cannot
+    /// tell. A record with an owner is only acted on while the window still has
+    /// exactly that owner.
+    pub owner: Option<WindowOwner>,
 }
 
 #[derive(Debug, Clone)]
@@ -56,6 +82,8 @@ struct Entry {
     record: SnapRecord,
     /// Insertion order; the smallest value is the oldest entry.
     seq: u64,
+    /// When the entry was inserted (a replaced entry counts as newly inserted).
+    at: Instant,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -83,6 +111,17 @@ impl SnapRegistry {
     /// inserted. At the size cap the oldest other entry is evicted first. Returns
     /// the record that was replaced, if any.
     pub fn insert(&mut self, key: WindowKey, record: SnapRecord) -> Option<SnapRecord> {
+        self.insert_at(key, record, Instant::now())
+    }
+
+    /// [`SnapRegistry::insert`] with the insertion time given (for tests and for
+    /// callers that already hold a clock reading).
+    pub fn insert_at(
+        &mut self,
+        key: WindowKey,
+        record: SnapRecord,
+        now: Instant,
+    ) -> Option<SnapRecord> {
         let previous = self.entries.remove(&key).map(|e| e.record);
         if self.entries.len() >= MAX_ENTRIES {
             if let Some(oldest) = self
@@ -96,8 +135,23 @@ impl SnapRegistry {
         }
         let seq = self.next_seq;
         self.next_seq = self.next_seq.wrapping_add(1);
-        self.entries.insert(key, Entry { record, seq });
+        self.entries.insert(
+            key,
+            Entry {
+                record,
+                seq,
+                at: now,
+            },
+        );
         previous
+    }
+
+    /// Forget the entries older than `max_age` at `now`; returns how many went.
+    pub fn expire(&mut self, now: Instant, max_age: Duration) -> usize {
+        let before = self.entries.len();
+        self.entries
+            .retain(|_, e| now.saturating_duration_since(e.at) <= max_age);
+        before - self.entries.len()
     }
 
     pub fn remove(&mut self, key: WindowKey) -> Option<SnapRecord> {
@@ -176,6 +230,7 @@ mod tests {
             layout_id: layout.to_owned(),
             zone_id: zone,
             rect: PxRect::new(0, 0, 100, 100),
+            owner: None,
         }
     }
 
@@ -274,5 +329,53 @@ mod tests {
         // The newest survive.
         assert!(r.contains(WindowKey(MAX_ENTRIES as u64 * 3 - 1)));
         assert!(!r.contains(WindowKey(0)));
+    }
+
+    #[test]
+    fn entries_expire_after_six_hours_and_a_refresh_starts_the_clock_again() {
+        let mut r = SnapRegistry::new();
+        let t0 = Instant::now();
+        r.insert_at(WindowKey(1), rec("monitor-1", "halves", 1), t0);
+        r.insert_at(
+            WindowKey(2),
+            rec("monitor-1", "halves", 2),
+            t0 + Duration::from_secs(3 * 3600),
+        );
+        // Five hours in: nothing is old enough yet.
+        assert_eq!(r.expire(t0 + Duration::from_secs(5 * 3600), MAX_AGE), 0);
+        // Exactly six hours is still fine; one second more and the first is gone.
+        assert_eq!(r.expire(t0 + MAX_AGE, MAX_AGE), 0);
+        assert_eq!(r.expire(t0 + MAX_AGE + Duration::from_secs(1), MAX_AGE), 1);
+        assert!(!r.contains(WindowKey(1)));
+        assert!(r.contains(WindowKey(2)));
+        // Replacing an entry counts as new.
+        r.insert_at(
+            WindowKey(2),
+            rec("monitor-1", "halves", 3),
+            t0 + Duration::from_secs(8 * 3600),
+        );
+        assert_eq!(r.expire(t0 + Duration::from_secs(13 * 3600), MAX_AGE), 0);
+        assert_eq!(r.expire(t0 + Duration::from_secs(15 * 3600), MAX_AGE), 1);
+        assert!(r.is_empty());
+    }
+
+    #[test]
+    fn a_clock_that_runs_backwards_never_expires_anything() {
+        let mut r = SnapRegistry::new();
+        let t0 = Instant::now() + Duration::from_secs(10);
+        r.insert_at(WindowKey(1), rec("monitor-1", "halves", 1), t0);
+        assert_eq!(r.expire(Instant::now(), Duration::ZERO), 0);
+    }
+
+    #[test]
+    fn the_owner_is_part_of_the_record() {
+        let mut r = SnapRegistry::new();
+        let mut record = rec("monitor-1", "halves", 1);
+        record.owner = Some(WindowOwner {
+            pid: 4242,
+            started: 1,
+        });
+        r.insert(WindowKey(1), record);
+        assert_eq!(r.get(WindowKey(1)).unwrap().owner.unwrap().pid, 4242);
     }
 }

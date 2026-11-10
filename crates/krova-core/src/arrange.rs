@@ -54,13 +54,13 @@ pub enum ArrangePolicy {
     MainFirst,
 }
 
-/// Auto-arrange settings. Proposed to live per monitor profile (the roadmap makes
-/// the switch per monitor); not part of `Settings` yet. Every field has a default so
-/// an older config, or a missing key, loads as "off".
+/// Auto-arrange settings, one set per monitor profile (`MonitorProfile.auto_arrange`).
+/// Every field has a default so an older config, or a missing key, loads with
+/// auto-arrange on (the owner's choice: Krova tiles without setup).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ArrangeSettings {
-    /// Off by default. A disabled planner plans nothing.
+    /// On by default (Krova arranges out of the box). A disabled planner plans nothing.
     pub enabled: bool,
     pub policy: ArrangePolicy,
     /// Closing a window lets the windows after it move up.
@@ -72,7 +72,7 @@ pub struct ArrangeSettings {
 impl Default for ArrangeSettings {
     fn default() -> Self {
         Self {
-            enabled: false,
+            enabled: true,
             policy: ArrangePolicy::NextFree,
             fill_gaps: false,
             stack_when_full: true,
@@ -511,9 +511,9 @@ mod tests {
     // ----- settings -----
 
     #[test]
-    fn auto_arrange_is_off_by_default() {
+    fn auto_arrange_is_on_by_default() {
         let d = ArrangeSettings::default();
-        assert!(!d.enabled);
+        assert!(d.enabled);
         assert_eq!(d.policy, ArrangePolicy::NextFree);
         assert!(!d.fill_gaps);
         assert!(d.stack_when_full);
@@ -537,7 +537,10 @@ mod tests {
     fn a_disabled_planner_plans_nothing() {
         let l = cols(3);
         let s = Stacks::new();
-        let off = ArrangeSettings::default();
+        let off = ArrangeSettings {
+            enabled: false,
+            ..ArrangeSettings::default()
+        };
         assert!(run(&l, &s, None, off, open(1)).is_empty());
         let s = st(&[(1, 1)]);
         assert!(run(&l, &s, None, off, close(1)).is_empty());

@@ -7,26 +7,18 @@
 //! channel served by one sleeping thread. The panel window is created on the
 //! first click only and then kept warm (hidden) so later clicks are instant.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use krova_core::notch::{
-    panel_rect, parse_hex, to_px, NotchCorner, DEFAULT_ACCENT, DEFAULT_RADIUS,
-};
+use krova_core::notch::{parse_hex, DEFAULT_ACCENT, DEFAULT_RADIUS};
 use krova_core::Settings;
 use krova_platform::notch::{
     start_notch, Notch, NotchAnchor, NotchEvent, NotchLayout, NotchMenu, NotchModel,
     NotchMonitorInfo, SUPPORTED,
 };
-use serde::Serialize;
-use tauri::webview::PageLoadEvent;
-use tauri::{
-    AppHandle, Emitter, Listener, Manager, PhysicalPosition, PhysicalSize, WebviewUrl,
-    WebviewWindow, WebviewWindowBuilder, Window, WindowEvent, Wry,
-};
+use tauri::{AppHandle, Emitter, Listener, Manager, Window, WindowEvent, Wry};
 
 use crate::commands::{build_state, change_settings, commit};
 use crate::model::{lock, Shared};
@@ -34,26 +26,12 @@ use crate::ui_window;
 
 /// Label of the quick panel window (also in the capability file).
 pub const PANEL: &str = "panel";
-/// Panel size, logical px.
-const PANEL_SIZE: (f64, f64) = (360.0, 440.0);
 /// A click this soon after the panel lost focus is the click that closed it
 /// (the blur comes first), so it must not reopen it.
 const REOPEN_GUARD: Duration = Duration::from_millis(400);
-/// Like `ui_window`: the page registers its listeners shortly after "loaded".
-const DELIVERY_DELAY: Duration = Duration::from_millis(250);
 
-/// Payload of the `panel-anchor` event: where the notch is (physical screen px),
-/// which position it sits at and which monitor (`MonitorProfile.id`) it is on.
-/// The panel window has already been placed next to it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct PanelAnchor {
-    pub x: i32,
-    pub y: i32,
-    pub w: i32,
-    pub h: i32,
-    pub corner: NotchCorner,
-    pub monitor_id: String,
-}
+/// Payload of the `panel-anchor` event (the engine's type, corner as a string).
+pub use crate::popups::PanelAnchor;
 
 impl From<&NotchAnchor> for PanelAnchor {
     fn from(a: &NotchAnchor) -> Self {
@@ -62,7 +40,7 @@ impl From<&NotchAnchor> for PanelAnchor {
             y: a.rect.y,
             w: a.rect.w,
             h: a.rect.h,
-            corner: a.corner,
+            corner: a.corner.as_str().to_owned(),
             monitor_id: a.monitor_id.clone(),
         }
     }
@@ -71,11 +49,7 @@ impl From<&NotchAnchor> for PanelAnchor {
 #[derive(Default)]
 pub struct NotchState {
     notch: Mutex<Option<Box<dyn Notch>>>,
-    /// The last anchor, for a panel page that is still loading.
-    anchor: Mutex<Option<PanelAnchor>>,
-    panel_ready: AtomicBool,
     hidden_at: Mutex<Option<Instant>>,
-    creating: Mutex<()>,
 }
 
 /// Accent (`0xrrggbb`) and corner radius (logical px) from `Settings.appearance`
@@ -151,7 +125,8 @@ fn model_of(shared: &Shared) -> (NotchModel, bool) {
         NotchModel {
             settings: settings.notch,
             monitors,
-            paused: !settings.enabled,
+            // --- integration --- (engine pause, or Krova switched off)
+            paused: shared.is_paused() || !settings.enabled,
             accent,
             radius,
         },
@@ -262,9 +237,13 @@ fn handle_event(app: &AppHandle, event: NotchEvent) {
             let _ = app.emit("state-changed", build_state(&shared));
         }
         NotchEvent::Menu { monitor_id, item } => match item {
+            // --- integration ---
+            // Pause is the engine's pause (auto-arrange, focus follows mouse, the
+            // hover picker and hot corners stand still), not the master switch.
             NotchMenu::TogglePause => {
-                settings_then_commit(app, &shared, |s| s.enabled = !s.enabled);
+                crate::engine::notify(&shared, crate::engine::Msg::SetPaused(!shared.is_paused()));
             }
+            // --- end integration ---
             NotchMenu::Layout(layout_id) => {
                 let set = lock(&shared.model)
                     .config
@@ -274,169 +253,69 @@ fn handle_event(app: &AppHandle, event: NotchEvent) {
             }
             NotchMenu::Switcher => {
                 *lock(&shared.switcher_monitor) = Some(monitor_id);
-                ui_window::show(app, Some("switcher"));
+                // --- integration --- (the engine's warm switcher window)
+                crate::popups::show(app, "switcher");
             }
-            NotchMenu::CheatSheet => ui_window::show(app, Some("cheatsheet")),
+            NotchMenu::CheatSheet => crate::popups::show(app, "cheat_sheet"),
             NotchMenu::OpenApp => ui_window::show(app, Some("editor")),
             NotchMenu::Hide => settings_then_commit(app, &shared, |s| s.notch.enabled = false),
         },
     }
 }
 
-/// Where the panel goes for this anchor (physical px).
-fn panel_place(anchor: &NotchAnchor) -> krova_core::PxRect {
-    let scale = anchor.scale;
-    panel_rect(
-        anchor.rect,
-        anchor.corner,
-        anchor.work,
-        to_px(PANEL_SIZE.0, scale),
-        to_px(PANEL_SIZE.1, scale),
-        to_px(krova_core::notch::PANEL_GAP, scale),
-    )
-}
-
-/// Open (or close, if it is showing) the quick panel next to the notch, and
-/// emit `panel-anchor`. The single entry point for the panel.
-// --- notch: replace with ui_window::show_panel after engine merge ---
-// The engine branch owns the `panel` window (it loads `ui/panel.html`). Until
-// that merges, this builds a window with the same settings when none exists
-// (loading `index.html`, which receives `navigate("panel")`), so the notch
-// works standalone. An existing `panel` window is always reused as is.
+/// Open (or close, if it is showing) the quick panel next to the notch. The
+/// engine's popups own the `panel` window (`ui/panel.html`, kept warm); this
+/// stores the anchor and asks `ui_window::show_panel`, which places the window
+/// next to it and sends `panel-anchor` and `navigate`.
 pub fn request_panel(app: &AppHandle, anchor: &NotchAnchor) {
     let state = app.state::<NotchState>();
-    let payload = PanelAnchor::from(anchor);
-    *lock(&state.anchor) = Some(payload.clone());
     if let Some(window) = app.get_webview_window(PANEL) {
         if window.is_visible().unwrap_or(false) {
-            hide_window(&window);
+            hide_window(app);
             return;
         }
-        let just_closed = lock(&state.hidden_at).is_some_and(|t| t.elapsed() < REOPEN_GUARD);
-        if just_closed {
-            return;
-        }
-        place_and_show(&window, anchor);
-        if state.panel_ready.load(Ordering::SeqCst) {
-            deliver(app);
-        }
+    }
+    let just_closed = lock(&state.hidden_at).is_some_and(|t| t.elapsed() < REOPEN_GUARD);
+    if just_closed {
         return;
     }
-    let _creating = lock(&state.creating);
-    if app.get_webview_window(PANEL).is_some() {
-        return;
-    }
-    let mut builder = WebviewWindowBuilder::new(app, PANEL, WebviewUrl::App("index.html".into()))
-        .title("Krova")
-        .decorations(false)
-        .always_on_top(true)
-        .skip_taskbar(true)
-        .resizable(false)
-        .shadow(false)
-        .visible(false)
-        .on_page_load(|window, payload| {
-            if payload.event() == PageLoadEvent::Finished {
-                panel_loaded(&window);
-            }
-        });
-    #[cfg(not(target_os = "macos"))]
-    {
-        builder = builder.transparent(true);
-    }
-    match builder.build() {
-        Ok(window) => {
-            // Placed now, shown once the page has loaded (no white flash).
-            let r = panel_place(anchor);
-            let _ = window.set_size(PhysicalSize::new(r.w.max(1) as u32, r.h.max(1) as u32));
-            let _ = window.set_position(PhysicalPosition::new(r.x, r.y));
-        }
-        Err(e) => eprintln!("krova: could not create the panel: {e}"),
-    }
+    ui_window::show_panel(app, Some(PanelAnchor::from(anchor)));
 }
 
-fn place_and_show(window: &WebviewWindow<Wry>, anchor: &NotchAnchor) {
-    let r = panel_place(anchor);
-    let _ = window.set_size(PhysicalSize::new(r.w.max(1) as u32, r.h.max(1) as u32));
-    let _ = window.set_position(PhysicalPosition::new(r.x, r.y));
-    let _ = window.show();
-    let _ = window.set_focus();
-}
-
-fn panel_loaded(window: &WebviewWindow<Wry>) {
-    let app = window.app_handle().clone();
-    app.state::<NotchState>()
-        .panel_ready
-        .store(true, Ordering::SeqCst);
-    let _ = window.show();
-    let _ = window.set_focus();
-    let spawned = thread::Builder::new()
-        .name("krova-panel".into())
-        .spawn(move || {
-            thread::sleep(DELIVERY_DELAY);
-            deliver(&app);
-        });
-    if let Err(e) = spawned {
-        eprintln!("krova: could not start the panel thread: {e}");
-    }
-}
-
-/// Tell the panel page where it is and which view to show.
-fn deliver(app: &AppHandle) {
-    let anchor = lock(&app.state::<NotchState>().anchor).clone();
-    if let Some(anchor) = anchor {
-        let _ = app.emit_to(PANEL, "panel-anchor", &anchor);
-    }
-    let _ = app.emit_to(PANEL, "navigate", "panel");
-}
-
-fn hide_window(window: &WebviewWindow<Wry>) {
-    let _ = window.hide();
-    if let Some(state) = window.app_handle().try_state::<NotchState>() {
+fn hide_window(app: &AppHandle) {
+    crate::popups::hide(app, PANEL);
+    if let Some(state) = app.try_state::<NotchState>() {
         *lock(&state.hidden_at) = Some(Instant::now());
     }
 }
 
-/// Window events of the panel: closing or losing focus hides it (it stays warm).
-/// Returns true when the event was the panel's, so the caller skips its own
-/// handling (which is for the editor window).
-pub fn on_window_event(window: &Window<Wry>, event: &WindowEvent) -> bool {
+/// Window events, before the popups handle them: remember when the panel hid
+/// (closed or lost focus), so the notch click that caused the blur does not
+/// reopen it.
+pub fn note_window_event(window: &Window<Wry>, event: &WindowEvent) {
     if window.label() != PANEL {
-        return false;
+        return;
     }
-    match event {
-        WindowEvent::CloseRequested { api, .. } => {
-            api.prevent_close();
-            if let Some(w) = window.app_handle().get_webview_window(PANEL) {
-                hide_window(&w);
-            }
+    if matches!(
+        event,
+        WindowEvent::CloseRequested { .. } | WindowEvent::Focused(false)
+    ) {
+        if let Some(state) = window.app_handle().try_state::<NotchState>() {
+            *lock(&state.hidden_at) = Some(Instant::now());
         }
-        WindowEvent::Focused(false) => {
-            if let Some(w) = window.app_handle().get_webview_window(PANEL) {
-                hide_window(&w);
-            }
-        }
-        WindowEvent::Destroyed => {
-            if let Some(state) = window.app_handle().try_state::<NotchState>() {
-                state.panel_ready.store(false, Ordering::SeqCst);
-            }
-        }
-        _ => {}
     }
-    true
 }
 
 /// The panel asks to close (Esc, or after it ran an action).
 #[tauri::command]
 pub fn hide_panel(app: AppHandle) {
-    if let Some(w) = app.get_webview_window(PANEL) {
-        hide_window(&w);
-    }
+    hide_window(&app);
 }
 
 /// The last `panel-anchor`, for a panel page that missed the event.
 #[tauri::command]
-pub fn panel_anchor(state: tauri::State<'_, NotchState>) -> Option<PanelAnchor> {
-    lock(&state.anchor).clone()
+pub fn panel_anchor(shared: tauri::State<'_, Arc<Shared>>) -> Option<PanelAnchor> {
+    lock(&shared.panel_anchor).clone()
 }
 
 #[cfg(test)]
@@ -473,7 +352,7 @@ mod tests {
     fn the_anchor_payload_has_the_contract_field_names() {
         let a = NotchAnchor {
             rect: krova_core::PxRect::new(850, 4, 220, 28),
-            corner: NotchCorner::TopCenter,
+            corner: krova_core::notch::NotchCorner::TopCenter,
             monitor_id: "monitor-1".into(),
             work: krova_core::PxRect::new(0, 0, 1920, 1032),
             scale: 1.0,
@@ -483,6 +362,5 @@ mod tests {
             v,
             json!({"x": 850, "y": 4, "w": 220, "h": 28, "corner": "top_center", "monitor_id": "monitor-1"})
         );
-        assert_eq!(panel_place(&a), krova_core::PxRect::new(780, 38, 360, 440));
     }
 }

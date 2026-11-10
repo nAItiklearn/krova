@@ -79,16 +79,64 @@ fn route(action: HotCornerAction) -> Route {
 
 /// What the watcher should do for these settings: nothing while Krova is off.
 pub fn config_for(settings: &Settings) -> CornerConfig {
+    config_while(settings, PAUSED.load(Ordering::SeqCst))
+}
+
+// --- integration ---
+/// Mirror of the engine's pause, kept by the `PauseChanged` hook from `start`.
+static PAUSED: AtomicBool = AtomicBool::new(false);
+
+/// The watcher's config: nothing while Krova is off; while the engine is paused
+/// only the corners whose action is `pause` (so a corner can resume).
+fn config_while(settings: &Settings, paused: bool) -> CornerConfig {
     let accent = accent_rgb(settings);
-    if settings.enabled {
-        CornerConfig {
-            settings: settings.hot_corners.clone(),
-            accent,
-        }
-    } else {
-        CornerConfig::off(accent)
+    if !settings.enabled {
+        return CornerConfig::off(accent);
+    }
+    let mut corners = settings.hot_corners.clone();
+    if paused {
+        let keep = |a: Option<HotCornerAction>| a.filter(|a| *a == HotCornerAction::Pause);
+        corners.top_left = keep(corners.top_left);
+        corners.top_right = keep(corners.top_right);
+        corners.bottom_left = keep(corners.bottom_left);
+        corners.bottom_right = keep(corners.bottom_right);
+    }
+    CornerConfig {
+        settings: corners,
+        accent,
     }
 }
+
+/// Engine wiring: the `pause` corner toggles the engine's pause, and pausing
+/// narrows the watched corners to `pause` ones (resuming restores them).
+fn wire_engine(shared: &Arc<Shared>) {
+    PAUSED.store(shared.is_paused(), Ordering::SeqCst);
+    let s = Arc::clone(shared);
+    register(
+        HotCornerAction::Pause,
+        Arc::new(move |_| {
+            crate::engine::notify(&s, crate::engine::Msg::SetPaused(!s.is_paused()));
+        }),
+    );
+    let weak = Arc::downgrade(shared);
+    shared.hooks.register(Arc::new(move |event| {
+        let crate::hooks::EngineEvent::PauseChanged(paused) = *event else {
+            return;
+        };
+        PAUSED.store(paused, Ordering::SeqCst);
+        let Some(shared) = weak.upgrade() else { return };
+        // The hook runs on the engine thread: reconfigure from a short thread.
+        let _ = thread::Builder::new()
+            .name("krova-corners-pause".into())
+            .spawn(move || {
+                let wanted = config_for(&lock(&shared.model).config.settings);
+                if let Some(handle) = lock(&WATCHER).as_ref() {
+                    handle.update(wanted);
+                }
+            });
+    }));
+}
+// --- end integration ---
 
 /// Plug in the code that runs `action` (the engine's calm desk, focus, ...). A
 /// later registration for the same action replaces the earlier one.
@@ -143,7 +191,6 @@ fn on_hit(app: &AppHandle, shared: &Shared, hit: CornerHit) {
 /// Start watching the corners. Call once, after the engine (whose mouse hook the
 /// watcher rides on) has started.
 pub fn start(app: &AppHandle, shared: &Arc<Shared>) {
-    let config = config_for(&lock(&shared.model).config.settings);
     // The platform sink must return at once: hand hits to a small thread that
     // sleeps in `recv` until a corner fires.
     let (tx, rx) = mpsc::channel::<CornerHit>();
@@ -164,6 +211,10 @@ pub fn start(app: &AppHandle, shared: &Arc<Shared>) {
     let sink: EventSink<CornerHit> = Arc::new(move |hit| {
         let _ = lock(&tx).send(hit);
     });
+    // --- integration ---
+    wire_engine(shared);
+    let config = config_for(&lock(&shared.model).config.settings);
+    // --- end integration ---
     match shared.platform.start_hot_corners(config, sink) {
         Ok(handle) => {
             SUPPORTED.store(true, Ordering::SeqCst);
@@ -235,6 +286,19 @@ mod tests {
         let off = config_for(&s);
         assert!(!off.settings.any());
         assert_eq!(off.accent, (0xff, 0x5b, 0x1f));
+    }
+
+    #[test]
+    fn while_paused_only_pause_corners_are_watched() {
+        let mut s = Settings::default();
+        s.hot_corners.top_left = Some(HotCornerAction::Pause);
+        let paused = config_while(&s, true);
+        assert_eq!(paused.settings.top_left, Some(HotCornerAction::Pause));
+        assert_eq!(paused.settings.top_right, None);
+        assert_eq!(paused.settings.bottom_right, None);
+        assert_eq!(config_while(&s, false).settings, s.hot_corners);
+        s.enabled = false;
+        assert!(!config_while(&s, true).settings.any());
     }
 
     #[test]

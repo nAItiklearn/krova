@@ -17,12 +17,16 @@
 
 use serde_json::{json, Value};
 
-use crate::zone::{Layout, LayoutError, MAX_NAME_LEN};
+use crate::zone::{has_hidden_char, Layout, LayoutError, MAX_NAME_LEN};
 
 /// The only envelope version this build reads and writes.
 pub const LAYOUT_FILE_VERSION: u32 = 1;
 /// Largest layout file accepted, in bytes. A 64-zone layout is about 5 KiB.
 pub const MAX_LAYOUT_JSON_BYTES: usize = 64 * 1024;
+/// Longest error text that goes back to the UI, in characters. The parser's own
+/// messages quote the file ("unknown variant `...`"), so an untrusted file could
+/// otherwise make an error message as long as the file.
+pub const MAX_ERROR_CHARS: usize = 200;
 
 const VERSION_KEY: &str = "krova_layout";
 const LAYOUT_KEY: &str = "layout";
@@ -37,24 +41,40 @@ pub enum LayoutIoError {
     WrongVersion(String),
     #[error("the layout is not valid: {0}")]
     Invalid(#[from] LayoutError),
-    #[error("the layout id or name contains control characters")]
+    #[error("the layout id or name contains control or invisible characters")]
     BadText,
 }
 
+/// `text` cut to at most [`MAX_ERROR_CHARS`] characters, with an ellipsis if cut.
+pub fn truncate_error(text: &str) -> String {
+    if text.chars().take(MAX_ERROR_CHARS + 1).count() <= MAX_ERROR_CHARS {
+        return text.to_owned();
+    }
+    let mut out: String = text.chars().take(MAX_ERROR_CHARS - 1).collect();
+    out.push('\u{2026}');
+    out
+}
+
+impl LayoutIoError {
+    /// A "malformed file" error carrying a parser message, cut to a sane length.
+    fn malformed(detail: impl std::fmt::Display) -> Self {
+        Self::Malformed(truncate_error(&detail.to_string()))
+    }
+}
+
 fn has_control_chars(s: &str) -> bool {
-    s.chars().any(char::is_control)
+    has_hidden_char(s)
 }
 
 /// Serialise `layout` as a pretty-printed layout file. The layout is validated
 /// first, so an invalid layout is never written out.
 pub fn export_json(layout: &Layout) -> Result<String, LayoutIoError> {
-    layout.validate()?;
     if has_control_chars(&layout.id) || has_control_chars(&layout.name) {
         return Err(LayoutIoError::BadText);
     }
+    layout.validate()?;
     let envelope = json!({ VERSION_KEY: LAYOUT_FILE_VERSION, LAYOUT_KEY: layout });
-    let text = serde_json::to_string_pretty(&envelope)
-        .map_err(|e| LayoutIoError::Malformed(e.to_string()))?;
+    let text = serde_json::to_string_pretty(&envelope).map_err(LayoutIoError::malformed)?;
     if text.len() > MAX_LAYOUT_JSON_BYTES {
         return Err(LayoutIoError::TooLarge);
     }
@@ -86,8 +106,7 @@ pub fn import_json(json: &str, existing_ids: &[&str]) -> Result<Layout, LayoutIo
     }
     // Editors on Windows like to put a byte order mark in front of UTF-8 text.
     let text = json.strip_prefix('\u{feff}').unwrap_or(json);
-    let value: Value =
-        serde_json::from_str(text).map_err(|e| LayoutIoError::Malformed(e.to_string()))?;
+    let value: Value = serde_json::from_str(text).map_err(LayoutIoError::malformed)?;
     let Value::Object(mut object) = value else {
         return Err(LayoutIoError::Malformed("expected a JSON object".into()));
     };
@@ -120,13 +139,13 @@ pub fn import_json(json: &str, existing_ids: &[&str]) -> Result<Layout, LayoutIo
             "missing \"{LAYOUT_KEY}\""
         )));
     };
-    let mut layout: Layout = serde_json::from_value(layout_value)
-        .map_err(|e| LayoutIoError::Malformed(e.to_string()))?;
+    let mut layout: Layout =
+        serde_json::from_value(layout_value).map_err(LayoutIoError::malformed)?;
 
-    layout.validate()?;
     if has_control_chars(&layout.id) || has_control_chars(&layout.name) {
         return Err(LayoutIoError::BadText);
     }
+    layout.validate()?;
     layout.id = layout.id.trim().to_owned();
     layout.name = layout.name.trim().to_owned();
     if layout.id.is_empty() {
@@ -476,5 +495,59 @@ mod tests {
         l.name = "Drei Spalten – 日本語 🪟".to_owned();
         let back = import_json(&export_json(&l).unwrap(), &[]).unwrap();
         assert_eq!(back.name, l.name);
+    }
+
+    #[test]
+    fn invisible_and_direction_changing_characters_are_refused_like_control_ones() {
+        for hidden in ["\\u202E", "\\u200B", "\\u2028", "\\uFEFF", "\\u2067"] {
+            let name = ONE_ZONE.replace("\"Mine\"", &format!("\"Mi{hidden}ne\""));
+            assert_eq!(
+                import_json(&envelope("1", &name), &[]),
+                Err(LayoutIoError::BadText),
+                "{hidden}"
+            );
+        }
+        let mut layout = templates().remove(0);
+        layout.name = "Ha\u{202E}lves".to_owned();
+        assert_eq!(export_json(&layout), Err(LayoutIoError::BadText));
+    }
+
+    #[test]
+    fn error_text_is_cut_to_two_hundred_characters() {
+        assert_eq!(truncate_error("short"), "short");
+        let exactly = "x".repeat(MAX_ERROR_CHARS);
+        assert_eq!(truncate_error(&exactly), exactly);
+        let cut = truncate_error(&"y".repeat(5_000));
+        assert_eq!(cut.chars().count(), MAX_ERROR_CHARS);
+        assert!(cut.ends_with('\u{2026}'));
+        // Multi-byte characters are counted as characters, never split.
+        let wide = truncate_error(&"\u{1F642}".repeat(1_000));
+        assert_eq!(wide.chars().count(), MAX_ERROR_CHARS);
+    }
+
+    #[test]
+    fn a_parser_message_that_quotes_the_file_stays_short() {
+        // serde names the offending key or variant, which the file controls.
+        let long_key = "k".repeat(30_000);
+        let json = format!("{{\"krova_layout\":1,\"layout\":{{\"{long_key}\":1}}}}");
+        let Err(LayoutIoError::Malformed(msg)) = import_json(&json, &[]) else {
+            panic!("expected a malformed error");
+        };
+        assert!(
+            msg.chars().count() <= MAX_ERROR_CHARS,
+            "{} chars",
+            msg.chars().count()
+        );
+        let shown = LayoutIoError::Malformed(msg).to_string();
+        assert!(shown.chars().count() < MAX_ERROR_CHARS + 80);
+        // A tiny file with a long wrong string does the same.
+        let long_value = "z".repeat(40_000);
+        let json = format!(
+            "{{\"krova_layout\":1,\"layout\":{{\"id\":\"a\",\"name\":\"b\",\"zones\":\"{long_value}\"}}}}"
+        );
+        let Err(LayoutIoError::Malformed(msg)) = import_json(&json, &[]) else {
+            panic!("expected a malformed error");
+        };
+        assert!(msg.chars().count() <= MAX_ERROR_CHARS);
     }
 }

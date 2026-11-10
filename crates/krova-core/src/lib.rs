@@ -23,6 +23,7 @@ pub mod notch;
 // --- notch ---
 pub mod presets;
 pub mod registry;
+pub mod shortcuts;
 pub mod snap;
 pub mod stack;
 pub mod swap;
@@ -35,8 +36,8 @@ pub mod workspace;
 // --- end wave3 ---
 
 pub use config::{
-    Config, ConfigError, LoadStatus, Modifier, MonitorProfile, MoveMode, ProfileError, Settings,
-    ShortcutModifier, Theme,
+    Appearance, Config, ConfigError, LoadStatus, Modifier, MonitorProfile, MoveMode, ProfileError,
+    Settings, ShortcutModifier, Theme,
 };
 pub use edge::{edge_snap, EdgeSnap};
 pub use edit::{Axis, EditError};

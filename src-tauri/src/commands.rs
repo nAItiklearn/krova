@@ -6,10 +6,13 @@
 
 use std::sync::Arc;
 
+use krova_core::app_rules::AppRule;
+use krova_core::arrange::ArrangeSettings;
 use krova_core::layout_io;
+use krova_core::presets::{self, PresetSpec, PresetVariant};
 use krova_core::{templates, Axis, Layout, Settings};
 use krova_platform::Permission;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 
 use crate::engine;
@@ -53,6 +56,24 @@ pub fn build_state(shared: &Shared) -> AppState {
     // --- wave4 ---
     state.wave4 = crate::wave4::state_extras(shared);
     // --- end wave4 ---
+    state.front_app = lock(&shared.front_app).clone();
+    // --- integration --- share-safe: the UI never gets the program name.
+    if crate::wave3::share_safe(shared) {
+        if let Some(front) = state.front_app.as_mut() {
+            front.exe = None;
+        }
+    }
+    // --- end integration ---
+    state.paused = shared.is_paused();
+    state.shortcut_actions = {
+        let settings = lock(&shared.model).config.settings.clone();
+        let features = lock(&shared.features);
+        crate::shortcut_cmds::shortcut_rows(
+            &settings,
+            features.hotkeys.as_ref(),
+            capabilities.shortcuts,
+        )
+    };
     state
 }
 
@@ -61,6 +82,8 @@ pub fn commit(app: &AppHandle, shared: &Shared) -> Result<AppState, String> {
     lock(&shared.model)
         .persist()
         .map_err(|e| format!("could not save the config: {e}"))?;
+    // Auto-arrange follows layout and switch changes (and later hooks see them).
+    engine::notify(shared, engine::Msg::ConfigChanged);
     let state = build_state(shared);
     tray::sync(app, &state);
     let _ = app.emit("state-changed", &state);
@@ -90,11 +113,13 @@ pub fn change_settings(shared: &Shared, edit: impl FnOnce(&mut Settings)) -> Res
         old.keyboard_shortcuts,
         old.layout_switcher_shortcut,
         old.shortcut_modifier,
+        &old.shortcuts,
     ) != (
         new.enabled,
         new.keyboard_shortcuts,
         new.layout_switcher_shortcut,
         new.shortcut_modifier,
+        &new.shortcuts,
     ) {
         engine::apply_shortcuts(shared);
     }
@@ -239,6 +264,103 @@ pub fn switcher_monitor(shared: State<'_, Arc<Shared>>) -> Option<String> {
 #[tauri::command]
 pub fn list_templates() -> Vec<Layout> {
     templates()
+}
+
+/// One preset of the template picker: the choices that make it, and the layout.
+#[derive(Debug, Clone, Serialize)]
+pub struct PresetInfo {
+    pub id: String,
+    pub name: String,
+    #[serde(flatten)]
+    pub spec: PresetSpec,
+    /// Made for the shape of the monitor asked about.
+    pub recommended: bool,
+    pub layout: Layout,
+}
+
+/// Every preset, each as an ordinary layout the user can save and edit. With a
+/// monitor id, the presets made for that monitor's shape are marked `recommended`.
+pub fn presets_for(shared: &Shared, monitor_id: Option<&str>) -> Vec<PresetInfo> {
+    let variant = monitor_id.and_then(|id| {
+        let model = lock(&shared.model);
+        model
+            .snapshots()
+            .into_iter()
+            .find(|m| m.profile_id == id)
+            .map(|m| PresetVariant::for_size(m.work.w, m.work.h))
+    });
+    presets::all()
+        .into_iter()
+        .filter_map(|spec| {
+            Some(PresetInfo {
+                id: spec.id(),
+                name: spec.name(),
+                recommended: variant == Some(spec.variant),
+                layout: spec.layout().ok()?,
+                spec,
+            })
+        })
+        .collect()
+}
+
+#[tauri::command]
+pub fn list_presets(shared: State<'_, Arc<Shared>>, monitor_id: Option<String>) -> Vec<PresetInfo> {
+    presets_for(&shared, monitor_id.as_deref())
+}
+
+/// Turn auto-arrange on or off for one monitor, or change how it arranges.
+#[tauri::command]
+pub fn set_auto_arrange(
+    app: AppHandle,
+    shared: State<'_, Arc<Shared>>,
+    monitor_id: String,
+    settings: ArrangeSettings,
+) -> Result<AppState, String> {
+    lock(&shared.model)
+        .config
+        .set_auto_arrange(&monitor_id, settings)
+        .map_err(|e| e.to_string())?;
+    commit(&app, &shared)
+}
+
+/// Add an app rule, or replace the rule of the same program. The message of a
+/// refused rule ("... is not a program file name") is shown as is.
+#[tauri::command]
+pub fn set_app_rule(
+    app: AppHandle,
+    shared: State<'_, Arc<Shared>>,
+    rule: AppRule,
+) -> Result<AppState, String> {
+    lock(&shared.model)
+        .config
+        .settings
+        .app_rules
+        .set(rule)
+        .map_err(|e| e.to_string())?;
+    commit(&app, &shared)
+}
+
+/// Delete the rule of a program (by executable name, ignoring case).
+#[tauri::command]
+pub fn remove_app_rule(
+    app: AppHandle,
+    shared: State<'_, Arc<Shared>>,
+    exe: String,
+) -> Result<AppState, String> {
+    if !lock(&shared.model).config.settings.app_rules.remove(&exe) {
+        return Err(format!("there is no rule for {exe}"));
+    }
+    commit(&app, &shared)
+}
+
+/// Arrange the windows already open on a monitor into its zones, now.
+#[tauri::command]
+pub fn arrange_monitor(shared: State<'_, Arc<Shared>>, monitor_id: String) -> Result<(), String> {
+    if !lock(&shared.model).connected_ids().contains(&monitor_id) {
+        return Err(format!("monitor {monitor_id} is not connected"));
+    }
+    engine::notify(&shared, engine::Msg::ArrangeMonitor(monitor_id));
+    Ok(())
 }
 
 /// The layout as a portable file (pretty JSON envelope). The layout is validated

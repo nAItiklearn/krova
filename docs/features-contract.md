@@ -49,7 +49,7 @@ All errors are plain strings.
 
 Existing commands are unchanged. (`save_layout` + `move_layout` + `set_active_layout` could also undo a delete, but as three persists and three `state-changed` pushes, with the layout visibly at the end of the list in between; `insert_layout` does it atomically.)
 
-## Keyboard map (display text)
+## Keyboard map (display text; superseded by Wave 2 below)
 
 With the chosen modifier (`<mods>`, by default `Ctrl+Alt+Shift`):
 
@@ -150,7 +150,7 @@ A small ink pill at a screen edge, the main way to control Krova without opening
 | `monitor` | string enum | `"primary"` | `"primary"` or `"cursor"` (TS `NotchMonitor`). `cursor` = the monitor under the cursor, re-checked when the foreground window or the displays change (never polled). |
 | `hide_in_fullscreen` | bool | `true` | Hidden while a fullscreen app (game, video, presentation) is in front of its monitor. |
 
-**Look.** Collapsed 46 x 13 logical px, fully rounded, ink `#141413` with a hairline rim and a dot: the accent (`appearance.accent`, default `#ff5b1f`) while Krova runs, grey `#8a877f` while paused. Hover for 150 ms grows it with a spring (damping 0.85, about 240 ms) to 220 x 28 with corner radius `appearance.corner_radius_px` (default 10) and the monitor's active layout name in off-white `#f2f1ee` (Segoe UI Variable, grayscale anti-aliasing); "Paused · name" while paused. With share-safe on (`settings.share_safe` once it exists) the name becomes "3 zones" and the menu lists "Layout 1..N". Sizes follow the monitor's DPI. It sits `4` logical px in from the monitor edge, but never under a reserved edge: a bottom position sits just above a bottom taskbar, a top one below a top taskbar.
+**Look.** Collapsed 46 x 13 logical px, fully rounded, ink `#141413` with a hairline rim and a dot: the accent (`appearance.accent`, default `#ff5b1f`) while Krova runs, grey `#8a877f` while paused. Hover for 150 ms grows it with a spring (damping 0.85, about 240 ms) to 220 x 28 with corner radius `appearance.corner_radius_px` (default 10) and the monitor's active layout name in off-white `#f2f1ee` (Segoe UI Variable, grayscale anti-aliasing); "Paused · name" while paused. With share-safe on (`settings.share_safe`) the name becomes "3 zones" and the menu lists "Layout 1..N". Sizes follow the monitor's DPI. It sits `4` logical px in from the monitor edge, but never under a reserved edge: a bottom position sits just above a bottom taskbar, a top one below a top taskbar.
 
 **Mouse.**
 - Left click: opens the quick panel next to the notch, or closes it if it is open (below). 
@@ -203,6 +203,151 @@ Loading never fails on this block: a missing or mistyped field takes its default
 **Cost.** No new hook, no polling: the existing low-level mouse hook tests the point against at most 64 corner bands in static atomics (no lock, no allocation) and wakes the corners thread only near a corner. One one-shot timer per dwell; the ripple's 16 ms frame timer runs only for its 220 ms. With no corner set the hook does one atomic load. With reduced motion (Windows "Show animations" off) the ripple is a still quarter-circle for 220 ms.
 
 **Demo mode.** `demoControls.hotCorner(corner, monitorId?)` behaves like a fire in the mock backend (event, then switcher/panel navigation) and returns the event, or `null` when that corner does nothing.
+## Wave 1: auto-arrange, stacks, swap, app rules, presets (engine branch)
+
+Krova arranges out of the box: auto-arrange is **on for every monitor by default**, and on first run a monitor that still has only the built-in layouts (with `halves` active) gets the preset that fits its shape (main + side for three windows: landscape, ultrawide 2.1:1 or wider, or portrait), added in front and made active. This happens once per monitor profile (`preset_seeded`).
+
+### Config additions
+
+| Where | Field | Type | Default | Notes |
+|---|---|---|---|---|
+| `MonitorProfile` | `auto_arrange` | `ArrangeSettings` | `{enabled: true, policy: "next_free", fill_gaps: false, stack_when_full: true}` | Per monitor. A missing key loads as on. Change with `set_auto_arrange`. |
+| `MonitorProfile` | `preset_seeded` | bool | `false` | Internal: the first-run preset was offered. The UI never shows or sends it (send back what you got). |
+| `Settings` | `app_rules` | `AppRule[]` | `[]` | `{exe, action}`; `action` is `{"kind":"never_touch"}`, `{"kind":"float"}`, `{"kind":"preferred_zone","value":N}` (1-based zone in reading order) or `{"kind":"start_on_monitor","value":"monitor-2"}`. By executable **file name** (`chrome.exe`), never a title or path; case-insensitive, one rule per program, at most 256. Sanitised on load and on save (invalid rules are dropped). Prefer `set_app_rule` / `remove_app_rule` for readable errors. |
+
+TS: `ArrangeSettings`, `ArrangePolicy`, `AppRule`, `RuleAction`.
+
+### `AppState` additions
+
+- `capabilities.auto_arrange`: auto-arrange, stacks and tab strips work on this OS (Windows: true; macOS: false). Hide the auto-arrange switches when false.
+- `front_app`: `FrontApp | null` = `{exe: string | null, arranged: bool, reason: FrontAppReason | null}`. Updated when the focus moves; read with the state (not pushed on every focus change). `reason` is `"dialog"`, `"tool"`, `"popup"`, `"elevated"`, `"never_touch"`, `"float"`, `"auto_arrange_off"`, `"paused"` or `"other"`, for the "Not arranged" chip.
+
+### Commands
+
+| Command | Arguments | Returns | Notes |
+|---|---|---|---|
+| `list_presets` | `monitorId: string \| null` | `PresetInfo[]` | Every distinct preset (grid / columns / rows / main + side, 1-5 windows, landscape / ultrawide / portrait, main 50/60/66.7 %). `PresetInfo` = `{id, name, family, count, variant, main_size, recommended, layout}`; `recommended` marks the presets for that monitor's shape. `layout` is an ordinary layout: save it with `save_layout`. |
+| `set_auto_arrange` | `monitorId`, `settings: ArrangeSettings` | `AppState` | Persists and emits `state-changed`. Switching off forgets the stacks (windows stay where they are). |
+| `set_app_rule` | `rule: AppRule` | `AppState` | Adds, or replaces the rule of the same program in place. Errors are sentences (`"C:\x.exe" is a path, not a program file name`). |
+| `remove_app_rule` | `exe: string` | `AppState` | Case-insensitive. Error if there is no such rule. |
+| `arrange_monitor` | `monitorId` | `null` | "Tile now": arrange every ordinary window already open on that monitor (at most 64). Asynchronous; the windows move a moment later. |
+
+### Behaviour (what the user sees)
+
+- A new ordinary window (not a dialog, tool window, owned pop-up, splash, notification, full-screen, cloaked or elevated window) springs into the next free zone of the active layout about 350 ms after it appears. An app rule can send it to zone N, to another monitor, or keep it floating.
+- With every zone taken it joins a **stack**: the zone of the preferred zone, the focused window or the last zone. A native **tab strip** sits on the zone's top edge: rounded translucent tabs, a 1 px hairline, the program's icon and short name (from the executable, never the title), the visible tab underlined in the accent colour, light or dark with the OS (or `theme`). Click a tab or turn the wheel over the strip to switch; gaps between tabs let clicks through. Share-safe (wave 3) hides names and icons.
+- Closing or minimising a window takes it out of its zone; the next tab of a stack shows. `fill_gaps` moves later windows up.
+- Dragging a tracked window (with the snap modifier) onto an occupied zone **swaps** the two windows. Moving a tracked window away by hand makes it float.
+- Changing the active layout re-tiles: windows keep their zone id; windows whose zone is gone are arranged again.
+- Keyboard swap and stack cycling are engine functions bound in wave 2 (`Ctrl+Alt+Shift+Arrow`, `Ctrl+Alt+[` / `]`).
+
+### Window classification (for other branches)
+
+`krova_platform::classify(&WindowFacts) -> WindowKind` is OS-independent and unit-tested; `Platform::probe_window(id) -> Option<WindowProbe {kind, exe, exe_path, owner}>` reads the facts on Windows (styles, owner, class family, DWM cloaking, elevation) and the program path. `WindowKind` gained `cloaked` and `elevated`. Only `normal` windows are ever arranged. No title is read.
+
+## Wave 2: shortcut scheme, rebinding, popups, pause (engine branch)
+
+**This replaces the "Keyboard map" above.** Base chord `Ctrl+Alt`; every action can be rebound or switched off one by one.
+
+| Action id | Default | Does |
+|---|---|---|
+| `move_left` / `move_right` / `move_up` / `move_down` | `Ctrl+Alt+Arrow` | Focused window to the neighbouring zone in that direction; past the layout's edge, to the nearest zone on the next monitor that way. A window in no zone goes to the far zone in that direction. |
+| `swap_left` ... `swap_down` | `Ctrl+Alt+Shift+Arrow` | Swap with the window in the neighbouring zone (auto-arranged windows); an untracked window just moves. |
+| `zone_1` ... `zone_9` | `Ctrl+Alt+1..9` | Focused window to zone N (reading order). |
+| `layout_1` ... `layout_9` | `Ctrl+Alt+Shift+1..9` | Apply layout N (the monitor's list order) on the monitor under the cursor; auto-arranged windows re-tile. |
+| `maximize_in_zone` | `Ctrl+Alt+Enter` | A window in a zone fills its monitor's work area; again: back into its zone. |
+| `stack_prev` / `stack_next` | `Ctrl+Alt+[` / `]` | Previous / next tab of the focused window's stack. |
+| `switcher` | `Ctrl+Alt+Space` | Layout switcher on the monitor under the cursor (also needs `layout_switcher_shortcut`). |
+| `pause` | `Ctrl+Alt+T` | Pause / resume auto-arrange; windows stay where they are. |
+| `cheat_sheet` | `Ctrl+Alt+/` | Show every shortcut (the `switcher` window with `navigate` = `cheat_sheet`). |
+| `focus` | `Ctrl+Alt+F` | Reported to the engine hooks only (`Action("focus")`); wave 3 implements focus. |
+
+**Known collisions.** `Ctrl+Alt+Left` / `Right` are "navigate back / forward" in Visual Studio and JetBrains IDEs (a global hot key wins while Krova runs), and older Intel graphics drivers bind `Ctrl+Alt+Arrow` to screen rotation; Windows then refuses the chord and its row shows `in_use` with suggestions. `Ctrl+Alt+Space` is a common quick-entry shortcut.
+
+### Settings
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `shortcuts` | `ShortcutMap` = `{ [actionId]: string \| null }` | `{}` | Only the user's changes: a chord text (`"Ctrl+Shift+F"`; modifiers written in the order Win, Ctrl, Alt, Shift, parsed in any order and case) or `null` (off). Missing ids keep their default. Loaded leniently: unknown ids and unreadable chords are dropped, a duplicate chord switches the later action off. |
+| `shortcut_modifier` | (deprecated) | | Migrated once: a config without `shortcuts` whose modifier was `win_alt` / `win_ctrl` gets overrides for the actions that existed then (move left / right / up, zones, switcher). `ctrl_alt_shift` (the old default) and `ctrl_alt` start from the new scheme. |
+
+`keyboard_shortcuts` still switches every shortcut except the switcher; `layout_switcher_shortcut` the switcher. `AppState.shortcuts` / `layout_switcher` keep working as group summaries.
+
+### `AppState` additions
+
+- `shortcut_actions: ShortcutActionState[]`: one row per action in sheet order: `{id, label (1-4 words), group: "Windows" | "Layouts" | "Krova", chord: string | null, default_chord, status: "active" | "off" | "in_use" | "error" | "unsupported", message: string | null}`. Render the shortcut sheet and the cheat sheet straight from it.
+- `paused: bool`. While paused the tray item "Pause arranging" is checked, the tray icon is drawn at 40 % opacity and its tooltip says "Krova (paused)".
+
+### Commands
+
+| Command | Arguments | Returns | Notes |
+|---|---|---|---|
+| `probe_shortcut` | `action: string`, `chord: string` | `ProbeResult` | `{status: "free" \| "current" \| "conflict" \| "in_use" \| "invalid" \| "unknown", chord, conflict_with, message, suggestions}`. Krova's own map first (`conflict` names the action), then a live `RegisterHotKey` probe. `suggestions`: up to 3 free chords with the same key. |
+| `set_shortcut` | `action`, `chord: string \| null` | `AppState` | Rebind or switch off; re-registers at once. A chord another action has is refused ("Ctrl+Alt+Left is already Move left"). |
+| `reset_shortcuts` | none | `AppState` | Every action back to its default. |
+| `set_paused` | `paused: bool` | `null` | Like `Ctrl+Alt+T`; the new state comes with `state-changed`. |
+| `hide_popup` | `label: "panel" \| "switcher"` | `null` | Call on Esc. |
+| `popup_open_ms` | `label` | `number \| null` | How long the last open took (request to shown); see `docs/measurements/popup-open-latency.md`. |
+
+### Windows `panel` and `switcher`
+
+Two more windows in `tauri.conf.json` (`create: false`, undecorated, transparent, always on top, no taskbar entry; panel 360x520, switcher 820x560), both in the capability file. Created on first use, then **kept warm**: closing, Esc (`hide_popup`) or a click outside (focus lost) only hides them; the next open is a show plus a `navigate` event. The UI tells them apart by `getCurrentWindow().label`. `navigate` payloads: `"panel"` in `panel`; `"switcher"` or `"cheat_sheet"` in `switcher`. The switcher opens centred (upper third) on the monitor `switcher_monitor` names; the panel near the tray (bottom right of the primary work area), or next to the notch (see "Popup windows" below). A left click on the tray icon opens the panel; the tray menu has "Quick panel" and "Pause arranging".
+
+TS: `ShortcutMap`, `ShortcutActionState`, `ShortcutGroup`, `ShortcutStatusCode`, `ProbeResult`, `PopupLabel`, `PanelAnchor`; `NavigateTarget` gained `cheat_sheet` and `panel`.
+
+### Popup windows: pages, backdrop, capabilities, `open_main`, `show_panel`
+
+- `panel` loads `panel.html`, `switcher` loads `switcher.html` (the pages are built by the UI branches `ui-panel` and `ui-switcher`; on this branch they are not in `ui/dist` yet). Both: undecorated, transparent, no shadow, not resizable, always on top, no taskbar entry, created hidden on first use and kept warm.
+- The **switcher** window is sized and placed to cover the whole target monitor (`switcher_monitor`, physical pixels) on every open, then shown, focused and sent `navigate` (`"switcher"` or `"cheat_sheet"`). The page hides itself (apply, Esc, backdrop click, blur) with `hide_popup` or the window API.
+- Both windows get the system's blurred backdrop once their page loaded: acrylic (`DWMSBT_TRANSIENTWINDOW`), else mica, through `DwmSetWindowAttribute(DWMWA_SYSTEMBACKDROP_TYPE)` (`krova_platform::apply_backdrop`), with the dark or light frame colours of the theme. Windows 11 22H2+; elsewhere nothing happens and the page's own background shows. No extra crate.
+- Capabilities: `capabilities/popups.json` for `panel` and `switcher`: `core:default`, `core:event:allow-emit-to`, `core:window:allow-set-size`, `-set-position`, `-show`, `-hide`, `-set-focus`. App commands (`get_state`, `switcher_monitor`, `set_active_layout`, `delete_layout`, `insert_layout`, `move_layout`, ...) have no per-command ACL yet (F-08), so they are callable from these windows like from `main`. `capabilities/default.json` is `main` only again.
+- Command `open_main` (`view: string`): `"switcher"` opens the switcher window on the monitor under the cursor, `"cheat_sheet"` the cheat sheet; anything else creates or focuses the editor window and emits `navigate` with that view or settings section (`"settings"`, `"editor"`, `"corners"`, ...; a section name is lower-case letters, digits, `_` and `-`, at most 32 long; at most 64 distinct names per run). Errors are sentences. TS: `Backend.openMain`.
+- `panel-anchor` payload (changed from `{rect}`): `PanelAnchor` = `{x, y, w, h, corner: "top_center" | "top_left" | "top_right" | "bottom_left" | "bottom_right", monitor_id}` in physical pixels. **The notch calls `ui_window::show_panel(&app, Some(anchor))`**: the anchor is stored in `Shared.panel_anchor`, the panel opens on that monitor next to it (below a top notch, above a bottom one, centred or aligned to the corner, kept inside the work area) and the anchor is emitted to the panel unchanged. `show_panel(&app, None)` (and the tray) opens it near the tray.
+
+## Appearance (engine branch)
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `appearance.accent` | `#rrggbb` | `#ff5b1f` | Validated like `highlight_color` (bad values fall back to the default). Used by every native overlay: the drag zones, the stack tab strips' underline, and the notch. |
+| `appearance.corner_radius_px` | int | `10` | `0..=16` logical px; zone tiles and tabs are rounded with it (scaled to each monitor's DPI). |
+| `appearance.border_width_px` | int | `2` | `1..=6` logical px; idle zones use it, the highlighted zone twice it. |
+| `highlight_opacity` | float | `0.35` | Unchanged: still the fill opacity. |
+| `highlight_color` | `#rrggbb` | **`#ff5b1f`** (was `#3b82f6`) | Old name of the accent. Kept so older UIs and files load; the overlays read `appearance.accent`. A config written before `appearance` existed whose `highlight_color` is not the old blue default has that colour migrated into `appearance.accent`. |
+
+TS: `Appearance`.
+
+## Engine hooks (for the wave 3 / wave 4 / notch / corners branches)
+
+`src-tauri/src/hooks.rs`. Register once at start-up: `shared.hooks.register(Arc::new(|event| { ... }))`. A hook runs on the engine thread right after the event and must return at once (send to a channel, flip a flag); never call back into the engine synchronously. No event carries a title.
+
+| `EngineEvent` | When |
+|---|---|
+| `FocusChanged { window }` | The foreground window changed. |
+| `WindowMoved { window, rect }` | Krova placed a window (snap, shortcut, auto-arrange, restore, fill screen). |
+| `MonitorsChanged` | The monitor set settled after a change. |
+| `SettingsChanged` | Settings or layouts changed (UI, tray, a layout applied by shortcut). |
+| `PauseChanged(bool)` | Auto-arrange paused / resumed. |
+| `Action(&'static str)` | A feature the engine does not implement was asked for (`"focus"` today). |
+
+Calls the other way (on `Shared` or in `engine`):
+
+- `engine::request(&shared, ShortcutAction::...)`: run any shortcut action as if pressed (switcher, cheat sheet, pause, focus, ...).
+- `shared.is_paused()`; `engine::notify(&shared, Msg::SetPaused(b))` changes it.
+- `shared.active_layouts()`: `[{profile_id, layout_id, layout_name}]` for every connected monitor (the notch shows the name).
+- `shared.set_hide_app_names(bool)` / `hide_app_names()`: share-safe; the stack tab strips stop drawing names and icons from their next refresh.
+- `*lock(&shared.panel_anchor) = Some(rect)`, then the `"panel"` view through `shared.open_view`: the panel opens anchored there and receives `panel-anchor`.
+- `shared.state_changed`: call it to push `state-changed` to the UI and refresh the tray after changing something.
+- `krova_platform::classify` / `Platform::probe_window`: the window classifier (see Wave 1).
+
+## Integration of the branches (integrate: wave3, wave4, notch, corners, engine)
+
+How the features talk to each other after the merges (code in `// --- integration ---` fences):
+
+- **Pause** is the engine's pause (`AppState.paused`; tray "Pause arranging", `Ctrl+Alt+T`, `set_paused`). The notch menu's Pause/Resume and a `pause` hot corner call `engine::notify(Msg::SetPaused(!paused))`; they no longer touch `settings.enabled` (the master switch). While paused: auto-arrange waits, focus follows mouse and the hover picker do nothing (the cursor watcher is stopped; `place_hovered` returns "Krova is paused"), and hot corners watch only corners whose action is `pause`, so a corner can resume. The notch shows "Paused" (grey dot) while paused or switched off.
+- **Share-safe** (`settings.share_safe`) also: hides layout names in the notch at once (`notch::set_share_safe`), makes the stack tab strips draw dots instead of names and icons (`Shared::set_hide_app_names`), drops `AppState.front_app.exe` (sent as `null`; the UI must not name the program) and excludes the notch, the hot-corner ripple and the tab strips from screen capture (the F-29 registry). The Tauri popups (`panel`, `switcher`, `picker`) are not excluded from capture.
+- **Actions.** `Action("focus")` (`Ctrl+Alt+F`) and `Action("calm_desk")` from the engine hooks, and the hot corner actions `focus` and `calm_desk`, run wave3's toggles (persisted, `state-changed` follows). `show_zones` stays an event (no overlay call for it yet).
+- **Quick panel.** The notch opens the engine's `panel` window through `ui_window::show_panel` (anchor stored in `Shared::panel_anchor`); `panel_anchor` returns it and `hide_panel` hides the window. The notch menu's Layout switcher and Cheat sheet open the `switcher` window (`switcher` / `cheat_sheet` views).
+- **Hover picker window.** A third warm popup, `picker` (`picker.html`, 240 x 160, transparent, topmost, no taskbar entry, `focus: false`): shown next to the cursor (inside the work area) on every `hover-picker` event, which it also receives after it first loads; hidden on `hover-picker-end` and after `place_hovered`. Capability `picker.json`: event listen/unlisten and `core:window:allow-hide`; `hide_popup` accepts `"picker"` (TS `PopupLabel`).
 
 ## Not part of the contract
 

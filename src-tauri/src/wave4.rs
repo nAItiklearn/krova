@@ -178,6 +178,13 @@ pub fn start(app: &AppHandle, shared: &Arc<Shared>) {
         emit: {
             let app = app.clone();
             Arc::new(move |name, payload| {
+                // --- integration --- (the picker popup follows the events)
+                match name {
+                    "hover-picker" => crate::popups::show_picker(&app, &payload),
+                    "hover-picker-end" => crate::popups::hide_picker(&app),
+                    _ => {}
+                }
+                // --- end integration ---
                 let _ = app.emit(name, payload);
             })
         },
@@ -189,6 +196,21 @@ pub fn start(app: &AppHandle, shared: &Arc<Shared>) {
         return;
     }
     apply(shared);
+    // --- integration ---
+    // Pausing or resuming starts or stops the watcher. Hooks run on the engine
+    // thread: hand the work (which may join the watcher thread) to a short thread.
+    shared.hooks.register(Arc::new(|event| {
+        if matches!(event, crate::hooks::EngineEvent::PauseChanged(_)) {
+            let _ = thread::Builder::new()
+                .name("krova-pointer-pause".into())
+                .spawn(|| {
+                    if let Some(w) = WAVE4.get() {
+                        apply(&w.shared);
+                    }
+                });
+        }
+    }));
+    // --- end integration ---
 }
 
 /// Follow the settings: update the watcher's live config, start it when a
@@ -199,6 +221,13 @@ pub fn apply(shared: &Shared) {
     };
     let settings = lock(&shared.model).config.settings.clone();
     let (focus, hover) = pointer_wanted(&settings, shared.platform.wave4_capabilities());
+    // --- integration --- (engine pause: nothing watches the cursor)
+    let (focus, hover) = if shared.is_paused() {
+        (false, false)
+    } else {
+        (focus, hover)
+    };
+    // --- end integration ---
     w.pointer.set(
         focus,
         settings.focus_follows_mouse_delay_ms,
@@ -239,10 +268,11 @@ pub fn apply(shared: &Shared) {
 
 // --- integration ---
 /// Krova is paused (`settings.enabled` off): focus follows mouse and the hover
-/// picker do nothing. Their entry points ask this; `pointer_wanted` also stops
-/// the watcher. After the engine merge, also check the engine's pause here.
+/// picker do nothing; so does the engine's pause (auto-arrange paused, from
+/// the tray, Ctrl+Alt+T, the notch or a hot corner). Their entry points ask
+/// this, and `apply` stops the watcher (re-run on `PauseChanged`).
 pub fn paused(shared: &Shared) -> bool {
-    !lock(&shared.model).config.settings.enabled
+    shared.is_paused() || !lock(&shared.model).config.settings.enabled
 }
 // --- end integration ---
 
@@ -347,6 +377,7 @@ fn plan_hover_place(
         layout_id: layout.id.clone(),
         zone_id,
         rect: target,
+        owner: None,
     };
     Ok((target, view.work, record))
 }
@@ -381,6 +412,7 @@ pub fn place_hovered_on(
         .place_window(hovered.window, target, work, animate)
         .map_err(|e| format!("could not move the window: {e}"))?;
     record.rect = done;
+    record.owner = shared.platform.window_owner(hovered.window);
     lock(&shared.registry).insert(WindowKey(hovered.window.0), record);
     Ok(done)
 }
@@ -398,6 +430,9 @@ pub async fn place_hovered(
         .ok_or_else(|| "no window is under the picker".to_owned())?;
     place_hovered_on(&shared, &hovered, zone_id)?;
     *lock(&HOVERED) = None;
+    // --- integration ---
+    crate::popups::hide_picker(&app);
+    // --- end integration ---
     let _ = app.emit("hover-picker-end", ());
     Ok(())
 }

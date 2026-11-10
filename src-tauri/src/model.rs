@@ -1,17 +1,20 @@
 //! App state shared by the tray, the Tauri commands and the drag engine.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
+use krova_core::arrange::ArrangeSettings;
 use krova_core::registry::{ConnectedMonitor, SnapRegistry};
-use krova_core::{Config, ConfigError, MonitorDescriptor, MonitorView, PxRect, Settings};
+use krova_core::{Config, ConfigError, Layout, MonitorDescriptor, MonitorView, PxRect, Settings};
 use krova_platform::{
     Capabilities, HotkeyHandle, InputHandle, MonitorInfo, Permission, Platform, WatchHandle,
 };
 use serde::Serialize;
 
 use crate::engine::Msg;
+use crate::hooks::Hooks;
 
 /// Everything the app threads share.
 pub struct Shared {
@@ -31,6 +34,22 @@ pub struct Shared {
     /// Profile id of the monitor the layout switcher was last opened for (the one
     /// under the cursor at the time). Read by the UI through `switcher_monitor`.
     pub switcher_monitor: Mutex<Option<String>>,
+    /// What the engine last learned about the window in front.
+    pub front_app: Mutex<Option<FrontApp>>,
+    /// Auto-arrange is paused (Ctrl+Alt+T or the tray): windows stay where they are.
+    pub paused: AtomicBool,
+    /// Share-safe: native overlays show no program names or icons. Set by the
+    /// share-safe feature (wave 3) through [`Shared::set_hide_app_names`].
+    pub hide_names: AtomicBool,
+    /// Hooks of features built on other branches (see `hooks.rs`).
+    pub hooks: Hooks,
+    /// Push the current state to the UI and the tray, after the engine changed
+    /// something itself (pause, a layout applied by shortcut). Set by the Tauri
+    /// setup; `None` in unit tests.
+    pub state_changed: Mutex<Option<StateNotifier>>,
+    /// Where the quick panel opens from (the notch's rect, in screen pixels), set by
+    /// the notch; `None`: near the tray.
+    pub panel_anchor: Mutex<Option<crate::popups::PanelAnchor>>,
     /// How the engine asks the shell to bring a view of the UI window forward. Set
     /// once by the Tauri setup; `None` where there is no window (unit tests).
     pub open_view: Mutex<Option<ViewOpener>>,
@@ -44,6 +63,9 @@ pub struct Shared {
 /// window, so it must not be called while a lock the window code needs is held.
 pub type ViewOpener = Arc<dyn Fn(&'static str) + Send + Sync>;
 
+/// Pushes the state to the UI and the tray (see `Shared::state_changed`).
+pub type StateNotifier = Arc<dyn Fn() + Send + Sync>;
+
 impl Shared {
     pub fn new(model: AppModel, platform: Arc<dyn Platform>) -> Self {
         Self {
@@ -55,11 +77,51 @@ impl Shared {
             engine_tx: Mutex::new(None),
             shortcut_gate: Mutex::new(()),
             switcher_monitor: Mutex::new(None),
+            front_app: Mutex::new(None),
+            paused: AtomicBool::new(false),
+            hide_names: AtomicBool::new(false),
+            hooks: Hooks::default(),
+            state_changed: Mutex::new(None),
+            panel_anchor: Mutex::new(None),
             open_view: Mutex::new(None),
             // --- wave3 ---
             wave3: crate::wave3::Wave3::default(),
             // --- end wave3 ---
         }
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.paused.load(Ordering::Relaxed)
+    }
+
+    pub fn set_paused(&self, paused: bool) {
+        self.paused.store(paused, Ordering::Relaxed);
+    }
+
+    /// Whether native overlays must hide program names and icons (share-safe).
+    pub fn hide_app_names(&self) -> bool {
+        self.hide_names.load(Ordering::Relaxed)
+    }
+
+    /// The active layout of every connected monitor, for the notch and other
+    /// features that show it (name only; hide it under share-safe if asked).
+    #[allow(dead_code)] // read by the notch (notch branch)
+    pub fn active_layouts(&self) -> Vec<ActiveLayout> {
+        let model = lock(&self.model);
+        model
+            .monitor_ctxs()
+            .into_iter()
+            .map(|m| ActiveLayout {
+                profile_id: m.profile_id,
+                layout_id: m.layout.id.clone(),
+                layout_name: m.layout.name,
+            })
+            .collect()
+    }
+
+    /// The hook for share-safe: strips (and later the notch) stop showing names.
+    pub fn set_hide_app_names(&self, hide: bool) {
+        self.hide_names.store(hide, Ordering::Relaxed);
     }
 }
 
@@ -91,6 +153,8 @@ pub struct CapabilitiesState {
     /// This build can show the notch (Windows).
     pub notch: bool,
     // --- notch ---
+    /// Auto-arrange, stacks and tab strips (window events and classification).
+    pub auto_arrange: bool,
 }
 
 impl From<Capabilities> for CapabilitiesState {
@@ -101,6 +165,7 @@ impl From<Capabilities> for CapabilitiesState {
             // --- notch ---
             notch: krova_platform::notch::SUPPORTED,
             // --- notch ---
+            auto_arrange: c.auto_arrange,
         }
     }
 }
@@ -162,6 +227,65 @@ pub struct AppState {
     #[serde(flatten)]
     pub wave4: crate::wave4::Wave4State,
     // --- end wave4 ---
+    /// The program in front and whether auto-arrange looks after it (for the
+    /// "Not arranged" chip). `None` when nothing is known yet.
+    pub front_app: Option<FrontApp>,
+    /// Auto-arrange is paused (windows stay where they are).
+    pub paused: bool,
+    /// Every shortcut action with its chord and state, in sheet order. The UI
+    /// shortcut sheet and the cheat sheet render straight from it.
+    pub shortcut_actions: Vec<ShortcutActionState>,
+}
+
+/// The program in front, as far as auto-arrange is concerned. Never a title.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FrontApp {
+    /// Executable file name (`chrome.exe`), when it could be read.
+    pub exe: Option<String>,
+    /// Auto-arrange places this window (it is in a zone it manages).
+    pub arranged: bool,
+    /// Why not, when `arranged` is false: `"dialog"`, `"tool"`, `"popup"`,
+    /// `"elevated"`, `"never_touch"`, `"float"`, `"auto_arrange_off"`, `"paused"`,
+    /// `"other"`. `None` when arranged.
+    pub reason: Option<String>,
+}
+
+/// A monitor and its active layout (see [`Shared::active_layouts`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ActiveLayout {
+    pub profile_id: String,
+    pub layout_id: String,
+    pub layout_name: String,
+}
+
+/// One row of the shortcut sheet.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ShortcutActionState {
+    /// Stable id (`move_left`, `zone_3`, `pause`, ...), the key of `Settings.shortcuts`.
+    pub id: String,
+    /// One to four words.
+    pub label: String,
+    /// `"Windows"`, `"Layouts"` or `"Krova"`.
+    pub group: String,
+    /// The chord now (`"Ctrl+Alt+Left"`), `None` when switched off.
+    pub chord: Option<String>,
+    pub default_chord: Option<String>,
+    /// `"active"` (registered), `"off"` (no chord, or its feature is switched off),
+    /// `"in_use"` (Windows refused it: another app owns it), `"error"`,
+    /// `"unsupported"` (this OS has no global shortcuts).
+    pub status: String,
+    /// Why, when the status is `in_use` or `error`.
+    pub message: Option<String>,
+}
+
+/// One connected monitor as the engine needs it, copied out of the model.
+#[derive(Debug, Clone)]
+pub struct MonitorCtx {
+    pub profile_id: String,
+    pub work: PxRect,
+    pub scale: f64,
+    pub layout: Layout,
+    pub arrange: ArrangeSettings,
 }
 
 pub struct AppModel {
@@ -173,6 +297,9 @@ pub struct AppModel {
     monitors: Vec<MonitorInfo>,
     /// Profile index in `config.monitors` for each entry of `monitors`.
     profile_idx: Vec<usize>,
+    /// Give a monitor that only has the built-in layouts the preset for its shape
+    /// (see `MonitorProfile::seed_preset`). On in the app, off in unit tests.
+    first_run_presets: bool,
 }
 
 impl AppModel {
@@ -183,7 +310,39 @@ impl AppModel {
             persist,
             monitors: Vec::new(),
             profile_idx: Vec::new(),
+            first_run_presets: false,
         }
+    }
+
+    /// Turn on the first-run preset (the app does; unit tests keep the templates).
+    pub fn enable_first_run_presets(&mut self) {
+        self.first_run_presets = true;
+    }
+
+    /// The connected monitor with profile `id`, with its active layout.
+    pub fn monitor_ctx(&self, id: &str) -> Option<MonitorCtx> {
+        self.monitors
+            .iter()
+            .zip(&self.profile_idx)
+            .find(|(_, &p)| self.config.monitors[p].id == id)
+            .and_then(|(m, &p)| {
+                let profile = &self.config.monitors[p];
+                Some(MonitorCtx {
+                    profile_id: profile.id.clone(),
+                    work: m.work,
+                    scale: m.scale,
+                    layout: profile.active()?.clone(),
+                    arrange: profile.auto_arrange,
+                })
+            })
+    }
+
+    /// Every connected monitor, as [`AppModel::monitor_ctx`].
+    pub fn monitor_ctxs(&self) -> Vec<MonitorCtx> {
+        self.connected_ids()
+            .iter()
+            .filter_map(|id| self.monitor_ctx(id))
+            .collect()
     }
 
     /// Adopt the currently connected monitors, matching them to saved profiles
@@ -194,6 +353,12 @@ impl AppModel {
         let descriptors: Vec<MonitorDescriptor> =
             infos.iter().map(|m| m.descriptor.clone()).collect();
         self.profile_idx = self.config.resolve_monitors(&descriptors);
+        if self.first_run_presets {
+            for (info, &p) in infos.iter().zip(&self.profile_idx) {
+                let r = info.descriptor.rect;
+                self.config.monitors[p].seed_preset(r.w, r.h);
+            }
+        }
         self.monitors = infos;
         let changed = self.config != before;
         if changed {
@@ -272,6 +437,9 @@ impl AppModel {
             // --- wave4 ---
             wave4: Default::default(),
             // --- end wave4 ---
+            front_app: None,
+            paused: false,
+            shortcut_actions: Vec::new(),
         }
     }
 
@@ -454,6 +622,7 @@ mod tests {
             Capabilities {
                 shortcuts: true,
                 window_memory: false,
+                auto_arrange: false,
             },
         );
         let json = serde_json::to_value(&s).unwrap();

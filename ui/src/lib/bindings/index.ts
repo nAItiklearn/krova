@@ -32,27 +32,29 @@ export interface Layout {
 }
 
 /** `Super` is the Windows key on Windows and Command on macOS. */
-export type Modifier = 'shift' | 'ctrl' | 'alt' | 'super';
-export type MoveMode = 'animate' | 'instant';
-export type Theme = 'system' | 'light' | 'dark';
+export type Modifier = "shift" | "ctrl" | "alt" | "super";
+export type MoveMode = "animate" | "instant";
+export type Theme = "system" | "light" | "dark";
 
 /**
  * Keys held together with Left/Right/Up/1..9 for the window-move shortcuts.
  * `win` is the Windows key (Command on macOS, once shortcuts exist there).
  */
-export type ShortcutModifier = 'ctrl_alt' | 'win_alt' | 'ctrl_alt_shift' | 'win_ctrl';
+export type ShortcutModifier =
+  "ctrl_alt" | "win_alt" | "ctrl_alt_shift" | "win_ctrl";
 
 // --- corners ---
 /** What a hot corner does. Rust: `krova_core::corners::HotCornerAction`. */
 export type HotCornerAction =
-  | 'switcher'
-  | 'cheat_sheet'
-  | 'focus'
-  | 'calm_desk'
-  | 'pause'
-  | 'show_zones'
-  | 'panel';
-export type HotCorner = 'top_left' | 'top_right' | 'bottom_left' | 'bottom_right';
+  | "switcher"
+  | "cheat_sheet"
+  | "focus"
+  | "calm_desk"
+  | "pause"
+  | "show_zones"
+  | "panel";
+export type HotCorner =
+  "top_left" | "top_right" | "bottom_left" | "bottom_right";
 
 /**
  * `Settings.hot_corners`. Only outer corners count (a corner touching another
@@ -102,8 +104,8 @@ export interface Settings {
   /** Global keyboard shortcuts that move the focused window between zones. Default true. */
   keyboard_shortcuts: boolean;
   /**
-   * Default `ctrl_alt_shift`. Windows refuses most Win+Alt and Win+Ctrl chords, so
-   * `shortcuts.failed` says which ones were not registered.
+   * Deprecated: replaced by `shortcuts`. Kept so an older config migrates (a
+   * `win_alt` / `win_ctrl` choice becomes overrides). Send back what you got.
    */
   shortcut_modifier: ShortcutModifier;
   /** Snapped windows return to their zones when their monitor reconnects. Default true. */
@@ -143,13 +145,20 @@ export interface Settings {
   // --- corners ---
   /** What each outer screen corner does when the cursor rests in it. */
   hot_corners: HotCornerSettings;
+  /** Per-program rules, in the order the user made them (at most 256). Default []. */
+  app_rules: AppRule[];
+  /** Changes to the default shortcut map (see `ShortcutMap`). Default {}. */
+  shortcuts: ShortcutMap;
+  /** Accent, corner radius and border width of the native overlays. */
+  appearance: Appearance;
 }
 
 // --- notch ---
 /** Where on its monitor the notch sits. */
-export type NotchCorner = 'top_center' | 'top_left' | 'top_right' | 'bottom_left' | 'bottom_right';
+export type NotchCorner =
+  "top_center" | "top_left" | "top_right" | "bottom_left" | "bottom_right";
 /** Which monitor shows the notch: the primary one, or the one under the cursor. */
-export type NotchMonitor = 'primary' | 'cursor';
+export type NotchMonitor = "primary" | "cursor";
 
 /** `Settings.notch`. Defaults: enabled, `top_center`, `primary`, hide in fullscreen. */
 export interface NotchSettings {
@@ -187,6 +196,10 @@ export interface MonitorProfile {
   /** Edges kept free for third-party docks and bars. Missing in old configs. */
   reserved?: ReservedEdges;
   // --- end wave4 ---
+  /** Auto-arrange on this monitor. On by default. Change with `setAutoArrange`. */
+  auto_arrange: ArrangeSettings;
+  /** The first-run preset was offered to this monitor (internal; never shown). */
+  preset_seeded: boolean;
 }
 
 export interface Config {
@@ -212,7 +225,7 @@ export interface MonitorSnapshot {
 }
 
 /** `denied` means macOS Accessibility access is still needed. */
-export type Permission = 'not_required' | 'granted' | 'denied';
+export type Permission = "not_required" | "granted" | "denied";
 
 /** Whether the global shortcuts are registered, and which ones could not be. */
 export interface ShortcutStatus {
@@ -229,6 +242,8 @@ export interface Capabilities {
   /** This build can show the notch (Windows). Missing in older backends. */
   notch?: boolean;
   // --- notch ---
+  /** Auto-arrange, stacks and tab strips (Windows only for now). */
+  auto_arrange: boolean;
 }
 
 export interface AppState {
@@ -254,20 +269,26 @@ export interface AppState {
   /** The resting-cursor watcher behind focus follows mouse and the hover picker. */
   pointer: PointerStatus;
   /** The language the native strings are shown in now (never `system`). */
-  language: Exclude<Language, 'system'>;
+  language: Exclude<Language, "system">;
   /** The choices for `Settings.language`, `system` first. */
   languages: LanguageOption[];
   // --- end wave4 ---
+  /** The program in front and whether auto-arrange looks after it; null if unknown. */
+  front_app: FrontApp | null;
+  /** Auto-arrange is paused (Ctrl+Alt+T, the tray, `setPaused`). */
+  paused: boolean;
+  /** Every shortcut with its chord and state, in sheet order. */
+  shortcut_actions: ShortcutActionState[];
 }
 
 /**
  * Divider direction. `vertical` = a vertical divider, zones end up side by side
  * (positions are x values); `horizontal` = zones stacked (positions are y).
  */
-export type Axis = 'vertical' | 'horizontal';
+export type Axis = "vertical" | "horizontal";
 
 /** Payload of the backend "navigate" event. */
-export type View = 'editor' | 'settings';
+export type View = "editor" | "settings";
 
 /**
  * What a "navigate" event or `take_pending_view` can carry: the two views of the
@@ -275,8 +296,6 @@ export type View = 'editor' | 'settings';
  * the monitor it is for comes from `switcher_monitor`). A UI that does not know
  * `switcher` yet must ignore it.
  */
-export type NavigateTarget = View | 'switcher';
-
 // --- wave3 ---
 // Workspaces, focus dim, calm desk, share-safe and window highlight
 // (crates/krova-core: workspace.rs, focus.rs, calm.rs; src-tauri/src/wave3.rs).
@@ -293,7 +312,7 @@ export interface CalmDeskSettings {
 }
 
 /** `active` = the focused window, `all` = every window, `glow` = a soft glow on the focused one. */
-export type HighlightMode = 'none' | 'active' | 'all' | 'glow';
+export type HighlightMode = "none" | "active" | "all" | "glow";
 
 export interface HighlightSettings {
   mode: HighlightMode;
@@ -326,13 +345,13 @@ export interface Workspace {
 }
 
 export type EntryOutcome =
-  | 'placed'
-  | 'launched'
-  | 'timed_out'
-  | 'not_running'
-  | 'refused'
-  | 'no_zone'
-  | 'failed';
+  | "placed"
+  | "launched"
+  | "timed_out"
+  | "not_running"
+  | "refused"
+  | "no_zone"
+  | "failed";
 
 export interface EntryResult {
   /** File name only (`code.exe`), never a folder. */
@@ -381,7 +400,7 @@ export interface Wave3State {
 // --- wave4 ---
 
 /** `system` follows the Windows display language (English if Krova has no table for it). */
-export type Language = 'system' | 'en' | 'es' | 'de' | 'ja' | 'zh-Hans';
+export type Language = "system" | "en" | "es" | "de" | "ja" | "zh-Hans";
 
 export interface LanguageOption {
   id: Language;
@@ -438,5 +457,144 @@ export interface HoverPicker {
  * window, from the notch menu) and `panel` (to the `panel` window, after
  * `panel-anchor`). Kept out of `NavigateTarget` so existing views ignore them.
  */
-export type NotchNavigateTarget = 'cheatsheet' | 'panel';
+export type NotchNavigateTarget = "cheatsheet" | "panel";
 // --- notch ---
+export type NavigateTarget = View | "switcher" | "cheat_sheet" | "panel";
+
+// ---------------------------------------------------------------- Wave 1: arrange
+
+/** Where a new window goes: the first free zone, or the first zone (others shift). */
+export type ArrangePolicy = "next_free" | "main_first";
+
+/** Auto-arrange for one monitor (`MonitorProfile.auto_arrange`). On by default. */
+export interface ArrangeSettings {
+  enabled: boolean;
+  policy: ArrangePolicy;
+  /** Closing a window lets the later ones move up. Default false. */
+  fill_gaps: boolean;
+  /** With every zone taken, a new window joins a stack (tabs). Default true. */
+  stack_when_full: boolean;
+}
+
+/** What an app rule does with a program's windows. */
+export type RuleAction =
+  | { kind: "never_touch" }
+  | { kind: "float" }
+  /** 1-based zone number in reading order (1..64). */
+  | { kind: "preferred_zone"; value: number }
+  /** A `MonitorProfile.id`. */
+  | { kind: "start_on_monitor"; value: string };
+
+/** A rule for one program, by executable file name (`chrome.exe`), never a title. */
+export interface AppRule {
+  exe: string;
+  action: RuleAction;
+}
+
+/** Why the front window is not arranged (`FrontApp.reason`). */
+export type FrontAppReason =
+  | "dialog"
+  | "tool"
+  | "popup"
+  | "elevated"
+  | "never_touch"
+  | "float"
+  | "auto_arrange_off"
+  | "paused"
+  | "other";
+
+/** The program in front, for the "Not arranged" chip. */
+export interface FrontApp {
+  exe: string | null;
+  arranged: boolean;
+  reason: FrontAppReason | null;
+}
+
+export type PresetFamily = "grid" | "columns" | "rows" | "main_side";
+export type PresetVariant = "landscape" | "ultrawide" | "portrait";
+export type MainSize = "half" | "sixty" | "two_thirds";
+
+/** One entry of `list_presets`: an ordinary layout plus the choices that made it. */
+export interface PresetInfo {
+  /** e.g. `grid-3`, `main-side-3-ultrawide-60` (also `layout.id`). */
+  id: string;
+  /** e.g. `Main + side 3 (ultrawide, 60%)` (also `layout.name`). */
+  name: string;
+  family: PresetFamily;
+  /** 1..5 windows. */
+  count: number;
+  variant: PresetVariant;
+  main_size: MainSize;
+  /** Made for the shape of the monitor that was asked about. */
+  recommended: boolean;
+  layout: Layout;
+}
+
+// ---------------------------------------------------------------- Wave 2: shortcuts
+
+/**
+ * The user's changes to the default shortcut map: action id -> chord text
+ * (`"Ctrl+Alt+Left"`) or `null` (switched off). Missing ids keep their default.
+ */
+export type ShortcutMap = Record<string, string | null>;
+
+export type ShortcutGroup = "Windows" | "Layouts" | "Krova";
+
+/**
+ * `active` registered; `off` no chord or its feature is off; `in_use` Windows refused
+ * it (another app owns it); `error` another refusal; `unsupported` no global
+ * shortcuts on this OS.
+ */
+export type ShortcutStatusCode =
+  "active" | "off" | "in_use" | "error" | "unsupported";
+
+/** One row of the shortcut sheet (`AppState.shortcut_actions`, in sheet order). */
+export interface ShortcutActionState {
+  /** `move_left`, `swap_up`, `zone_3`, `layout_2`, `maximize_in_zone`, `stack_prev`,
+   * `stack_next`, `switcher`, `pause`, `cheat_sheet`, `focus`. */
+  id: string;
+  /** One to four words, e.g. "Move left". */
+  label: string;
+  group: ShortcutGroup;
+  /** Display text of the chord now; null when switched off. */
+  chord: string | null;
+  default_chord: string | null;
+  status: ShortcutStatusCode;
+  /** Why, for `in_use` / `error`. */
+  message: string | null;
+}
+
+/** Answer of `probe_shortcut`. */
+export interface ProbeResult {
+  /** `free`, `current` (already this action's), `conflict` (another Krova action),
+   * `in_use` (another program), `invalid` (not a chord), `unknown` (cannot check). */
+  status: "free" | "current" | "conflict" | "in_use" | "invalid" | "unknown";
+  /** Normalised chord text, when it could be read. */
+  chord: string | null;
+  /** The Krova action id that has it, for `conflict`. */
+  conflict_with: string | null;
+  /** One sentence for the UI. */
+  message: string;
+  /** Up to three free chords with the same key. */
+  suggestions: string[];
+}
+
+/** Window labels of the two warm popups. */
+export type PopupLabel = "panel" | "switcher" | "picker";
+
+/** Payload of the `panel-anchor` event: where the panel was opened from (the notch). */
+// ---------------------------------------------------------------- appearance
+
+/**
+ * How Krova's native overlays (zones, stack tabs, the notch) look. `highlight_opacity`
+ * stays the opacity. `highlight_color` is the old name of the accent (kept; a colour
+ * picked there before `appearance` existed was migrated to `accent`).
+ */
+export interface Appearance {
+  /** `#rrggbb`. Default `#ff5b1f`. */
+  accent: string;
+  /** Integer 0..16, logical px. Default 10. */
+  corner_radius_px: number;
+  /** Integer 1..6, logical px; the highlighted zone uses twice this. Default 2. */
+  border_width_px: number;
+}

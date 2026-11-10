@@ -3,6 +3,8 @@
   "_language": "Deutsch",
   "tray.tooltip": "Krova",
   "tray.enabled": "Enabled",
+  "tray.pause": "Pause arranging",
+  "tray.panel": "Quick panel",
   "tray.edit": "Edit layouts…",
   "tray.settings": "Settings…",
   "tray.autostart": "Launch at login",

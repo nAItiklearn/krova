@@ -147,7 +147,11 @@ pub fn apply_settings(shared: &Shared) {
     let settings = lock(&shared.model).config.settings.clone();
     desk::set_share_safe(kfocus::share_safe(&settings));
     // --- integration ---
-    crate::notch::set_share_safe(kfocus::share_safe(&settings));
+    // Share-safe reaches the notch (layout names) and the engine's tab strips
+    // (program names and icons; the next strip update after this change uses it).
+    let safe = kfocus::share_safe(&settings);
+    crate::notch::set_share_safe(safe);
+    shared.set_hide_app_names(safe);
     // --- end integration ---
     let want = (settings.enabled).then(|| visuals_config(&settings));
     let want = want.filter(VisualsConfig::is_active);
@@ -189,9 +193,55 @@ pub fn on_settings_changed(shared: &Shared, old: &Settings, new: &Settings) {
 }
 
 /// Start what the saved settings ask for (called once at startup).
-pub fn start(shared: &Shared) {
+pub fn start(shared: &Arc<Shared>) {
     apply_settings(shared);
+    // --- integration ---
+    register_engine_actions(shared);
+    // --- end integration ---
 }
+
+// --- integration ---
+/// The engine emits `Action("focus")` (Ctrl+Alt+F) and `Action("calm_desk")`
+/// for shortcuts it does not implement. Hooks run on the engine thread and must
+/// not block or call back into the engine, so each toggle runs on its own short
+/// thread; it persists and pushes `state-changed` through the shell's notifier.
+fn register_engine_actions(shared: &Arc<Shared>) {
+    let weak = Arc::downgrade(shared);
+    shared.hooks.register(Arc::new(move |event| {
+        let crate::hooks::EngineEvent::Action(action) = event else {
+            return;
+        };
+        let toggle: fn(&Shared) -> Result<bool, String> = match *action {
+            "focus" => toggle_focus,
+            "calm_desk" => toggle_calm_desk,
+            _ => return,
+        };
+        let Some(shared) = weak.upgrade() else { return };
+        let name = *action;
+        let spawned = std::thread::Builder::new()
+            .name("krova-wave3-action".into())
+            .spawn(move || {
+                let saved = toggle(&shared).and_then(|_| {
+                    lock(&shared.model)
+                        .persist()
+                        .map_err(|e| format!("could not save the config: {e}"))
+                });
+                match saved {
+                    Ok(()) => {
+                        let notify = lock(&shared.state_changed).clone();
+                        if let Some(notify) = notify {
+                            notify();
+                        }
+                    }
+                    Err(e) => eprintln!("krova: {name}: {e}"),
+                }
+            });
+        if let Err(e) = spawned {
+            eprintln!("krova: could not start the {name} action: {e}");
+        }
+    }));
+}
+// --- end integration ---
 
 // --- integration ---
 /// Plug wave 3's toggles into the hot corners: `focus` flips focus dim,
@@ -544,6 +594,7 @@ fn restore_inner(shared: &Shared, id: &str, launch: bool) -> Result<RestoreRepor
                         layout_id,
                         zone_id: entry.zone_id,
                         rect: done,
+                        owner: shared.platform.window_owner(win),
                     },
                 );
                 outcomes[i] = Some(ok);
@@ -1022,7 +1073,7 @@ mod tests {
     #[test]
     fn overlays_start_only_while_needed_and_follow_the_settings() {
         let (shared, desk, _) = setup();
-        start(&shared);
+        apply_settings(&shared);
         assert_eq!(desk.visuals_started.load(Ordering::SeqCst), 0);
         assert!(toggle_focus(&shared).unwrap());
         assert_eq!(desk.visuals_started.load(Ordering::SeqCst), 1);

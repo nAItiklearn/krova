@@ -10,10 +10,12 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
 
-use krova_core::registry::KeyAction;
+use krova_core::registry::WindowOwner;
+use krova_core::shortcuts::{Chord, ShortcutAction};
 use krova_core::{DragEvent, Modifier, MonitorDescriptor, PxRect};
 
 // --- corners ---
+pub mod classify;
 pub mod corners;
 pub mod hotkeys;
 pub mod ids;
@@ -27,6 +29,7 @@ pub mod notch;
 pub mod win_notch;
 // --- notch ---
 pub mod overlay;
+pub mod strips;
 #[cfg(windows)]
 pub mod win;
 // --- corners ---
@@ -55,8 +58,15 @@ pub mod win_hover;
 #[cfg(windows)]
 pub mod win_shell;
 // --- end wave4 ---
+#[cfg(windows)]
+pub mod win_strips;
+#[cfg(windows)]
+pub mod win_windows;
 
+pub use classify::{classify, ClassFamily, WindowFacts};
 pub use hotkeys::{HotkeyEvent, HotkeySpec};
+pub use krova_core::app_rules::WindowKind;
+pub use strips::{StripEvent, StripHost, StripScene, StripTab, StripTheme};
 
 /// Where an OS-level notification is delivered. The closure runs on the platform's
 /// own thread and must only enqueue (a channel send) and return at once.
@@ -70,6 +80,9 @@ pub struct Capabilities {
     pub shortcuts: bool,
     /// Reading where windows are (reconnect memory, linked dividers).
     pub window_memory: bool,
+    /// Seeing windows appear, close and take the focus, and classifying them:
+    /// auto-arrange, stacks and their tab strips.
+    pub auto_arrange: bool,
 }
 
 /// Something happened that the engine wants to know about.
@@ -82,6 +95,33 @@ pub enum WatchEvent {
     /// The set or layout of the monitors may have changed (display change, work
     /// area change, resume from sleep). Debounce before acting on it.
     DisplayChanged,
+    /// A top-level window became visible: it was created and shown, shown again
+    /// after being hidden, or stopped being cloaked (a window of another virtual
+    /// desktop, a UWP window that finished starting). Fired for every kind of
+    /// window, popups and tooltips included: classify with
+    /// [`Platform::probe_window`] before acting, and wait a moment, because many
+    /// programs move and resize their window right after showing it.
+    WindowShown(WindowId),
+    /// A top-level window was destroyed or hidden.
+    WindowGone(WindowId),
+    /// A window was minimized.
+    WindowMinimized(WindowId),
+    /// A minimized window was restored.
+    WindowRestored(WindowId),
+    /// This window became the foreground window.
+    Foreground(WindowId),
+}
+
+/// What a window is and whose it is, as far as the OS can tell without reading its
+/// title. Never contains a title.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WindowProbe {
+    pub kind: WindowKind,
+    /// File name of the program (`chrome.exe`), the key of the app rules.
+    pub exe: Option<String>,
+    /// Full path of the program, kept in memory only (it finds the program's icon).
+    pub exe_path: Option<String>,
+    pub owner: Option<WindowOwner>,
 }
 
 /// What happened to one group of shortcuts when they were registered.
@@ -97,16 +137,16 @@ pub struct ChordReport {
 /// their thread.
 pub struct HotkeyHandle {
     /// What each accepted shortcut asks for.
-    accepted: Vec<KeyAction>,
+    accepted: Vec<ShortcutAction>,
     /// What each refused shortcut asked for, and the sentence that says why.
-    refused: Vec<(KeyAction, String)>,
+    refused: Vec<(ShortcutAction, String)>,
     stop: Option<Box<dyn FnOnce() + Send>>,
 }
 
 impl HotkeyHandle {
     pub fn new(
-        accepted: Vec<KeyAction>,
-        refused: Vec<(KeyAction, String)>,
+        accepted: Vec<ShortcutAction>,
+        refused: Vec<(ShortcutAction, String)>,
         stop: impl FnOnce() + Send + 'static,
     ) -> Self {
         Self {
@@ -127,7 +167,7 @@ impl HotkeyHandle {
     }
 
     fn report(&self, switcher: bool) -> ChordReport {
-        let in_group = |action: &KeyAction| (*action == KeyAction::OpenSwitcher) == switcher;
+        let in_group = |action: &ShortcutAction| (*action == ShortcutAction::Switcher) == switcher;
         ChordReport {
             registered: self.accepted.iter().filter(|a| in_group(a)).count(),
             failed: self
@@ -139,14 +179,27 @@ impl HotkeyHandle {
         }
     }
 
-    /// The twelve shortcuts that move the focused window.
+    /// Every shortcut but the switcher.
     pub fn window_moves(&self) -> ChordReport {
         self.report(false)
     }
 
-    /// `<mods>+Space`, which opens the layout switcher.
+    /// The layout switcher shortcut.
     pub fn switcher(&self) -> ChordReport {
         self.report(true)
+    }
+
+    /// Whether the OS accepted the chord of `action`.
+    pub fn is_registered(&self, action: ShortcutAction) -> bool {
+        self.accepted.contains(&action)
+    }
+
+    /// The sentence saying why the chord of `action` was refused, if it was.
+    pub fn refusal(&self, action: ShortcutAction) -> Option<&str> {
+        self.refused
+            .iter()
+            .find(|(a, _)| *a == action)
+            .map(|(_, why)| why.as_str())
     }
 }
 
@@ -245,6 +298,18 @@ pub fn modifier_from_code(code: u8) -> Modifier {
     }
 }
 
+/// Blurred system backdrop (acrylic, else mica) for one of Krova's own windows, by
+/// its raw native handle. `false` where the OS has none (macOS today, Windows 10).
+#[cfg(windows)]
+pub fn apply_backdrop(native_window: isize, dark: bool) -> bool {
+    win_windows::apply_backdrop(native_window, dark)
+}
+
+/// Blurred system backdrop: not available on this OS.
+#[cfg(not(windows))]
+pub fn apply_backdrop(_native_window: isize, _dark: bool) -> bool {
+    false
+}
 /// Command line stored in the Windows `Run` key: the quoted executable path.
 pub fn autostart_command(exe: &Path) -> String {
     format!("\"{}\"", exe.display())
@@ -353,6 +418,58 @@ pub trait Platform: Send + Sync {
         false
     }
 
+    /// Who owns the window: its process id and the process creation time. A window
+    /// handle can be reused by the OS for another window after the first closed; two
+    /// readings with the same owner are the same program. `None` when the window is
+    /// gone or the process cannot be inspected. No name or title is read.
+    fn window_owner(&self, _window: WindowId) -> Option<WindowOwner> {
+        None
+    }
+
+    /// Classify a window and find its program. `None` when the window is gone.
+    /// A window that is not an ordinary application window is reported with the kind
+    /// that says why (dialog, tool window, owned popup, cloaked, elevated, ...), so
+    /// the caller never has to know OS flags.
+    fn probe_window(&self, _window: WindowId) -> Option<WindowProbe> {
+        None
+    }
+
+    /// Bring the window above its siblings without taking the keyboard focus (the
+    /// tab that is "showing" in a stack).
+    fn raise_window(&self, _window: WindowId) -> Result<(), PlatformError> {
+        Err(PlatformError::Unsupported)
+    }
+
+    /// Give the window the keyboard focus and raise it.
+    fn activate_window(&self, _window: WindowId) -> Result<(), PlatformError> {
+        Err(PlatformError::Unsupported)
+    }
+
+    /// The visible top-level windows, front to back (z-order). Every kind is
+    /// listed: probe each one.
+    fn top_level_windows(&self) -> Vec<WindowId> {
+        Vec::new()
+    }
+
+    /// Whether the operating system is set to dark app mode. Overlays follow it.
+    fn prefers_dark(&self) -> bool {
+        true
+    }
+
+    /// Create the host of the stack tab strips (native overlay windows). Events
+    /// (a tab clicked, the wheel turned) go to `events`; the closure only enqueues.
+    fn create_strip_host(
+        &self,
+        _events: EventSink<StripEvent>,
+    ) -> Result<Box<dyn StripHost>, PlatformError> {
+        Err(PlatformError::Unsupported)
+    }
+
+    /// Is `chord` free to register right now? `Ok(false)` when another program
+    /// (or Krova itself) holds it. Registers and releases it at once.
+    fn probe_hotkey(&self, _chord: Chord) -> Result<bool, PlatformError> {
+        Err(PlatformError::Unsupported)
+    }
     /// Register the global shortcuts. They stay registered until the handle is
     /// dropped. Shortcuts the OS refuses are reported in the handle, not as an error.
     fn start_hotkeys(
@@ -471,6 +588,8 @@ pub fn default_platform() -> Box<dyn Platform> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use krova_core::shortcuts::ShortcutAction as A;
+    use krova_core::swap::Direction;
     use std::sync::mpsc;
 
     #[test]
@@ -546,11 +665,12 @@ mod tests {
         assert_eq!(p.foreground_window(), None);
         assert_eq!(p.cursor_position(), None);
         assert!(!p.is_movable_target(w));
-        let spec = HotkeySpec {
-            modifier: krova_core::ShortcutModifier::WinAlt,
-            window_moves: true,
-            switcher: true,
-        };
+        assert_eq!(p.window_owner(w), None);
+        let spec = HotkeySpec::default();
+        assert!(matches!(
+            p.probe_hotkey("Ctrl+Alt+T".parse().unwrap()),
+            Err(PlatformError::Unsupported)
+        ));
         assert!(matches!(
             p.start_hotkeys(spec, Arc::new(|_| {})),
             Err(PlatformError::Unsupported)
@@ -566,9 +686,9 @@ mod tests {
         let stops = Arc::new(AtomicU8::new(0));
         let s = Arc::clone(&stops);
         let hotkeys = HotkeyHandle::new(
-            vec![KeyAction::PrevZone, KeyAction::NextZone],
+            vec![A::Move(Direction::Left), A::Move(Direction::Right)],
             vec![(
-                KeyAction::Zone(3),
+                A::Zone(3),
                 "Win+Alt+3 is already used by another app".into(),
             )],
             move || {
@@ -593,15 +713,8 @@ mod tests {
     fn a_hotkey_handle_reports_the_two_groups_apart() {
         let chord = |what: &str| format!("Ctrl+Alt+Shift+{what} is already used by another app");
         let handle = HotkeyHandle::new(
-            vec![
-                KeyAction::PrevZone,
-                KeyAction::Zone(1),
-                KeyAction::OpenSwitcher,
-            ],
-            vec![
-                (KeyAction::Zone(2), chord("2")),
-                (KeyAction::Zone(3), chord("3")),
-            ],
+            vec![A::Move(Direction::Left), A::Zone(1), A::Switcher],
+            vec![(A::Zone(2), chord("2")), (A::Zone(3), chord("3"))],
             || {},
         );
         assert_eq!(handle.registered(), 3);
@@ -623,8 +736,8 @@ mod tests {
 
         // The switcher chord refused while the moves are fine.
         let handle = HotkeyHandle::new(
-            vec![KeyAction::NextZone],
-            vec![(KeyAction::OpenSwitcher, chord("Space"))],
+            vec![A::Move(Direction::Right)],
+            vec![(A::Switcher, chord("Space"))],
             || {},
         );
         assert_eq!(handle.window_moves().failed, Vec::<String>::new());
@@ -632,7 +745,9 @@ mod tests {
         assert_eq!(handle.switcher().failed, [chord("Space")]);
 
         // Nothing requested for a group: its report is empty, not an error.
-        let handle = HotkeyHandle::new(vec![KeyAction::OpenSwitcher], vec![], || {});
+        let handle = HotkeyHandle::new(vec![A::Switcher], vec![], || {});
+        assert!(handle.is_registered(A::Switcher));
+        assert_eq!(handle.refusal(A::Switcher), None);
         assert_eq!(handle.window_moves(), ChordReport::default());
     }
 }

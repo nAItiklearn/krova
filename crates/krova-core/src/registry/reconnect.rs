@@ -14,19 +14,27 @@
 //! - a window that is already in its zone is left alone, so running the plan
 //!   twice does nothing the second time;
 //! - windows the user dragged or placed elsewhere are not in the registry at all
-//!   (the engine removes an entry the moment a drag of that window starts).
+//!   (the engine removes an entry the moment a drag of that window starts);
+//! - a window handle the OS reused for another program (the owner recorded at snap
+//!   time differs from the owner now) is forgotten, never moved;
+//! - at most [`MAX_RESTORED_PER_RECONNECT`] windows are moved per reconnect.
 
 use std::collections::{HashMap, HashSet};
 
 use crate::config::Config;
 use crate::geometry::PxRect;
 
-use super::{SnapRegistry, WindowKey};
+use super::{SnapRegistry, WindowKey, WindowOwner};
 
 /// How far (in pixels, per edge) a window may be from its zone rectangle and still
 /// count as "already in place". Absorbs rounding and DPI differences in the
 /// reported frame.
 pub const IN_PLACE_TOLERANCE_PX: i32 = 2;
+
+/// Most windows one reconnect moves. A monitor that flaps cannot make Krova shuffle
+/// hundreds of windows (or hold the engine for minutes of animations). Entries past
+/// the cap stay registered and are looked at on the next reconnect.
+pub const MAX_RESTORED_PER_RECONNECT: usize = 64;
 
 /// What the caller learned about one registered window, right now.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -40,6 +48,9 @@ pub struct WindowSnapshot {
     pub rect: Option<PxRect>,
     /// Profile id of the monitor the window is on now (`None` if on none).
     pub monitor_profile_id: Option<String>,
+    /// Who owns the window now. If the registry entry has an owner and this differs
+    /// (or could not be read), the handle is not the window Krova placed.
+    pub owner: Option<WindowOwner>,
 }
 
 /// A connected monitor and its work area, keyed by profile id.
@@ -117,6 +128,10 @@ pub fn plan_reconnect(
                 continue;
             }
         };
+        if record.owner != snapshot.owner {
+            plan.forget.push(key);
+            continue;
+        }
         let target = config
             .monitors
             .iter()
@@ -140,6 +155,10 @@ pub fn plan_reconnect(
         let on_home =
             snapshot.monitor_profile_id.as_deref() == Some(record.monitor_profile_id.as_str());
         if on_home && (near(now, target) || near(now, record.rect)) {
+            continue;
+        }
+        if plan.placements.len() >= MAX_RESTORED_PER_RECONNECT {
+            // The rest wait for the next reconnect (they stay in the registry).
             continue;
         }
         plan.placements.push(Placement {
@@ -206,6 +225,7 @@ mod tests {
             layout_id: layout.to_owned(),
             zone_id: zone,
             rect,
+            owner: None,
         }
     }
 
@@ -217,6 +237,7 @@ mod tests {
             maximized: false,
             rect: Some(PxRect::new(300, 200, 800, 600)),
             monitor_profile_id: Some(A.to_owned()),
+            owner: None,
         }
     }
 
@@ -417,6 +438,7 @@ mod tests {
             maximized: false,
             rect: Some(b_right_half()),
             monitor_profile_id: Some(B.to_owned()),
+            owner: None,
         };
         let plan = plan_reconnect(
             &registry_with_one(),
@@ -442,6 +464,7 @@ mod tests {
                 b_right_half().h,
             )),
             monitor_profile_id: Some(B.to_owned()),
+            owner: None,
         };
         let plan = plan_reconnect(
             &registry_with_one(),
@@ -463,6 +486,7 @@ mod tests {
         };
         let on_b = WindowSnapshot {
             monitor_profile_id: Some(B.to_owned()),
+            owner: None,
             ..off_by_three
         };
         let plan = plan_reconnect(
@@ -489,6 +513,7 @@ mod tests {
             maximized: false,
             rect: Some(achieved),
             monitor_profile_id: Some(B.to_owned()),
+            owner: None,
         };
         let plan = plan_reconnect(&reg, &only_a(), &both(), &config(), &snaps(&[(1, home)]), 0);
         assert_eq!(plan, ReconnectPlan::default());
@@ -502,6 +527,7 @@ mod tests {
             maximized: false,
             rect: Some(PxRect::new(1920 + 50, 50, 500, 400)),
             monitor_profile_id: Some(B.to_owned()),
+            owner: None,
         };
         let plan = plan_reconnect(
             &registry_with_one(),
@@ -636,6 +662,7 @@ mod tests {
                 1,
                 WindowSnapshot {
                     monitor_profile_id: None,
+                    owner: None,
                     ..displaced()
                 },
             ),
@@ -659,5 +686,100 @@ mod tests {
             0,
         );
         assert_eq!(plan, ReconnectPlan::default());
+    }
+
+    fn owner(pid: u32, started: u64) -> Option<WindowOwner> {
+        Some(WindowOwner { pid, started })
+    }
+
+    #[test]
+    fn a_handle_the_os_gave_to_another_program_is_forgotten_not_moved() {
+        // Krova snapped a window of process 100; the handle is now a window of 200.
+        let mut reg = SnapRegistry::new();
+        let mut rec = record(B, "halves", 2, b_right_half());
+        rec.owner = owner(100, 5_000);
+        reg.insert(WindowKey(1), rec);
+        let reused = WindowSnapshot {
+            owner: owner(200, 9_000),
+            ..displaced()
+        };
+        let plan = plan_reconnect(
+            &reg,
+            &only_a(),
+            &both(),
+            &config(),
+            &snaps(&[(1, reused)]),
+            0,
+        );
+        assert!(plan.placements.is_empty());
+        assert_eq!(plan.forget, vec![WindowKey(1)]);
+    }
+
+    #[test]
+    fn a_reused_process_id_with_another_start_time_is_a_different_program() {
+        let mut reg = SnapRegistry::new();
+        let mut rec = record(B, "halves", 2, b_right_half());
+        rec.owner = owner(100, 5_000);
+        reg.insert(WindowKey(1), rec);
+        let same_pid_new_process = WindowSnapshot {
+            owner: owner(100, 7_000),
+            ..displaced()
+        };
+        let plan = plan_reconnect(
+            &reg,
+            &only_a(),
+            &both(),
+            &config(),
+            &snaps(&[(1, same_pid_new_process)]),
+            0,
+        );
+        assert!(plan.placements.is_empty());
+        assert_eq!(plan.forget, vec![WindowKey(1)]);
+    }
+
+    #[test]
+    fn the_same_owner_is_restored_and_an_unreadable_owner_is_not_trusted() {
+        let mut reg = SnapRegistry::new();
+        let mut rec = record(B, "halves", 2, b_right_half());
+        rec.owner = owner(100, 5_000);
+        reg.insert(WindowKey(1), rec);
+        let same = WindowSnapshot {
+            owner: owner(100, 5_000),
+            ..displaced()
+        };
+        let plan = plan_reconnect(&reg, &only_a(), &both(), &config(), &snaps(&[(1, same)]), 0);
+        assert_eq!(plan.placements.len(), 1);
+        assert!(plan.forget.is_empty());
+
+        // The owner could not be read now: we cannot prove it is the same window.
+        let unreadable = WindowSnapshot {
+            owner: None,
+            ..displaced()
+        };
+        let plan = plan_reconnect(
+            &reg,
+            &only_a(),
+            &both(),
+            &config(),
+            &snaps(&[(1, unreadable)]),
+            0,
+        );
+        assert!(plan.placements.is_empty());
+        assert_eq!(plan.forget, vec![WindowKey(1)]);
+    }
+
+    #[test]
+    fn at_most_sixty_four_windows_are_moved_per_reconnect_and_the_rest_stay_registered() {
+        let mut reg = SnapRegistry::new();
+        let mut windows = Vec::new();
+        for k in 0..(MAX_RESTORED_PER_RECONNECT as u64 + 20) {
+            reg.insert(WindowKey(k), record(B, "halves", 2, b_right_half()));
+            windows.push((k, displaced()));
+        }
+        let plan = plan_reconnect(&reg, &only_a(), &both(), &config(), &snaps(&windows), 0);
+        assert_eq!(plan.placements.len(), MAX_RESTORED_PER_RECONNECT);
+        assert!(plan.forget.is_empty(), "the others are kept for next time");
+        // Ordered by key: the first 64.
+        assert_eq!(plan.placements.last().unwrap().key, WindowKey(63));
     }
 }

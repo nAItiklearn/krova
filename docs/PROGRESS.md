@@ -146,3 +146,35 @@ By hand, on a real Windows PC:
 - [ ] Switch Krova off in the tray: no corner fires. Back on: they work.
 - [ ] Windows Settings, Accessibility, Visual effects, Animation effects off: the ripple is a still quarter-circle that disappears after a moment.
 - [ ] Task Manager with the cursor resting in a set corner and elsewhere: no CPU use beyond the fire itself.
+## Manual tests for the engine branch
+
+Run on a real Windows PC with the app built from the `engine` branch (automated tests cover the logic; these cover the desktop). Ignored desktop tests: `cargo test -p krova-platform -- --ignored --test-threads=1` (strip window, Notepad probe, watcher events).
+
+**Wave 1: auto-arrange**
+1. Fresh config (rename `config.json`): every monitor shows the "Main + side 3" preset for its shape as the active layout (ultrawide and portrait monitors get their variant).
+2. Open Notepad, then Explorer, then a browser: each springs into the next free zone about a third of a second after it appears.
+3. Open a fourth window with all zones full: it stacks; a tab strip appears on that zone's top edge with icons and short program names (never window titles). Click a tab: that window comes forward. Wheel over the strip: tabs cycle. Clicks between tabs reach the window below.
+4. Strip look: rounded per radius, translucent, hairline, accent underline on the active tab; switch Windows to light mode and back: the strip follows. On a 150 % monitor the strip is the same physical size as on 100 %.
+5. Close the visible tab: the next one shows; the strip disappears when one window is left.
+6. Open a dialog (Notepad, File > Open), a tooltip, the Start menu, Task Manager (elevated): none is arranged.
+7. App rule `calc.exe` float: Calculator is left where it opens. Rule `notepad.exe` preferred zone 2: Notepad opens in zone 2.
+8. Shift-drag a tiled window onto another tiled window's zone: the two swap. Drag a tiled window to the middle of the screen without the modifier: it floats and is not moved again.
+9. Switch the active layout (switcher or editor): the arranged windows move to the new zones.
+10. Turn auto-arrange off for one monitor: new windows there are not touched; the other monitor still arranges.
+11. Idle: with nothing happening, Task Manager shows 0 % CPU for Krova (no timers run between events).
+
+**Wave 2: shortcuts, popups, pause**
+12. `cargo test -p krova-platform default_chords_probe -- --ignored --nocapture`: note which default `Ctrl+Alt` chords this PC refuses (IDE, Intel driver).
+13. With two windows tiled: `Ctrl+Alt+Right` moves the focused one to the next zone; past the right edge it enters the next monitor's leftmost zone. `Ctrl+Alt+Shift+Left` swaps two tiled windows; `Ctrl+Alt+3` sends to zone 3; `Ctrl+Alt+Shift+2` applies layout 2 on the monitor under the cursor.
+14. `Ctrl+Alt+Enter`: the window fills the screen; again: back in its zone. `Ctrl+Alt+]` / `[` cycle a stack.
+15. `Ctrl+Alt+T`: the tray icon dims, its tooltip says "Krova (paused)", the tray item is checked, new windows are not arranged; again: resumes.
+16. `Ctrl+Alt+Space` opens the switcher window on the monitor under the cursor; Esc or a click outside hides it; the second open is instant (warm). `Ctrl+Alt+/` opens the cheat sheet in the same window. A left click on the tray icon opens the quick panel near the tray. Record the latencies in `docs/measurements/popup-open-latency.md`.
+17. Rebind `pause` to a chord another app holds: the sheet shows it as in use with up to three suggestions; reset brings the defaults back. An old config with `"shortcut_modifier":"win_alt"` keeps Win+Alt for the zone shortcuts.
+
+**Appearance**
+18. Change the accent and the corner radius in Settings: the drag zones and the stack tabs use the new colour and radius at once; on a 150 % monitor the radius and borders are 1.5 times as many pixels. Border width 6: the highlighted zone's border is clearly thicker than the idle ones.
+
+**Popup windows (after merging ui-panel / ui-switcher)**
+19. Ctrl+Alt+Space: the switcher window covers the monitor under the cursor with a blurred (acrylic or mica) backdrop on Windows 11; on Windows 10 the page's own background shows. Esc hides it; the next open is instant.
+20. In the quick panel, a link to Settings opens (or focuses) the editor window on that section (`open_main`); "Switcher" and "Shortcuts" links open the switcher window.
+21. With the notch branch merged: clicking the notch opens the panel next to it, on the notch's monitor, below a top notch and above a bottom one.

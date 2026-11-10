@@ -44,19 +44,47 @@ pub struct UiState {
     creating: Mutex<()>,
 }
 
-/// The names a "navigate" can carry: the editor window's two views and `switcher`,
-/// the layout switcher opened by its global shortcut. Anything else is not a view.
+/// The names a "navigate" can carry: the editor window's views (`editor`,
+/// `settings`, `switcher`) and the settings sections the panel links to (`corners`,
+/// `shortcuts`, ...). A section name is lower-case ASCII letters, digits, `_` and
+/// `-`, starts with a letter and is at most 32 long; anything else is not a view.
+/// Section names are kept (at most [`MAX_SECTIONS`] distinct ones) so a parked view
+/// stays plain `&'static str` data.
 fn known_view(name: &str) -> Option<&'static str> {
     match name {
-        "editor" => Some("editor"),
-        "settings" => Some("settings"),
-        "switcher" => Some("switcher"),
+        "editor" => return Some("editor"),
+        "settings" => return Some("settings"),
+        "switcher" => return Some("switcher"),
         // --- notch --- (the notch menu's "Cheat sheet")
-        "cheatsheet" => Some("cheatsheet"),
+        "cheatsheet" => return Some("cheatsheet"),
         // --- notch ---
-        _ => None,
+        _ => {}
     }
+    let ok = !name.is_empty()
+        && name.len() <= 32
+        && name.starts_with(|c: char| c.is_ascii_lowercase())
+        && name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-');
+    if !ok {
+        return None;
+    }
+    static SECTIONS: Mutex<Vec<&'static str>> = Mutex::new(Vec::new());
+    let mut sections = lock(&SECTIONS);
+    if let Some(known) = sections.iter().find(|s| **s == name) {
+        return Some(known);
+    }
+    if sections.len() >= MAX_SECTIONS {
+        return None;
+    }
+    // Leaked once per distinct name, bounded by MAX_SECTIONS: a few hundred bytes.
+    let kept: &'static str = Box::leak(name.to_owned().into_boxed_str());
+    sections.push(kept);
+    Some(kept)
 }
+
+/// Most distinct section names a "navigate" can ever carry.
+const MAX_SECTIONS: usize = 64;
 
 impl UiState {
     /// Remember which view to show next. Unknown names are ignored.
@@ -183,6 +211,42 @@ pub fn destroyed(app: &AppHandle) {
     app.state::<UiState>().set_ready(false);
 }
 
+/// Open a view from another window (the quick panel's links): `"switcher"` and
+/// `"cheat_sheet"` open the switcher window, anything else the editor window with
+/// that view or settings section (`"settings"`, `"editor"`, `"corners"`, ...).
+#[tauri::command]
+pub fn open_main(app: AppHandle, view: String) -> Result<(), String> {
+    match view.as_str() {
+        "switcher" => {
+            let shared = app.state::<std::sync::Arc<crate::model::Shared>>();
+            let cursor = shared.platform.cursor_position();
+            let target = lock(&shared.model).monitor_for_switcher(cursor);
+            if target.is_some() {
+                *lock(&shared.switcher_monitor) = target;
+            }
+            crate::popups::show(&app, "switcher");
+        }
+        "cheat_sheet" => crate::popups::show(&app, "cheat_sheet"),
+        other => {
+            if known_view(other).is_none() {
+                return Err(format!(
+                    "\"{}\" is not a view",
+                    other.chars().take(32).collect::<String>()
+                ));
+            }
+            show(&app, Some(other));
+        }
+    }
+    Ok(())
+}
+
+/// Show the quick panel, anchored to `anchor` (the notch) or, with `None`, near
+/// the tray. The anchor is also sent to the panel as the `panel-anchor` event.
+pub fn show_panel(app: &AppHandle, anchor: Option<crate::popups::PanelAnchor>) {
+    let shared = app.state::<std::sync::Arc<crate::model::Shared>>();
+    *lock(&shared.panel_anchor) = anchor;
+    crate::popups::show(app, "panel");
+}
 /// The view a pending "navigate" asked for, if it has not been delivered yet.
 /// Optional pull path for the UI: the push above already covers the common case.
 #[tauri::command]
