@@ -34,6 +34,10 @@ pub struct Shared {
     /// How the engine asks the shell to bring a view of the UI window forward. Set
     /// once by the Tauri setup; `None` where there is no window (unit tests).
     pub open_view: Mutex<Option<ViewOpener>>,
+    // --- wave3 ---
+    /// Workspaces, focus dim, calm desk, share-safe and highlight (`wave3.rs`).
+    pub wave3: crate::wave3::Wave3,
+    // --- end wave3 ---
 }
 
 /// Brings the UI window forward showing a view (`"switcher"`). May create the
@@ -52,6 +56,9 @@ impl Shared {
             shortcut_gate: Mutex::new(()),
             switcher_monitor: Mutex::new(None),
             open_view: Mutex::new(None),
+            // --- wave3 ---
+            wave3: crate::wave3::Wave3::default(),
+            // --- end wave3 ---
         }
     }
 }
@@ -138,6 +145,10 @@ pub struct AppState {
     pub capabilities: CapabilitiesState,
     /// The layout switcher's shortcut (`<mods>+Space`): at most one entry in `failed`.
     pub layout_switcher: ShortcutStatus,
+    // --- wave3 ---
+    /// Wave-3 status: capabilities, calm desk, focus dim, share-safe, restore.
+    pub wave3: crate::wave3::Wave3State,
+    // --- end wave3 ---
 }
 
 pub struct AppModel {
@@ -231,6 +242,9 @@ impl AppModel {
             shortcuts,
             capabilities: capabilities.into(),
             layout_switcher,
+            // --- wave3 ---
+            wave3: crate::wave3::Wave3State::default(),
+            // --- end wave3 ---
         }
     }
 
