@@ -119,6 +119,9 @@ pub struct Settings {
     /// `<shortcut_modifier>+Space` opens the layout switcher on the monitor under
     /// the cursor. Independent of `keyboard_shortcuts`.
     pub layout_switcher_shortcut: bool,
+    // --- corners ---
+    /// What each outer screen corner does when the cursor rests in it.
+    pub hot_corners: crate::corners::HotCornerSettings,
 }
 
 /// `#rrggbb` (any case, optional `#`, surrounding spaces ignored) as lowercase `#rrggbb`.
@@ -142,6 +145,8 @@ impl Settings {
         };
         self.edge_size_px = self.edge_size_px.clamp(2, 64);
         self.zone_gap_px = self.zone_gap_px.clamp(0, MAX_ZONE_GAP_PX);
+        // --- corners ---
+        self.hot_corners = self.hot_corners.sanitized();
         self.highlight_color =
             normalize_hex_color(&self.highlight_color).unwrap_or(defaults.highlight_color);
         self
@@ -166,6 +171,8 @@ impl Default for Settings {
             linked_dividers: true,
             zone_gap_px: 0,
             layout_switcher_shortcut: true,
+            // --- corners ---
+            hot_corners: crate::corners::HotCornerSettings::default(),
         }
     }
 }
