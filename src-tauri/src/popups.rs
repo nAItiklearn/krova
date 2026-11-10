@@ -125,10 +125,32 @@ fn create(app: &AppHandle, label: &'static str) {
     });
     let state = app.state::<PopupState>();
     lock(&state.inner).entry(label).or_default().building = false;
-    if let Err(e) = built {
-        eprintln!("krova: could not create the {label} window: {e}");
+    match built {
+        Ok(window) => track_capture(&window),
+        Err(e) => eprintln!("krova: could not create the {label} window: {e}"),
     }
 }
+
+// --- integration --- share-safe: the popups join the capture-exclusion registry
+/// While share-safe is on, a popup is excluded from screen capture
+/// (`WDA_EXCLUDEFROMCAPTURE`), like the notch, the strips and the zone overlays.
+/// The popups stay warm (hidden, never destroyed) until the app quits; a destroyed
+/// one leaves the registry.
+fn track_capture(window: &WebviewWindow<Wry>) {
+    #[cfg(windows)]
+    if let Ok(hwnd) = window.hwnd() {
+        let raw = hwnd.0 as isize;
+        krova_platform::desk::track_capture_window(raw);
+        window.on_window_event(move |event| {
+            if matches!(event, tauri::WindowEvent::Destroyed) {
+                krova_platform::desk::untrack_capture_window(raw);
+            }
+        });
+    }
+    #[cfg(not(windows))]
+    let _ = window;
+}
+// --- integration ---
 
 fn loaded(window: &WebviewWindow<Wry>, label: &'static str) {
     let app = window.app_handle().clone();
@@ -511,8 +533,9 @@ fn create_picker(app: &AppHandle) {
             .build()
     });
     lock(&PICKER_SLOT).building = false;
-    if let Err(e) = built {
-        eprintln!("krova: could not create the picker window: {e}");
+    match built {
+        Ok(window) => track_capture(&window),
+        Err(e) => eprintln!("krova: could not create the picker window: {e}"),
     }
 }
 

@@ -183,6 +183,25 @@ pub fn share_safe() -> bool {
     SHARE_SAFE.load(Ordering::Relaxed)
 }
 
+/// Exclude a window this process made outside krova-platform (a Tauri popup:
+/// the quick panel, the layout switcher, the hover picker) from screen capture
+/// whenever share-safe is on, like the native overlays. `raw_hwnd` is the window's
+/// `HWND` value. A no-op where capture exclusion does not exist (macOS for now).
+pub fn track_capture_window(raw_hwnd: isize) {
+    #[cfg(windows)]
+    crate::win_capture::register_raw(raw_hwnd);
+    #[cfg(not(windows))]
+    let _ = raw_hwnd;
+}
+
+/// Stop tracking a window given to [`track_capture_window`] (it is being destroyed).
+pub fn untrack_capture_window(raw_hwnd: isize) {
+    #[cfg(windows)]
+    crate::win_capture::unregister_raw(raw_hwnd);
+    #[cfg(not(windows))]
+    let _ = raw_hwnd;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

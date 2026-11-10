@@ -64,6 +64,17 @@ pub(crate) fn unregister_overlay(h: HWND) {
     with_overlays(|set| set.remove(&(h.0 as isize)));
 }
 
+/// [`register_overlay`] for a window created outside this crate (a Tauri popup),
+/// given as its raw `HWND` value.
+pub(crate) fn register_raw(raw: isize) {
+    register_overlay(to_hwnd(raw));
+}
+
+/// [`unregister_overlay`] for a raw `HWND` value.
+pub(crate) fn unregister_raw(raw: isize) {
+    unregister_overlay(to_hwnd(raw));
+}
+
 /// Re-apply the affinity to every tracked overlay (share-safe switched).
 pub(crate) fn apply_all(share_safe: bool) {
     let all: Vec<isize> = with_overlays(|set| set.iter().copied().collect());
