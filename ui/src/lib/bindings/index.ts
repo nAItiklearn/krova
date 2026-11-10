@@ -73,6 +73,8 @@ export interface Settings {
    * the cursor. Independent of `keyboard_shortcuts`. Default true.
    */
   layout_switcher_shortcut: boolean;
+  /** Per-program rules, in the order the user made them (at most 256). Default []. */
+  app_rules: AppRule[];
 }
 
 export interface MonitorProfile {
@@ -83,6 +85,10 @@ export interface MonitorProfile {
   last_rect: PxRect;
   layouts: Layout[];
   active_layout: string;
+  /** Auto-arrange on this monitor. On by default. Change with `setAutoArrange`. */
+  auto_arrange: ArrangeSettings;
+  /** The first-run preset was offered to this monitor (internal; never shown). */
+  preset_seeded: boolean;
 }
 
 export interface Config {
@@ -117,6 +123,8 @@ export interface ShortcutStatus {
 export interface Capabilities {
   shortcuts: boolean;
   window_memory: boolean;
+  /** Auto-arrange, stacks and tab strips (Windows only for now). */
+  auto_arrange: boolean;
 }
 
 export interface AppState {
@@ -134,6 +142,8 @@ export interface AppState {
    * one sentence, e.g. "Ctrl+Alt+Shift+Space is already used by another app".
    */
   layout_switcher: ShortcutStatus;
+  /** The program in front and whether auto-arrange looks after it; null if unknown. */
+  front_app: FrontApp | null;
 }
 
 /**
@@ -152,3 +162,72 @@ export type View = 'editor' | 'settings';
  * `switcher` yet must ignore it.
  */
 export type NavigateTarget = View | 'switcher';
+
+// ---------------------------------------------------------------- Wave 1: arrange
+
+/** Where a new window goes: the first free zone, or the first zone (others shift). */
+export type ArrangePolicy = 'next_free' | 'main_first';
+
+/** Auto-arrange for one monitor (`MonitorProfile.auto_arrange`). On by default. */
+export interface ArrangeSettings {
+  enabled: boolean;
+  policy: ArrangePolicy;
+  /** Closing a window lets the later ones move up. Default false. */
+  fill_gaps: boolean;
+  /** With every zone taken, a new window joins a stack (tabs). Default true. */
+  stack_when_full: boolean;
+}
+
+/** What an app rule does with a program's windows. */
+export type RuleAction =
+  | { kind: 'never_touch' }
+  | { kind: 'float' }
+  /** 1-based zone number in reading order (1..64). */
+  | { kind: 'preferred_zone'; value: number }
+  /** A `MonitorProfile.id`. */
+  | { kind: 'start_on_monitor'; value: string };
+
+/** A rule for one program, by executable file name (`chrome.exe`), never a title. */
+export interface AppRule {
+  exe: string;
+  action: RuleAction;
+}
+
+/** Why the front window is not arranged (`FrontApp.reason`). */
+export type FrontAppReason =
+  | 'dialog'
+  | 'tool'
+  | 'popup'
+  | 'elevated'
+  | 'never_touch'
+  | 'float'
+  | 'auto_arrange_off'
+  | 'paused'
+  | 'other';
+
+/** The program in front, for the "Not arranged" chip. */
+export interface FrontApp {
+  exe: string | null;
+  arranged: boolean;
+  reason: FrontAppReason | null;
+}
+
+export type PresetFamily = 'grid' | 'columns' | 'rows' | 'main_side';
+export type PresetVariant = 'landscape' | 'ultrawide' | 'portrait';
+export type MainSize = 'half' | 'sixty' | 'two_thirds';
+
+/** One entry of `list_presets`: an ordinary layout plus the choices that made it. */
+export interface PresetInfo {
+  /** e.g. `grid-3`, `main-side-3-ultrawide-60` (also `layout.id`). */
+  id: string;
+  /** e.g. `Main + side 3 (ultrawide, 60%)` (also `layout.name`). */
+  name: string;
+  family: PresetFamily;
+  /** 1..5 windows. */
+  count: number;
+  variant: PresetVariant;
+  main_size: MainSize;
+  /** Made for the shape of the monitor that was asked about. */
+  recommended: boolean;
+  layout: Layout;
+}

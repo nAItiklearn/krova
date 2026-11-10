@@ -7,7 +7,16 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { AppState, Axis, Layout, NavigateTarget, Settings } from './bindings';
+import type {
+  AppRule,
+  AppState,
+  ArrangeSettings,
+  Axis,
+  Layout,
+  NavigateTarget,
+  PresetInfo,
+  Settings,
+} from './bindings';
 import { createMockBackend, type DemoControls, type MockBackend } from './mock/mockBackend';
 
 export type Unlisten = () => void;
@@ -43,6 +52,24 @@ export interface Backend {
     activate: boolean,
   ): Promise<AppState>;
   listTemplates(): Promise<Layout[]>;
+
+  /**
+   * Every preset (grid, columns, rows, main + side, 1..5 windows, three screen
+   * shapes) as ordinary layouts. With a monitor id, those made for its shape are
+   * `recommended`. Save one with `saveLayout` to use it.
+   */
+  listPresets(monitorId?: string): Promise<PresetInfo[]>;
+  /** Auto-arrange on/off and its options for one monitor. */
+  setAutoArrange(monitorId: string, settings: ArrangeSettings): Promise<AppState>;
+  /**
+   * Add a rule, or replace the rule of the same program (case-insensitive). Rejects
+   * with a readable sentence, e.g. for a path instead of a file name.
+   */
+  setAppRule(rule: AppRule): Promise<AppState>;
+  /** Delete a program's rule; rejects if there is none. */
+  removeAppRule(exe: string): Promise<AppState>;
+  /** Arrange the windows already open on a monitor, now ("Tile now"). */
+  arrangeMonitor(monitorId: string): Promise<void>;
   /**
    * `MonitorProfile.id` of the monitor the layout switcher was last opened for (the
    * one under the cursor when its shortcut was pressed), or null if it was never
@@ -101,8 +128,7 @@ export const tauriBackend: Backend = {
   getState: () => invoke<AppState>('get_state'),
   saveSettings: (settings) => invoke<AppState>('save_settings', { settings }),
   saveLayout: (monitorId, layout) => invoke<AppState>('save_layout', { monitorId, layout }),
-  deleteLayout: (monitorId, layoutId) =>
-    invoke<AppState>('delete_layout', { monitorId, layoutId }),
+  deleteLayout: (monitorId, layoutId) => invoke<AppState>('delete_layout', { monitorId, layoutId }),
   setActiveLayout: (monitorId, layoutId) =>
     invoke<AppState>('set_active_layout', { monitorId, layoutId }),
   moveLayout: (monitorId, layoutId, toIndex) =>
@@ -110,6 +136,13 @@ export const tauriBackend: Backend = {
   insertLayout: (monitorId, layout, index, activate) =>
     invoke<AppState>('insert_layout', { monitorId, layout, index, activate }),
   listTemplates: () => invoke<Layout[]>('list_templates'),
+  listPresets: (monitorId) =>
+    invoke<PresetInfo[]>('list_presets', { monitorId: monitorId ?? null }),
+  setAutoArrange: (monitorId, settings) =>
+    invoke<AppState>('set_auto_arrange', { monitorId, settings }),
+  setAppRule: (rule) => invoke<AppState>('set_app_rule', { rule }),
+  removeAppRule: (exe) => invoke<AppState>('remove_app_rule', { exe }),
+  arrangeMonitor: (monitorId) => invoke<void>('arrange_monitor', { monitorId }),
   switcherMonitor: () => invoke<string | null>('switcher_monitor'),
 
   exportLayout: (layout) => invoke<string>('export_layout', { layout }),

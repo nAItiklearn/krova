@@ -84,3 +84,20 @@ No Critical or High findings in Krova's own code; privacy promises hold for Krov
 - macOS: blanket `#![allow(dead_code, unused_unsafe, unused_imports, ...)]` in the mac files predates the first green macOS CI run; tighten it now that the lints pass. The overlay is the lowest-confidence macOS item; if it misbehaves, make `create_overlay` return `Err(Unsupported)`.
 - macOS: `start_input` fails until Accessibility is granted. `get_state` retries it once permission is `Granted`; a restart may still be needed. The Accessibility prompt helper (`prompt_for_accessibility`) is not yet wired to any command.
 - Window memory, keyboard shortcuts and linked dividers are Windows-only (`capabilities` is false for them on macOS).
+
+## Manual tests for the engine branch
+
+Run on a real Windows PC with the app built from the `engine` branch (automated tests cover the logic; these cover the desktop). Ignored desktop tests: `cargo test -p krova-platform -- --ignored --test-threads=1` (strip window, Notepad probe, watcher events).
+
+**Wave 1: auto-arrange**
+1. Fresh config (rename `config.json`): every monitor shows the "Main + side 3" preset for its shape as the active layout (ultrawide and portrait monitors get their variant).
+2. Open Notepad, then Explorer, then a browser: each springs into the next free zone about a third of a second after it appears.
+3. Open a fourth window with all zones full: it stacks; a tab strip appears on that zone's top edge with icons and short program names (never window titles). Click a tab: that window comes forward. Wheel over the strip: tabs cycle. Clicks between tabs reach the window below.
+4. Strip look: rounded per radius, translucent, hairline, accent underline on the active tab; switch Windows to light mode and back: the strip follows. On a 150 % monitor the strip is the same physical size as on 100 %.
+5. Close the visible tab: the next one shows; the strip disappears when one window is left.
+6. Open a dialog (Notepad, File > Open), a tooltip, the Start menu, Task Manager (elevated): none is arranged.
+7. App rule `calc.exe` float: Calculator is left where it opens. Rule `notepad.exe` preferred zone 2: Notepad opens in zone 2.
+8. Shift-drag a tiled window onto another tiled window's zone: the two swap. Drag a tiled window to the middle of the screen without the modifier: it floats and is not moved again.
+9. Switch the active layout (switcher or editor): the arranged windows move to the new zones.
+10. Turn auto-arrange off for one monitor: new windows there are not touched; the other monitor still arranges.
+11. Idle: with nothing happening, Task Manager shows 0 % CPU for Krova (no timers run between events).

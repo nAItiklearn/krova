@@ -4,8 +4,11 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+use crate::app_rules::AppRules;
+use crate::arrange::ArrangeSettings;
 use crate::geometry::PxRect;
 use crate::monitor::{match_monitors, MonitorDescriptor};
+use crate::presets::{MainSize, PresetFamily, PresetSpec, PresetVariant};
 use crate::zone::{has_hidden_char, strip_hidden, templates, Layout};
 
 pub const SCHEMA_VERSION: u32 = 1;
@@ -123,6 +126,8 @@ pub struct Settings {
     /// `<shortcut_modifier>+Space` opens the layout switcher on the monitor under
     /// the cursor. Independent of `keyboard_shortcuts`.
     pub layout_switcher_shortcut: bool,
+    /// Per-program rules (by executable file name, never a title). A plain array.
+    pub app_rules: AppRules,
 }
 
 /// `#rrggbb` (any case, optional `#`, surrounding spaces ignored) as lowercase `#rrggbb`.
@@ -148,6 +153,7 @@ impl Settings {
         self.zone_gap_px = self.zone_gap_px.clamp(0, MAX_ZONE_GAP_PX);
         self.highlight_color =
             normalize_hex_color(&self.highlight_color).unwrap_or(defaults.highlight_color);
+        self.app_rules = self.app_rules.sanitized();
         self
     }
 }
@@ -170,6 +176,7 @@ impl Default for Settings {
             linked_dividers: true,
             zone_gap_px: 0,
             layout_switcher_shortcut: true,
+            app_rules: AppRules::default(),
         }
     }
 }
@@ -183,6 +190,13 @@ pub struct MonitorProfile {
     pub last_rect: PxRect,
     pub layouts: Vec<Layout>,
     pub active_layout: String,
+    /// Auto-arrange on this monitor. On by default (missing in older files: on).
+    #[serde(default)]
+    pub auto_arrange: ArrangeSettings,
+    /// The first-run preset was offered to this profile (see
+    /// [`MonitorProfile::seed_preset`]); it is never offered again.
+    #[serde(default)]
+    pub preset_seeded: bool,
 }
 
 impl MonitorProfile {
@@ -195,7 +209,41 @@ impl MonitorProfile {
             last_rect: d.rect,
             layouts: templates(),
             active_layout: "halves".to_owned(),
+            auto_arrange: ArrangeSettings::default(),
+            preset_seeded: false,
         }
+    }
+
+    /// The preset a monitor of this size starts with: main + side for three windows,
+    /// in the shape of the screen (landscape, ultrawide or portrait).
+    pub fn first_run_preset(width: i32, height: i32) -> PresetSpec {
+        PresetSpec::new(
+            PresetFamily::MainSide,
+            3,
+            PresetVariant::for_size(width, height),
+            MainSize::Sixty,
+        )
+    }
+
+    /// First run: a profile that still holds exactly the built-in layouts, with the
+    /// first one active, gets the preset that fits the monitor's shape added in front
+    /// and made active, so Krova tiles out of the box. Done once per profile; a
+    /// profile the user has already changed is only marked. Returns whether a layout
+    /// was added.
+    pub fn seed_preset(&mut self, width: i32, height: i32) -> bool {
+        if self.preset_seeded {
+            return false;
+        }
+        self.preset_seeded = true;
+        if self.layouts != templates() || self.active_layout != "halves" {
+            return false;
+        }
+        let Ok(layout) = Self::first_run_preset(width, height).layout() else {
+            return false;
+        };
+        self.active_layout = layout.id.clone();
+        self.layouts.insert(0, layout);
+        true
     }
 
     pub fn descriptor(&self) -> MonitorDescriptor {
@@ -505,6 +553,16 @@ impl Config {
             return Err(ProfileError::NoSuchLayout(layout_id.to_owned()));
         }
         p.active_layout = layout_id.to_owned();
+        Ok(())
+    }
+
+    /// Replace a monitor's auto-arrange settings.
+    pub fn set_auto_arrange(
+        &mut self,
+        monitor_id: &str,
+        settings: ArrangeSettings,
+    ) -> Result<(), ProfileError> {
+        self.profile_mut(monitor_id)?.auto_arrange = settings;
         Ok(())
     }
 }
@@ -1344,5 +1402,94 @@ mod tests {
             .find(|l| l.id == "halves")
             .expect("the layout survives");
         assert_eq!(halves.name, "Halves");
+    }
+
+    #[test]
+    fn a_fresh_profile_gets_the_preset_for_its_shape_once() {
+        let mut c = Config::default();
+        let idx = c.resolve_monitors(&[desc("A", 0)]);
+        let p = &mut c.monitors[idx[0]];
+        assert!(p.seed_preset(1920, 1080));
+        assert_eq!(p.active_layout, "main-side-3-60");
+        assert_eq!(p.layouts[0].id, "main-side-3-60");
+        assert_eq!(p.layouts.len(), templates().len() + 1);
+        assert!(p.active().is_some());
+        // Never twice, even if the user goes back to the old layouts.
+        assert!(!p.seed_preset(1920, 1080));
+        p.layouts = templates();
+        p.active_layout = "halves".into();
+        assert!(!p.seed_preset(1920, 1080));
+    }
+
+    #[test]
+    fn the_preset_follows_the_monitor_shape() {
+        for (w, h, id) in [
+            (3440, 1440, "main-side-3-ultrawide-60"),
+            (1080, 1920, "main-side-3-portrait-60"),
+        ] {
+            let mut c = Config::default();
+            let idx = c.resolve_monitors(&[desc("A", 0)]);
+            let p = &mut c.monitors[idx[0]];
+            assert!(p.seed_preset(w, h));
+            assert_eq!(p.active_layout, id);
+        }
+    }
+
+    #[test]
+    fn a_profile_the_user_changed_is_only_marked() {
+        let mut c = Config::default();
+        let idx = c.resolve_monitors(&[desc("A", 0)]);
+        let p = &mut c.monitors[idx[0]];
+        p.active_layout = "thirds".into();
+        assert!(!p.seed_preset(1920, 1080));
+        assert!(p.preset_seeded);
+        assert_eq!(p.layouts, templates());
+        assert_eq!(p.active_layout, "thirds");
+    }
+
+    #[test]
+    fn an_old_profile_loads_with_auto_arrange_on_and_unseeded() {
+        let json = r#"{"schema_version":1,"monitors":[{"id":"monitor-1","label":"x",
+            "hardware_id":null,"device_path":null,"last_rect":{"x":0,"y":0,"w":10,"h":10},
+            "layouts":[],"active_layout":"halves"}]}"#;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        std::fs::write(&path, json).unwrap();
+        let (c, _) = Config::load(&path).unwrap();
+        assert!(c.monitors[0].auto_arrange.enabled);
+        assert!(!c.monitors[0].preset_seeded);
+        assert!(c.settings.app_rules.is_empty());
+    }
+
+    #[test]
+    fn auto_arrange_can_be_set_per_monitor() {
+        let mut c = Config::default();
+        c.resolve_monitors(&[desc("A", 0), desc("B", 1920)]);
+        let off = ArrangeSettings {
+            enabled: false,
+            ..ArrangeSettings::default()
+        };
+        c.set_auto_arrange("monitor-2", off).unwrap();
+        assert!(c.monitors[0].auto_arrange.enabled);
+        assert!(!c.monitors[1].auto_arrange.enabled);
+        assert!(c.set_auto_arrange("monitor-9", off).is_err());
+    }
+
+    #[test]
+    fn app_rules_in_settings_are_sanitised() {
+        use crate::app_rules::{AppRule, RuleAction};
+        let json = r#"[{"exe":"a.exe","action":{"kind":"float"}},
+            {"exe":"A.EXE","action":{"kind":"never_touch"}},
+            {"exe":"dir/x.exe","action":{"kind":"float"}}]"#;
+        let rules: AppRules = serde_json::from_str(json).unwrap();
+        let s = Settings {
+            app_rules: rules,
+            ..Settings::default()
+        }
+        .sanitized();
+        assert_eq!(
+            s.app_rules.as_slice(),
+            &[AppRule::new("a.exe", RuleAction::Float)]
+        );
     }
 }

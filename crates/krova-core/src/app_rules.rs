@@ -219,6 +219,11 @@ pub enum WindowKind {
     Fullscreen,
     /// The desktop, the taskbar, the dock or another part of the shell.
     Shell,
+    /// Not shown on the current virtual desktop (cloaked by the shell), or a
+    /// store app still starting. Looked at again once it is shown.
+    Cloaked,
+    /// Run by an elevated program that Krova (not elevated) may not move.
+    Elevated,
     /// The platform could not tell. Treated with caution: not arranged.
     Unknown,
 }
@@ -234,6 +239,8 @@ pub fn is_arrangeable(kind: WindowKind) -> bool {
         | WindowKind::Notification
         | WindowKind::Fullscreen
         | WindowKind::Shell
+        | WindowKind::Cloaked
+        | WindowKind::Elevated
         | WindowKind::Unknown => false,
     }
 }
@@ -780,6 +787,8 @@ mod tests {
             Notification,
             Fullscreen,
             Shell,
+            Cloaked,
+            Elevated,
             Unknown,
         ] {
             assert!(!is_arrangeable(kind), "{kind:?}");

@@ -93,11 +93,11 @@ fn io_err(e: std::io::Error) -> PlatformError {
     PlatformError::Os(e.to_string())
 }
 
-fn hwnd(id: WindowId) -> HWND {
+pub(crate) fn hwnd(id: WindowId) -> HWND {
     HWND(id.0 as usize as *mut c_void)
 }
 
-fn window_id(h: HWND) -> WindowId {
+pub(crate) fn window_id(h: HWND) -> WindowId {
     WindowId(h.0 as usize as u64)
 }
 
@@ -105,20 +105,20 @@ fn px(r: RECT) -> PxRect {
     PxRect::new(r.left, r.top, r.right - r.left, r.bottom - r.top)
 }
 
-fn wide_to_string(w: &[u16]) -> String {
+pub(crate) fn wide_to_string(w: &[u16]) -> String {
     let len = w.iter().position(|&c| c == 0).unwrap_or(w.len());
     String::from_utf16_lossy(&w[..len])
 }
 
 /// Outer window rect (`GetWindowRect`), including the invisible resize borders.
-fn outer_rect(h: HWND) -> Result<PxRect, PlatformError> {
+pub(crate) fn outer_rect(h: HWND) -> Result<PxRect, PlatformError> {
     let mut r = RECT::default();
     unsafe { GetWindowRect(h, &mut r) }.map_err(os_err)?;
     Ok(px(r))
 }
 
 /// The frame the user actually sees (DWM extended frame bounds).
-fn visible_rect(h: HWND) -> Option<PxRect> {
+pub(crate) fn visible_rect(h: HWND) -> Option<PxRect> {
     let mut r = RECT::default();
     unsafe {
         DwmGetWindowAttribute(
@@ -133,7 +133,7 @@ fn visible_rect(h: HWND) -> Option<PxRect> {
 }
 
 /// Windows on other virtual desktops are cloaked.
-fn is_cloaked(h: HWND) -> bool {
+pub(crate) fn is_cloaked(h: HWND) -> bool {
     let mut cloaked = 0u32;
     let ok = unsafe {
         DwmGetWindowAttribute(
@@ -147,7 +147,7 @@ fn is_cloaked(h: HWND) -> bool {
     ok && cloaked != 0
 }
 
-fn class_name(h: HWND) -> String {
+pub(crate) fn class_name(h: HWND) -> String {
     let mut buf = [0u16; 128];
     let n = unsafe { GetClassNameW(h, &mut buf) };
     String::from_utf16_lossy(&buf[..usize::try_from(n).unwrap_or(0)])
@@ -198,7 +198,7 @@ fn self_elevated() -> bool {
 /// UIPI stops a normal process from moving an elevated process's windows, so
 /// those are skipped up front (documented limitation). If the owning process
 /// cannot be inspected we assume it is protected.
-fn target_is_protected(h: HWND) -> bool {
+pub(crate) fn target_is_protected(h: HWND) -> bool {
     if self_elevated() {
         return false;
     }
@@ -218,7 +218,7 @@ fn target_is_protected(h: HWND) -> bool {
 
 /// The program a window belongs to: process id plus process creation time. The pair
 /// outlives a window handle that the OS reuses for another window.
-fn owner_of(h: HWND) -> Option<WindowOwner> {
+pub(crate) fn owner_of(h: HWND) -> Option<WindowOwner> {
     let mut pid = 0u32;
     unsafe { GetWindowThreadProcessId(h, Some(&mut pid)) };
     if pid == 0 {
@@ -242,7 +242,7 @@ fn owner_of(h: HWND) -> Option<WindowOwner> {
 }
 
 /// Is this one of Krova's own windows (the settings window, the overlay)?
-fn is_own_process_window(h: HWND) -> bool {
+pub(crate) fn is_own_process_window(h: HWND) -> bool {
     let mut pid = 0u32;
     unsafe { GetWindowThreadProcessId(h, Some(&mut pid)) };
     pid != 0 && pid == unsafe { GetCurrentProcessId() }
@@ -760,6 +760,7 @@ impl Platform for WindowsPlatform {
         Capabilities {
             shortcuts: true,
             window_memory: true,
+            auto_arrange: true,
         }
     }
 
@@ -817,6 +818,34 @@ impl Platform for WindowsPlatform {
             return None;
         }
         owner_of(h)
+    }
+
+    fn probe_window(&self, window: WindowId) -> Option<crate::WindowProbe> {
+        crate::win_windows::probe(window)
+    }
+
+    fn raise_window(&self, window: WindowId) -> Result<(), PlatformError> {
+        crate::win_windows::raise(window)
+    }
+
+    fn activate_window(&self, window: WindowId) -> Result<(), PlatformError> {
+        crate::win_windows::activate(window)
+    }
+
+    fn top_level_windows(&self) -> Vec<WindowId> {
+        crate::win_windows::top_level()
+    }
+
+    fn prefers_dark(&self) -> bool {
+        crate::win_windows::prefers_dark()
+    }
+
+    fn create_strip_host(
+        &self,
+        events: EventSink<crate::StripEvent>,
+    ) -> Result<Box<dyn crate::StripHost>, PlatformError> {
+        crate::win_strips::WinStrips::start(events)
+            .map(|s| Box::new(s) as Box<dyn crate::StripHost>)
     }
 
     fn start_hotkeys(

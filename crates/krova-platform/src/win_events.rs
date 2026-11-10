@@ -36,13 +36,15 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     MOD_SHIFT, MOD_WIN, VK_LEFT, VK_RIGHT, VK_SPACE, VK_UP,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, MsgWaitForMultipleObjectsEx,
-    PeekMessageW, RegisterClassExW, TranslateMessage, EVENT_SYSTEM_MOVESIZEEND,
-    EVENT_SYSTEM_MOVESIZESTART, HMENU, MSG, MWMO_INPUTAVAILABLE, OBJID_WINDOW,
-    PBT_APMRESUMEAUTOMATIC, PBT_APMRESUMESUSPEND, PM_NOREMOVE, PM_REMOVE, QS_ALLINPUT,
-    SPI_SETWORKAREA, WINEVENT_OUTOFCONTEXT, WINEVENT_SKIPOWNPROCESS, WM_CLOSE, WM_DISPLAYCHANGE,
-    WM_HOTKEY, WM_POWERBROADCAST, WM_QUIT, WM_SETTINGCHANGE, WNDCLASSEXW, WS_EX_NOACTIVATE,
-    WS_EX_TOOLWINDOW, WS_POPUP,
+    CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetAncestor,
+    MsgWaitForMultipleObjectsEx, PeekMessageW, RegisterClassExW, TranslateMessage,
+    EVENT_OBJECT_CLOAKED, EVENT_OBJECT_DESTROY, EVENT_OBJECT_HIDE, EVENT_OBJECT_SHOW,
+    EVENT_OBJECT_UNCLOAKED, EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_MINIMIZEEND,
+    EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MOVESIZEEND, EVENT_SYSTEM_MOVESIZESTART, GA_ROOT,
+    HMENU, MSG, MWMO_INPUTAVAILABLE, OBJID_WINDOW, PBT_APMRESUMEAUTOMATIC, PBT_APMRESUMESUSPEND,
+    PM_NOREMOVE, PM_REMOVE, QS_ALLINPUT, SPI_SETWORKAREA, WINEVENT_OUTOFCONTEXT,
+    WINEVENT_SKIPOWNPROCESS, WM_CLOSE, WM_DISPLAYCHANGE, WM_HOTKEY, WM_POWERBROADCAST, WM_QUIT,
+    WM_SETTINGCHANGE, WNDCLASSEXW, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_POPUP,
 };
 
 use crate::hotkeys::{action_for_id, refusal_message, HotkeyEvent, HotkeySpec, Key, Refusal};
@@ -263,7 +265,7 @@ fn window_id(h: HWND) -> WindowId {
 }
 
 /// Called by Windows on the watcher thread (during `PeekMessageW`) for every
-/// move/size loop start and end, in any other process.
+/// window event in the hooked ranges, in any other process.
 unsafe extern "system" fn win_event_proc(
     _hook: HWINEVENTHOOK,
     event: u32,
@@ -280,8 +282,25 @@ unsafe extern "system" fn win_event_proc(
     match event {
         EVENT_SYSTEM_MOVESIZESTART => emit(WatchEvent::MoveSizeStart(window_id(hwnd))),
         EVENT_SYSTEM_MOVESIZEEND => emit(WatchEvent::MoveSizeEnd(window_id(hwnd))),
+        EVENT_SYSTEM_FOREGROUND => emit(WatchEvent::Foreground(window_id(hwnd))),
+        EVENT_SYSTEM_MINIMIZESTART => emit(WatchEvent::WindowMinimized(window_id(hwnd))),
+        EVENT_SYSTEM_MINIMIZEEND => emit(WatchEvent::WindowRestored(window_id(hwnd))),
+        // A destroyed handle cannot be asked whether it was top level; the engine
+        // ignores handles it does not track.
+        EVENT_OBJECT_DESTROY => emit(WatchEvent::WindowGone(window_id(hwnd))),
+        EVENT_OBJECT_HIDE if is_top_level(hwnd) => emit(WatchEvent::WindowGone(window_id(hwnd))),
+        EVENT_OBJECT_SHOW | EVENT_OBJECT_UNCLOAKED if is_top_level(hwnd) => {
+            emit(WatchEvent::WindowShown(window_id(hwnd)));
+        }
         _ => {}
     }
+}
+
+/// A top-level window (its own root), as opposed to a control inside one.
+fn is_top_level(hwnd: HWND) -> bool {
+    // SAFETY: GetAncestor is harmless on any handle; it returns null for a gone one.
+    let root = unsafe { GetAncestor(hwnd, GA_ROOT) };
+    root == hwnd
 }
 
 /// Window procedure of the hidden top-level window that receives the broadcast
@@ -354,37 +373,57 @@ fn watch_thread(stop: usize, ready: &mpsc::Sender<Result<(), String>>) {
             return;
         }
     };
-    // SAFETY: out-of-context hook with a plain function callback; it is removed
-    // below, on this same thread, before the thread ends.
-    let hook = unsafe {
-        SetWinEventHook(
-            EVENT_SYSTEM_MOVESIZESTART,
-            EVENT_SYSTEM_MOVESIZEEND,
-            HMODULE::default(),
-            Some(win_event_proc),
-            0,
-            0,
-            WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
-        )
-    };
-    if hook.is_invalid() {
-        let _ = ready.send(Err("SetWinEventHook failed".into()));
-        // SAFETY: destroys the window created above, on its own thread.
-        let _ = unsafe { DestroyWindow(window) };
-        return;
+    // Three event ranges: the system events from "foreground changed" to "minimize
+    // ended" (move/size loops included), "destroyed / shown / hidden", and
+    // "cloaked / uncloaked". Everything else in a range is dropped by the callback.
+    let ranges = [
+        (EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_MINIMIZEEND),
+        (EVENT_OBJECT_DESTROY, EVENT_OBJECT_HIDE),
+        (EVENT_OBJECT_CLOAKED, EVENT_OBJECT_UNCLOAKED),
+    ];
+    let mut hooks = Vec::with_capacity(ranges.len());
+    for (min, max) in ranges {
+        // SAFETY: out-of-context hook with a plain function callback; it is removed
+        // below, on this same thread, before the thread ends.
+        let hook = unsafe {
+            SetWinEventHook(
+                min,
+                max,
+                HMODULE::default(),
+                Some(win_event_proc),
+                0,
+                0,
+                WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
+            )
+        };
+        if hook.is_invalid() {
+            let _ = ready.send(Err("SetWinEventHook failed".into()));
+            // SAFETY: removes what was created above, on its own thread.
+            unsafe {
+                for h in hooks {
+                    let _ = UnhookWinEvent(h);
+                }
+                let _ = DestroyWindow(window);
+            }
+            return;
+        }
+        hooks.push(hook);
     }
     let _ = ready.send(Ok(()));
 
     pump(stop, dispatch);
 
-    // SAFETY: removes the hook and window created above, on their own thread.
+    // SAFETY: removes the hooks and window created above, on their own thread.
     unsafe {
-        let _ = UnhookWinEvent(hook);
+        for h in hooks {
+            let _ = UnhookWinEvent(h);
+        }
         let _ = DestroyWindow(window);
     }
 }
 
-/// Watch for window move/size loops (any process but ours) and display changes.
+/// Watch for window move/size loops, windows shown, hidden, destroyed, minimized,
+/// restored and focused (any process but ours), and display changes.
 /// Only one watcher can run at a time.
 pub fn start_watcher(sink: EventSink<WatchEvent>) -> Result<WatchHandle, PlatformError> {
     {
@@ -670,5 +709,36 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    #[ignore = "opens and closes Notepad; needs an interactive desktop session"]
+    fn the_watcher_reports_a_window_shown_focused_and_gone() {
+        use std::sync::mpsc;
+        use std::sync::Arc;
+        use std::time::Instant;
+        let _turn = take_turn();
+        let (tx, rx) = mpsc::channel();
+        let handle = start_watcher(Arc::new(move |e| {
+            let _ = tx.send(e);
+        }))
+        .expect("watcher starts");
+        let mut child = std::process::Command::new("notepad.exe")
+            .spawn()
+            .expect("notepad starts");
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let (mut shown, mut focused) = (false, false);
+        while Instant::now() < deadline && !(shown && focused) {
+            match rx.recv_timeout(Duration::from_millis(200)) {
+                Ok(WatchEvent::WindowShown(_)) => shown = true,
+                Ok(WatchEvent::Foreground(_)) => focused = true,
+                _ => {}
+            }
+        }
+        let _ = child.kill();
+        let _ = child.wait();
+        drop(handle);
+        assert!(shown, "a shown event arrived");
+        assert!(focused, "a foreground event arrived");
     }
 }

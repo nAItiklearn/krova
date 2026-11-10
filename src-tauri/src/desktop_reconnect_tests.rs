@@ -79,6 +79,7 @@ impl Platform for FakeMonitors {
         Capabilities {
             shortcuts: false,
             window_memory: false,
+            auto_arrange: false,
         }
     }
     fn window_exists(&self, window: WindowId) -> bool {

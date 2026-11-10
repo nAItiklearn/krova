@@ -13,6 +13,7 @@ use std::sync::Arc;
 use krova_core::registry::{KeyAction, WindowOwner};
 use krova_core::{DragEvent, Modifier, MonitorDescriptor, PxRect};
 
+pub mod classify;
 pub mod hotkeys;
 pub mod ids;
 pub mod input;
@@ -20,14 +21,22 @@ pub mod input;
 pub mod mac;
 pub mod mac_math;
 pub mod overlay;
+pub mod strips;
 #[cfg(windows)]
 pub mod win;
 #[cfg(windows)]
 pub mod win_events;
 #[cfg(windows)]
 pub mod win_overlay;
+#[cfg(windows)]
+pub mod win_strips;
+#[cfg(windows)]
+pub mod win_windows;
 
+pub use classify::{classify, ClassFamily, WindowFacts};
 pub use hotkeys::{HotkeyEvent, HotkeySpec};
+pub use krova_core::app_rules::WindowKind;
+pub use strips::{StripEvent, StripHost, StripScene, StripTab, StripTheme};
 
 /// Where an OS-level notification is delivered. The closure runs on the platform's
 /// own thread and must only enqueue (a channel send) and return at once.
@@ -41,6 +50,9 @@ pub struct Capabilities {
     pub shortcuts: bool,
     /// Reading where windows are (reconnect memory, linked dividers).
     pub window_memory: bool,
+    /// Seeing windows appear, close and take the focus, and classifying them:
+    /// auto-arrange, stacks and their tab strips.
+    pub auto_arrange: bool,
 }
 
 /// Something happened that the engine wants to know about.
@@ -53,6 +65,33 @@ pub enum WatchEvent {
     /// The set or layout of the monitors may have changed (display change, work
     /// area change, resume from sleep). Debounce before acting on it.
     DisplayChanged,
+    /// A top-level window became visible: it was created and shown, shown again
+    /// after being hidden, or stopped being cloaked (a window of another virtual
+    /// desktop, a UWP window that finished starting). Fired for every kind of
+    /// window, popups and tooltips included: classify with
+    /// [`Platform::probe_window`] before acting, and wait a moment, because many
+    /// programs move and resize their window right after showing it.
+    WindowShown(WindowId),
+    /// A top-level window was destroyed or hidden.
+    WindowGone(WindowId),
+    /// A window was minimized.
+    WindowMinimized(WindowId),
+    /// A minimized window was restored.
+    WindowRestored(WindowId),
+    /// This window became the foreground window.
+    Foreground(WindowId),
+}
+
+/// What a window is and whose it is, as far as the OS can tell without reading its
+/// title. Never contains a title.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WindowProbe {
+    pub kind: WindowKind,
+    /// File name of the program (`chrome.exe`), the key of the app rules.
+    pub exe: Option<String>,
+    /// Full path of the program, kept in memory only (it finds the program's icon).
+    pub exe_path: Option<String>,
+    pub owner: Option<WindowOwner>,
 }
 
 /// What happened to one group of shortcuts when they were registered.
@@ -330,6 +369,45 @@ pub trait Platform: Send + Sync {
     /// gone or the process cannot be inspected. No name or title is read.
     fn window_owner(&self, _window: WindowId) -> Option<WindowOwner> {
         None
+    }
+
+    /// Classify a window and find its program. `None` when the window is gone.
+    /// A window that is not an ordinary application window is reported with the kind
+    /// that says why (dialog, tool window, owned popup, cloaked, elevated, ...), so
+    /// the caller never has to know OS flags.
+    fn probe_window(&self, _window: WindowId) -> Option<WindowProbe> {
+        None
+    }
+
+    /// Bring the window above its siblings without taking the keyboard focus (the
+    /// tab that is "showing" in a stack).
+    fn raise_window(&self, _window: WindowId) -> Result<(), PlatformError> {
+        Err(PlatformError::Unsupported)
+    }
+
+    /// Give the window the keyboard focus and raise it.
+    fn activate_window(&self, _window: WindowId) -> Result<(), PlatformError> {
+        Err(PlatformError::Unsupported)
+    }
+
+    /// The visible top-level windows, front to back (z-order). Every kind is
+    /// listed: probe each one.
+    fn top_level_windows(&self) -> Vec<WindowId> {
+        Vec::new()
+    }
+
+    /// Whether the operating system is set to dark app mode. Overlays follow it.
+    fn prefers_dark(&self) -> bool {
+        true
+    }
+
+    /// Create the host of the stack tab strips (native overlay windows). Events
+    /// (a tab clicked, the wheel turned) go to `events`; the closure only enqueues.
+    fn create_strip_host(
+        &self,
+        _events: EventSink<StripEvent>,
+    ) -> Result<Box<dyn StripHost>, PlatformError> {
+        Err(PlatformError::Unsupported)
     }
 
     /// Register the global shortcuts. They stay registered until the handle is

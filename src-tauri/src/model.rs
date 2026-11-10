@@ -1,11 +1,13 @@
 //! App state shared by the tray, the Tauri commands and the drag engine.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
+use krova_core::arrange::ArrangeSettings;
 use krova_core::registry::{ConnectedMonitor, SnapRegistry};
-use krova_core::{Config, ConfigError, MonitorDescriptor, MonitorView, PxRect, Settings};
+use krova_core::{Config, ConfigError, Layout, MonitorDescriptor, MonitorView, PxRect, Settings};
 use krova_platform::{
     Capabilities, HotkeyHandle, InputHandle, MonitorInfo, Permission, Platform, WatchHandle,
 };
@@ -31,6 +33,13 @@ pub struct Shared {
     /// Profile id of the monitor the layout switcher was last opened for (the one
     /// under the cursor at the time). Read by the UI through `switcher_monitor`.
     pub switcher_monitor: Mutex<Option<String>>,
+    /// What the engine last learned about the window in front.
+    pub front_app: Mutex<Option<FrontApp>>,
+    /// Auto-arrange is paused (Ctrl+Alt+T or the tray): windows stay where they are.
+    pub paused: AtomicBool,
+    /// Share-safe: native overlays show no program names or icons. Set by the
+    /// share-safe feature (wave 3) through [`Shared::set_hide_app_names`].
+    pub hide_names: AtomicBool,
     /// How the engine asks the shell to bring a view of the UI window forward. Set
     /// once by the Tauri setup; `None` where there is no window (unit tests).
     pub open_view: Mutex<Option<ViewOpener>>,
@@ -51,8 +60,31 @@ impl Shared {
             engine_tx: Mutex::new(None),
             shortcut_gate: Mutex::new(()),
             switcher_monitor: Mutex::new(None),
+            front_app: Mutex::new(None),
+            paused: AtomicBool::new(false),
+            hide_names: AtomicBool::new(false),
             open_view: Mutex::new(None),
         }
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.paused.load(Ordering::Relaxed)
+    }
+
+    #[allow(dead_code)] // the pause shortcut and tray item (wave 2) call it
+    pub fn set_paused(&self, paused: bool) {
+        self.paused.store(paused, Ordering::Relaxed);
+    }
+
+    /// Whether native overlays must hide program names and icons (share-safe).
+    pub fn hide_app_names(&self) -> bool {
+        self.hide_names.load(Ordering::Relaxed)
+    }
+
+    /// The hook for share-safe: strips (and later the notch) stop showing names.
+    #[allow(dead_code)] // called by share-safe (wave 3)
+    pub fn set_hide_app_names(&self, hide: bool) {
+        self.hide_names.store(hide, Ordering::Relaxed);
     }
 }
 
@@ -80,6 +112,8 @@ pub struct ShortcutStatus {
 pub struct CapabilitiesState {
     pub shortcuts: bool,
     pub window_memory: bool,
+    /// Auto-arrange, stacks and tab strips (window events and classification).
+    pub auto_arrange: bool,
 }
 
 impl From<Capabilities> for CapabilitiesState {
@@ -87,6 +121,7 @@ impl From<Capabilities> for CapabilitiesState {
         Self {
             shortcuts: c.shortcuts,
             window_memory: c.window_memory,
+            auto_arrange: c.auto_arrange,
         }
     }
 }
@@ -138,6 +173,32 @@ pub struct AppState {
     pub capabilities: CapabilitiesState,
     /// The layout switcher's shortcut (`<mods>+Space`): at most one entry in `failed`.
     pub layout_switcher: ShortcutStatus,
+    /// The program in front and whether auto-arrange looks after it (for the
+    /// "Not arranged" chip). `None` when nothing is known yet.
+    pub front_app: Option<FrontApp>,
+}
+
+/// The program in front, as far as auto-arrange is concerned. Never a title.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FrontApp {
+    /// Executable file name (`chrome.exe`), when it could be read.
+    pub exe: Option<String>,
+    /// Auto-arrange places this window (it is in a zone it manages).
+    pub arranged: bool,
+    /// Why not, when `arranged` is false: `"dialog"`, `"tool"`, `"popup"`,
+    /// `"elevated"`, `"never_touch"`, `"float"`, `"auto_arrange_off"`, `"paused"`,
+    /// `"other"`. `None` when arranged.
+    pub reason: Option<String>,
+}
+
+/// One connected monitor as the engine needs it, copied out of the model.
+#[derive(Debug, Clone)]
+pub struct MonitorCtx {
+    pub profile_id: String,
+    pub work: PxRect,
+    pub scale: f64,
+    pub layout: Layout,
+    pub arrange: ArrangeSettings,
 }
 
 pub struct AppModel {
@@ -149,6 +210,9 @@ pub struct AppModel {
     monitors: Vec<MonitorInfo>,
     /// Profile index in `config.monitors` for each entry of `monitors`.
     profile_idx: Vec<usize>,
+    /// Give a monitor that only has the built-in layouts the preset for its shape
+    /// (see `MonitorProfile::seed_preset`). On in the app, off in unit tests.
+    first_run_presets: bool,
 }
 
 impl AppModel {
@@ -159,7 +223,39 @@ impl AppModel {
             persist,
             monitors: Vec::new(),
             profile_idx: Vec::new(),
+            first_run_presets: false,
         }
+    }
+
+    /// Turn on the first-run preset (the app does; unit tests keep the templates).
+    pub fn enable_first_run_presets(&mut self) {
+        self.first_run_presets = true;
+    }
+
+    /// The connected monitor with profile `id`, with its active layout.
+    pub fn monitor_ctx(&self, id: &str) -> Option<MonitorCtx> {
+        self.monitors
+            .iter()
+            .zip(&self.profile_idx)
+            .find(|(_, &p)| self.config.monitors[p].id == id)
+            .and_then(|(m, &p)| {
+                let profile = &self.config.monitors[p];
+                Some(MonitorCtx {
+                    profile_id: profile.id.clone(),
+                    work: m.work,
+                    scale: m.scale,
+                    layout: profile.active()?.clone(),
+                    arrange: profile.auto_arrange,
+                })
+            })
+    }
+
+    /// Every connected monitor, as [`AppModel::monitor_ctx`].
+    pub fn monitor_ctxs(&self) -> Vec<MonitorCtx> {
+        self.connected_ids()
+            .iter()
+            .filter_map(|id| self.monitor_ctx(id))
+            .collect()
     }
 
     /// Adopt the currently connected monitors, matching them to saved profiles
@@ -170,6 +266,12 @@ impl AppModel {
         let descriptors: Vec<MonitorDescriptor> =
             infos.iter().map(|m| m.descriptor.clone()).collect();
         self.profile_idx = self.config.resolve_monitors(&descriptors);
+        if self.first_run_presets {
+            for (info, &p) in infos.iter().zip(&self.profile_idx) {
+                let r = info.descriptor.rect;
+                self.config.monitors[p].seed_preset(r.w, r.h);
+            }
+        }
         self.monitors = infos;
         let changed = self.config != before;
         if changed {
@@ -231,6 +333,7 @@ impl AppModel {
             shortcuts,
             capabilities: capabilities.into(),
             layout_switcher,
+            front_app: None,
         }
     }
 
@@ -413,6 +516,7 @@ mod tests {
             Capabilities {
                 shortcuts: true,
                 window_memory: false,
+                auto_arrange: false,
             },
         );
         let json = serde_json::to_value(&s).unwrap();

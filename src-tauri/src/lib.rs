@@ -40,6 +40,11 @@ pub fn run() {
             commands::insert_layout,
             commands::switcher_monitor,
             commands::list_templates,
+            commands::list_presets,
+            commands::set_auto_arrange,
+            commands::set_app_rule,
+            commands::remove_app_rule,
+            commands::arrange_monitor,
             commands::export_layout,
             commands::import_layout,
             commands::edit_split_zone,
@@ -96,6 +101,7 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let mut model = AppModel::new(config, path, persist);
+    model.enable_first_run_presets();
     match platform.monitors() {
         Ok(infos) => {
             if let Err(e) = model.refresh_monitors(infos) {

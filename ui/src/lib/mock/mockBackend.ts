@@ -15,6 +15,9 @@ import type {
   NavigateTarget,
   Permission,
   Settings,
+  AppRule,
+  ArrangeSettings,
+  FrontApp,
   ShortcutStatus,
 } from '../bindings';
 import { editMoveDivider, editRemoveZone, editSplitZone, validateLayout } from './edit';
@@ -26,6 +29,7 @@ import {
   uniqueLayoutId,
 } from './exchange';
 import { templates } from './templates';
+import { allPresets, variantForSize } from './presets';
 
 /** localStorage key used for the optional persistence of demo edits. */
 export const STORAGE_KEY = 'krova-demo';
@@ -71,6 +75,8 @@ export interface DemoControls {
   setShortcuts(mode: ShortcutsMode): void;
   /** Change the fake platform support and emit "state-changed". */
   setCapabilities(mode: CapabilitiesMode): void;
+  /** Pretend another window came to the front (for the "Not arranged" chip). */
+  setFrontApp(front: FrontApp): void;
   /** Back to the initial demo state (also clears localStorage). */
   reset(): void;
 }
@@ -94,6 +100,7 @@ export function defaultSettings(): Settings {
     linked_dividers: true,
     zone_gap_px: 0,
     layout_switcher_shortcut: true,
+    app_rules: [],
   };
 }
 
@@ -125,11 +132,85 @@ function initialConfig(): Config {
     last_rect: { ...m.rect },
     layouts: templates(),
     active_layout: i === 0 ? 'halves' : 'thirds',
+    auto_arrange: defaultArrange(),
+    preset_seeded: true,
   }));
   return { schema_version: 1, settings: defaultSettings(), monitors: profiles };
 }
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+
+export function defaultArrange(): ArrangeSettings {
+  return {
+    enabled: true,
+    policy: 'next_free',
+    fill_gaps: false,
+    stack_when_full: true,
+  };
+}
+
+/** Like krova-core `validate_exe_name`: a bare file name, no path, no hidden characters. */
+/** Code point ranges of control, zero-width, line-separating and bidi characters. */
+const HIDDEN_RANGES: [number, number][] = [
+  [0x00, 0x1f],
+  [0x7f, 0x9f],
+  [0xad, 0xad],
+  [0x200b, 0x200f],
+  [0x2028, 0x202e],
+  [0x2060, 0x2069],
+  [0xfeff, 0xfeff],
+];
+
+function hasHidden(s: string): boolean {
+  for (const ch of s) {
+    const c = ch.codePointAt(0) ?? 0;
+    if (HIDDEN_RANGES.some(([a, b]) => c >= a && c <= b)) return true;
+  }
+  return false;
+}
+
+const PATH_CHARS = ['/', ':', String.fromCharCode(92)];
+
+export function exeNameError(exe: string): string | null {
+  const name = exe.trim();
+  if (!name) return 'the program name is empty';
+  if (name.length > 128) return 'the program name is too long (at most 128 characters)';
+  if (PATH_CHARS.some((c) => name.includes(c))) {
+    return `"${name}" is a path, not a program file name`;
+  }
+  if (hasHidden(name)) return 'the program name has control or invisible characters';
+  return null;
+}
+
+function ruleError(rule: AppRule): string | null {
+  const bad = exeNameError(rule.exe);
+  if (bad) return bad;
+  const a = rule.action;
+  if (
+    a.kind === 'preferred_zone' &&
+    !(Number.isInteger(a.value) && a.value >= 1 && a.value <= 64)
+  ) {
+    return 'the zone number must be between 1 and 64';
+  }
+  if (a.kind === 'start_on_monitor' && (typeof a.value !== 'string' || !a.value)) {
+    return 'the monitor id is empty';
+  }
+  return null;
+}
+
+const sameExe = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+
+/** Drop invalid rules and later duplicates, keep the first 256 (`AppRules::sanitized`). */
+function sanitizeRules(rules: AppRule[]): AppRule[] {
+  const out: AppRule[] = [];
+  for (const r of rules) {
+    if (out.length >= 256) break;
+    const rule = { exe: String(r?.exe ?? '').trim(), action: r?.action };
+    if (!rule.action || ruleError(rule) || out.some((o) => sameExe(o.exe, rule.exe))) continue;
+    out.push(clone(rule));
+  }
+  return out;
+}
 
 const MODIFIERS = ['shift', 'ctrl', 'alt', 'super'];
 const MOVE_MODES = ['animate', 'instant'];
@@ -171,6 +252,7 @@ function sanitizeSettings(s: Settings): Settings {
     linked_dividers: flag(s.linked_dividers, defaults.linked_dividers),
     zone_gap_px: Math.min(32, Math.max(0, gap)),
     layout_switcher_shortcut: flag(s.layout_switcher_shortcut, defaults.layout_switcher_shortcut),
+    app_rules: Array.isArray(s.app_rules) ? sanitizeRules(s.app_rules) : [],
   };
 }
 
@@ -230,6 +312,8 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
   const navigateListeners = new Set<(v: NavigateTarget) => void>();
   // The demo's "cursor" is on the first monitor until a test says otherwise.
   let switcherMonitorId: string | null = MONITORS[0].profile_id;
+  // A plausible front window for the "Not arranged" chip.
+  let frontApp: FrontApp = { exe: 'code.exe', arranged: true, reason: null };
   const stateListeners = new Set<(s: AppState) => void>();
 
   function persist(): void {
@@ -243,7 +327,7 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
 
   function capabilities(): Capabilities {
     const on = capabilitiesMode === 'all';
-    return { shortcuts: on, window_memory: on };
+    return { shortcuts: on, window_memory: on, auto_arrange: on };
   }
 
   /**
@@ -263,7 +347,9 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
   /** The switcher's `<mods>+Space` has its own switch and its own (single) conflict. */
   function layoutSwitcherStatus(): ShortcutStatus {
     const registering =
-      capabilities().shortcuts && config.settings.layout_switcher_shortcut && shortcutsMode !== 'off';
+      capabilities().shortcuts &&
+      config.settings.layout_switcher_shortcut &&
+      shortcutsMode !== 'off';
     return {
       active: registering && shortcutsMode !== 'failed',
       failed: registering && shortcutsMode === 'failed' ? [DEMO_FAILED_SWITCHER_SHORTCUT] : [],
@@ -280,6 +366,7 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
       shortcuts: shortcutStatus(),
       capabilities: capabilities(),
       layout_switcher: layoutSwitcherStatus(),
+      front_app: capabilities().auto_arrange ? frontApp : null,
     });
   }
 
@@ -313,7 +400,17 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
           const parsed: unknown = JSON.parse(raw);
           if (looksValid(parsed)) {
             config = { ...initialConfig(), ...parsed.config };
-            config.settings = { ...defaultSettings(), ...parsed.config.settings };
+            config.settings = {
+              ...defaultSettings(),
+              ...parsed.config.settings,
+            };
+            for (const m of config.monitors) {
+              m.auto_arrange = {
+                ...defaultArrange(),
+                ...(m.auto_arrange ?? {}),
+              };
+              m.preset_seeded = m.preset_seeded ?? true;
+            }
             autostart = !!parsed.autostart;
           }
         }
@@ -341,7 +438,10 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
       emitState();
     },
     toggleEnabled() {
-      config.settings = { ...config.settings, enabled: !config.settings.enabled };
+      config.settings = {
+        ...config.settings,
+        enabled: !config.settings.enabled,
+      };
       persist();
       emitState();
     },
@@ -351,6 +451,10 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
     },
     setCapabilities(mode) {
       capabilitiesMode = mode;
+      emitState();
+    },
+    setFrontApp(front) {
+      frontApp = clone(front);
       emitState();
     },
     reset() {
@@ -444,6 +548,61 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
 
     async listTemplates() {
       return templates();
+    },
+
+    async listPresets(monitorId) {
+      const m = MONITORS.find((x) => x.profile_id === monitorId);
+      const variant = m ? variantForSize(m.work.w, m.work.h) : null;
+      return allPresets().map((p) => ({
+        ...p,
+        recommended: p.variant === variant,
+      }));
+    },
+
+    async setAutoArrange(monitorId, settings) {
+      const p = profile(monitorId);
+      if (settings.policy !== 'next_free' && settings.policy !== 'main_first') {
+        throw `invalid policy "${String(settings.policy)}"`;
+      }
+      p.auto_arrange = {
+        enabled: !!settings.enabled,
+        policy: settings.policy,
+        fill_gaps: !!settings.fill_gaps,
+        stack_when_full: !!settings.stack_when_full,
+      };
+      persist();
+      return snapshot();
+    },
+
+    async setAppRule(rule) {
+      const normalized: AppRule = {
+        exe: String(rule.exe ?? '').trim(),
+        action: rule.action,
+      };
+      const bad = ruleError(normalized);
+      if (bad) throw bad;
+      const rules = config.settings.app_rules;
+      const i = rules.findIndex((r) => sameExe(r.exe, normalized.exe));
+      if (i >= 0) rules[i] = clone(normalized);
+      else if (rules.length >= 256) throw 'there are too many app rules (at most 256)';
+      else rules.push(clone(normalized));
+      persist();
+      return snapshot();
+    },
+
+    async removeAppRule(exe) {
+      const rules = config.settings.app_rules;
+      const i = rules.findIndex((r) => sameExe(r.exe, exe));
+      if (i < 0) throw `there is no rule for ${exe}`;
+      rules.splice(i, 1);
+      persist();
+      return snapshot();
+    },
+
+    async arrangeMonitor(monitorId) {
+      if (!MONITORS.some((m) => m.profile_id === monitorId)) {
+        throw `monitor ${monitorId} is not connected`;
+      }
     },
 
     async switcherMonitor() {

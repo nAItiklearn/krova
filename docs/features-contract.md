@@ -94,6 +94,48 @@ A quick overlay listing the saved layouts of one monitor as stacked cards: tap o
 
 **Window.** Today `navigate("switcher")` goes to the `main` window like the other views. Recommended for the real view: a separate small window (label `switcher`, transparent, undecorated, always on top, no taskbar entry, created on demand and destroyed on close like `main`), so opening it never replaces an editor that has unsaved edits, closing it never takes the editor with it, and its size and position come from the target monitor. The contract above (events, commands, state) does not change with that; only `ui_window.rs`, `tauri.conf.json` and the capability file do.
 
+## Wave 1: auto-arrange, stacks, swap, app rules, presets (engine branch)
+
+Krova arranges out of the box: auto-arrange is **on for every monitor by default**, and on first run a monitor that still has only the built-in layouts (with `halves` active) gets the preset that fits its shape (main + side for three windows: landscape, ultrawide 2.1:1 or wider, or portrait), added in front and made active. This happens once per monitor profile (`preset_seeded`).
+
+### Config additions
+
+| Where | Field | Type | Default | Notes |
+|---|---|---|---|---|
+| `MonitorProfile` | `auto_arrange` | `ArrangeSettings` | `{enabled: true, policy: "next_free", fill_gaps: false, stack_when_full: true}` | Per monitor. A missing key loads as on. Change with `set_auto_arrange`. |
+| `MonitorProfile` | `preset_seeded` | bool | `false` | Internal: the first-run preset was offered. The UI never shows or sends it (send back what you got). |
+| `Settings` | `app_rules` | `AppRule[]` | `[]` | `{exe, action}`; `action` is `{"kind":"never_touch"}`, `{"kind":"float"}`, `{"kind":"preferred_zone","value":N}` (1-based zone in reading order) or `{"kind":"start_on_monitor","value":"monitor-2"}`. By executable **file name** (`chrome.exe`), never a title or path; case-insensitive, one rule per program, at most 256. Sanitised on load and on save (invalid rules are dropped). Prefer `set_app_rule` / `remove_app_rule` for readable errors. |
+
+TS: `ArrangeSettings`, `ArrangePolicy`, `AppRule`, `RuleAction`.
+
+### `AppState` additions
+
+- `capabilities.auto_arrange`: auto-arrange, stacks and tab strips work on this OS (Windows: true; macOS: false). Hide the auto-arrange switches when false.
+- `front_app`: `FrontApp | null` = `{exe: string | null, arranged: bool, reason: FrontAppReason | null}`. Updated when the focus moves; read with the state (not pushed on every focus change). `reason` is `"dialog"`, `"tool"`, `"popup"`, `"elevated"`, `"never_touch"`, `"float"`, `"auto_arrange_off"`, `"paused"` or `"other"`, for the "Not arranged" chip.
+
+### Commands
+
+| Command | Arguments | Returns | Notes |
+|---|---|---|---|
+| `list_presets` | `monitorId: string \| null` | `PresetInfo[]` | Every distinct preset (grid / columns / rows / main + side, 1-5 windows, landscape / ultrawide / portrait, main 50/60/66.7 %). `PresetInfo` = `{id, name, family, count, variant, main_size, recommended, layout}`; `recommended` marks the presets for that monitor's shape. `layout` is an ordinary layout: save it with `save_layout`. |
+| `set_auto_arrange` | `monitorId`, `settings: ArrangeSettings` | `AppState` | Persists and emits `state-changed`. Switching off forgets the stacks (windows stay where they are). |
+| `set_app_rule` | `rule: AppRule` | `AppState` | Adds, or replaces the rule of the same program in place. Errors are sentences (`"C:\x.exe" is a path, not a program file name`). |
+| `remove_app_rule` | `exe: string` | `AppState` | Case-insensitive. Error if there is no such rule. |
+| `arrange_monitor` | `monitorId` | `null` | "Tile now": arrange every ordinary window already open on that monitor (at most 64). Asynchronous; the windows move a moment later. |
+
+### Behaviour (what the user sees)
+
+- A new ordinary window (not a dialog, tool window, owned pop-up, splash, notification, full-screen, cloaked or elevated window) springs into the next free zone of the active layout about 350 ms after it appears. An app rule can send it to zone N, to another monitor, or keep it floating.
+- With every zone taken it joins a **stack**: the zone of the preferred zone, the focused window or the last zone. A native **tab strip** sits on the zone's top edge: rounded translucent tabs, a 1 px hairline, the program's icon and short name (from the executable, never the title), the visible tab underlined in the accent colour, light or dark with the OS (or `theme`). Click a tab or turn the wheel over the strip to switch; gaps between tabs let clicks through. Share-safe (wave 3) hides names and icons.
+- Closing or minimising a window takes it out of its zone; the next tab of a stack shows. `fill_gaps` moves later windows up.
+- Dragging a tracked window (with the snap modifier) onto an occupied zone **swaps** the two windows. Moving a tracked window away by hand makes it float.
+- Changing the active layout re-tiles: windows keep their zone id; windows whose zone is gone are arranged again.
+- Keyboard swap and stack cycling are engine functions bound in wave 2 (`Ctrl+Alt+Shift+Arrow`, `Ctrl+Alt+[` / `]`).
+
+### Window classification (for other branches)
+
+`krova_platform::classify(&WindowFacts) -> WindowKind` is OS-independent and unit-tested; `Platform::probe_window(id) -> Option<WindowProbe {kind, exe, exe_path, owner}>` reads the facts on Windows (styles, owner, class family, DWM cloaking, elevation) and the program path. `WindowKind` gained `cloaked` and `elevated`. Only `normal` windows are ever arranged. No title is read.
+
 ## Not part of the contract
 
 Everything about the registry, the engine messages and the platform traits is internal and may change.

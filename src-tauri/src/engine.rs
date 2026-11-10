@@ -25,10 +25,12 @@ use krova_core::registry::{plan_reconnect, KeyAction, WindowKey, WindowSnapshot,
 use krova_core::{
     Action, DragEvent, MonitorView, MoveMode, PxRect, Session, Settings, SnapSettings, SnapTarget,
 };
+mod arrange;
+
 use krova_platform::overlay::{Overlay, OverlayScene, OverlayStyle};
 use krova_platform::{
     ChordReport, EventSink, HotkeyEvent, HotkeyHandle, HotkeySpec, InputEvent, PlatformError,
-    WatchEvent, WindowId,
+    StripEvent, StripHost, WatchEvent, WindowId,
 };
 
 use crate::actions::{classify_change, plan_key_move, same_place, Change, Slot};
@@ -47,6 +49,12 @@ pub enum Msg {
     Input(InputEvent),
     Hotkey(KeyAction),
     Watch(WatchEvent),
+    /// A tab of a stack strip was clicked, or the wheel turned over a strip.
+    Strip(StripEvent),
+    /// Settings or layouts were changed (by the UI or the tray): follow them.
+    ConfigChanged,
+    /// Arrange every ordinary window on this monitor (profile id) now.
+    ArrangeMonitor(String),
 }
 
 /// Which zone of which connected monitor a snap targets (monitor = index into the
@@ -208,10 +216,26 @@ fn start_parts(shared: &Arc<Shared>, with_mouse: bool) {
     } else {
         None
     };
+    // The stack tab strips are native windows like the overlay: not in headless runs.
+    let strips = if with_mouse && shared.platform.capabilities().auto_arrange {
+        let strip_tx = tx.clone();
+        let sink: EventSink<StripEvent> = Arc::new(move |ev| {
+            let _ = strip_tx.send(Msg::Strip(ev));
+        });
+        match shared.platform.create_strip_host(sink) {
+            Ok(s) => Some(s),
+            Err(e) => {
+                eprintln!("krova: stack tab strips are unavailable: {e}");
+                None
+            }
+        }
+    } else {
+        None
+    };
     let engine_shared = Arc::clone(shared);
     let spawned = thread::Builder::new()
         .name("krova-engine".into())
-        .spawn(move || run(&rx, &engine_shared, overlay.as_deref()));
+        .spawn(move || run(&rx, &engine_shared, overlay.as_deref(), strips.as_deref()));
     if let Err(e) = spawned {
         eprintln!("krova: could not start the engine thread: {e}");
         return;
@@ -223,6 +247,13 @@ fn start_parts(shared: &Arc<Shared>, with_mouse: bool) {
     }
     start_watcher(shared, &tx);
     apply_shortcuts(shared);
+}
+
+/// Hand a message to the engine thread (no-op before it has started).
+pub fn notify(shared: &Shared, msg: Msg) {
+    if let Some(tx) = lock(&shared.engine_tx).as_ref() {
+        let _ = tx.send(msg);
+    }
 }
 
 /// Try to (re)start the mouse hook, for example after a permission was granted.
@@ -358,10 +389,21 @@ pub fn apply_shortcuts(shared: &Shared) {
     }
 }
 
-fn run(rx: &Receiver<Msg>, shared: &Shared, overlay: Option<&dyn Overlay>) {
-    let mut engine = Engine::new(shared, overlay);
+fn run(
+    rx: &Receiver<Msg>,
+    shared: &Shared,
+    overlay: Option<&dyn Overlay>,
+    strips: Option<&dyn StripHost>,
+) {
+    let mut engine = Engine::new(shared, overlay, strips);
     loop {
-        let message = match engine.display_deadline {
+        // Sleep until a message arrives or the earliest timer is due; with no timer
+        // set, block: nothing runs while nothing happens.
+        let deadline = [engine.display_deadline, engine.arrange.deadline()]
+            .into_iter()
+            .flatten()
+            .min();
+        let message = match deadline {
             Some(deadline) => {
                 match rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
                     Ok(m) => Some(m),
@@ -378,10 +420,18 @@ fn run(rx: &Receiver<Msg>, shared: &Shared, overlay: Option<&dyn Overlay>) {
             Some(Msg::Input(ev)) => engine.on_input(ev),
             Some(Msg::Hotkey(action)) => engine.on_hotkey(action),
             Some(Msg::Watch(ev)) => engine.on_watch(ev),
-            None => {
-                engine.display_deadline = None;
-                engine.reconcile_monitors();
-            }
+            Some(Msg::Strip(ev)) => engine.on_strip(ev),
+            Some(Msg::ConfigChanged) => engine.on_config_changed(),
+            Some(Msg::ArrangeMonitor(profile)) => engine.arrange_monitor(&profile),
+            None => {}
+        }
+        let now = Instant::now();
+        if engine.display_deadline.is_some_and(|d| d <= now) {
+            engine.display_deadline = None;
+            engine.reconcile_monitors();
+        }
+        if engine.arrange.deadline().is_some_and(|d| d <= now) {
+            engine.arrange_due();
         }
     }
 }
@@ -389,6 +439,7 @@ fn run(rx: &Receiver<Msg>, shared: &Shared, overlay: Option<&dyn Overlay>) {
 struct Engine<'a> {
     shared: &'a Shared,
     overlay: Option<&'a dyn Overlay>,
+    strips: Option<&'a dyn StripHost>,
     session: Session,
     scene: SceneState,
     /// Profile ids of the monitors connected when we last looked.
@@ -397,14 +448,22 @@ struct Engine<'a> {
     display_deadline: Option<Instant>,
     /// Windows Krova moved itself a moment ago; their own move/size events are ignored.
     placed_at: HashMap<WindowKey, Instant>,
+    /// Auto-arrange: stacks per monitor, windows waiting to settle, strips shown.
+    arrange: arrange::ArrangeState,
 }
 
 impl<'a> Engine<'a> {
-    fn new(shared: &'a Shared, overlay: Option<&'a dyn Overlay>) -> Self {
+    fn new(
+        shared: &'a Shared,
+        overlay: Option<&'a dyn Overlay>,
+        strips: Option<&'a dyn StripHost>,
+    ) -> Self {
         let connected = lock(&shared.model).connected_ids();
         Self {
             shared,
             overlay,
+            strips,
+            arrange: arrange::ArrangeState::default(),
             session: Session::new(SnapSettings::default()),
             scene: SceneState::default(),
             connected,
@@ -478,11 +537,14 @@ impl<'a> Engine<'a> {
                     animate,
                     ..
                 } => match shared.platform.place_window(window, target, work, animate) {
-                    Ok(done) => {
-                        if let Some(slot) = slot {
-                            self.remember(window, slot, done);
+                    Ok(done) => match slot {
+                        Some(slot) => {
+                            self.remember(window, slot.clone(), done);
+                            // A drop on an occupied zone swaps tracked windows.
+                            self.after_manual_place(window, &slot, true);
                         }
-                    }
+                        None => self.after_free_place(window),
+                    },
                     Err(e) => eprintln!("krova: could not move the window: {e}"),
                 },
             }
@@ -565,7 +627,10 @@ impl<'a> Engine<'a> {
             return;
         };
         match platform.place_window(window, planned.target, planned.work, animate) {
-            Ok(done) => self.remember(window, planned.slot, done),
+            Ok(done) => {
+                self.remember(window, planned.slot.clone(), done);
+                self.after_manual_place(window, &planned.slot, false);
+            }
             Err(e) => eprintln!("krova: could not move the window: {e}"),
         }
     }
@@ -608,6 +673,12 @@ impl<'a> Engine<'a> {
             // The decision is made at the end, by comparing with the registry.
             WatchEvent::MoveSizeStart(_) => {}
             WatchEvent::MoveSizeEnd(window) => self.on_move_size_end(window),
+            WatchEvent::WindowShown(window) | WatchEvent::WindowRestored(window) => {
+                self.on_window_shown(window);
+            }
+            WatchEvent::WindowGone(window) => self.on_window_left(window, true),
+            WatchEvent::WindowMinimized(window) => self.on_window_left(window, false),
+            WatchEvent::Foreground(window) => self.on_focus(window),
         }
     }
 
@@ -646,6 +717,7 @@ impl<'a> Engine<'a> {
             self.connected = model.connected_ids();
             (model.config.settings.clone(), model.connected())
         };
+        self.arrange_monitors_changed();
         if !settings.enabled || !settings.restore_on_reconnect {
             return;
         }
@@ -718,6 +790,8 @@ impl<'a> Engine<'a> {
         if !active || self.placed_by_us_just_now(key) {
             return;
         }
+        // Auto-arrange looks again in a moment: a snap may still be on its way.
+        self.on_user_moved(window);
         let Some(record) = lock(&shared.registry).get(key).cloned() else {
             return;
         };
@@ -1162,6 +1236,7 @@ mod switcher_tests {
             Capabilities {
                 shortcuts: true,
                 window_memory: false,
+                auto_arrange: false,
             }
         }
         fn cursor_position(&self) -> Option<(i32, i32)> {
@@ -1232,7 +1307,7 @@ mod switcher_tests {
     }
 
     fn press(shared: &Shared) {
-        Engine::new(shared, None).on_hotkey(KeyAction::OpenSwitcher);
+        Engine::new(shared, None, None).on_hotkey(KeyAction::OpenSwitcher);
     }
 
     #[test]
