@@ -12,6 +12,9 @@
   import Corners from './components/views/Corners.svelte';
   import Displays from './components/views/Displays.svelte';
   import Privacy from './components/views/Privacy.svelte';
+  import Workspaces from './components/views/Workspaces.svelte';
+  import Focus from './components/views/Focus.svelte';
+  import Screen from './components/views/Screen.svelte';
   import { app, type Section } from './lib/app.svelte';
   import { api } from './lib/backend';
   import { editor } from './lib/editor.svelte';
@@ -27,6 +30,8 @@
         { id: 'overview', label: 'Overview', icon: 'overview' },
         { id: 'layouts', label: 'Layouts', icon: 'layouts' },
         { id: 'arrange', label: 'Arrange', icon: 'arrange' },
+        { id: 'workspaces', label: 'Workspaces', icon: 'workspaces' },
+        { id: 'focus', label: 'Focus', icon: 'focus' },
       ],
     },
     {
@@ -41,6 +46,7 @@
       items: [
         { id: 'appearance', label: 'Appearance', icon: 'appearance' },
         { id: 'displays', label: 'Displays', icon: 'displays' },
+        { id: 'screen', label: 'Screen edges', icon: 'screen' },
         { id: 'privacy', label: 'Privacy & about', icon: 'privacy' },
       ],
     },
@@ -212,6 +218,12 @@
             <Corners />
           {:else if app.view === 'displays'}
             <Displays />
+          {:else if app.view === 'workspaces'}
+            <Workspaces />
+          {:else if app.view === 'focus'}
+            <Focus />
+          {:else if app.view === 'screen'}
+            <Screen />
           {:else}
             <Privacy />
           {/if}

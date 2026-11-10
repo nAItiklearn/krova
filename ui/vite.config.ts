@@ -26,6 +26,14 @@ export default defineConfig({
     // Single chunk, so no preload links; this also keeps the bundle free of Vite's
     // fetch()-based modulepreload polyfill (nothing in the app calls fetch itself).
     modulePreload: { polyfill: false },
+    // Two pages: the main window and the hover zone picker window (paths are
+    // relative to ui/, where every npm script runs).
+    rollupOptions: {
+      input: {
+        main: 'index.html',
+        picker: 'picker.html',
+      },
+    },
   },
   test: {
     environment: 'node',

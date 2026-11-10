@@ -12,7 +12,10 @@
     | 'bolt'
     | 'switcher'
     | 'sheet'
-    | 'pause';
+    | 'pause'
+    | 'workspaces'
+    | 'focus'
+    | 'screen';
   let { name }: { name: NavIconName } = $props();
 </script>
 
@@ -41,6 +44,12 @@
     <rect x="3.5" y="2.5" width="13" height="15" rx="2" /><path d="M6.5 6.5h7M6.5 10h7M6.5 13.5h4" />
   {:else if name === 'pause'}
     <rect x="5.5" y="4" width="3" height="12" rx="1" /><rect x="11.5" y="4" width="3" height="12" rx="1" />
+  {:else if name === 'workspaces'}
+    <rect x="2.5" y="5.5" width="11" height="9" rx="1.8" /><path d="M6.5 3h9a2 2 0 0 1 2 2v7" /><path d="M8 5.5v9" />
+  {:else if name === 'focus'}
+    <circle cx="10" cy="10" r="3" /><path d="M3 7V5a2 2 0 0 1 2-2h2M13 3h2a2 2 0 0 1 2 2v2M17 13v2a2 2 0 0 1-2 2h-2M7 17H5a2 2 0 0 1-2-2v-2" />
+  {:else if name === 'screen'}
+    <rect x="2.5" y="3.5" width="15" height="11" rx="2" /><path d="M2.5 6.5h15M14.5 6.5v8M7 17.5h6" />
   {/if}
 </svg>
 
