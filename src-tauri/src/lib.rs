@@ -51,6 +51,7 @@ pub fn run() {
             ui_window::take_pending_view,
             // --- wave4 ---
             wave4::set_reserved_edges,
+            wave4::place_hovered,
             // --- end wave4 ---
         ])
         .on_window_event(|window, event| match event {
@@ -125,5 +126,8 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let initial = commands::build_state(&shared);
     tray::build(app.handle(), &initial)?;
     engine::start(&shared);
+    // --- wave4 ---
+    wave4::start(app.handle(), &shared);
+    // --- end wave4 ---
     Ok(())
 }

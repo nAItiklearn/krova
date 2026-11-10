@@ -40,13 +40,17 @@ pub fn build_state(shared: &Shared) -> AppState {
         (features.shortcuts.clone(), features.layout_switcher.clone())
     };
     let capabilities = shared.platform.capabilities();
-    lock(&shared.model).state(
+    let mut state = lock(&shared.model).state(
         autostart,
         permission,
         shortcuts,
         layout_switcher,
         capabilities,
-    )
+    );
+    // --- wave4 ---
+    state.wave4 = crate::wave4::state_extras(shared);
+    // --- end wave4 ---
+    state
 }
 
 /// Persist the config, refresh the tray, tell every listener, return the state.
@@ -97,6 +101,9 @@ pub fn change_settings(shared: &Shared, edit: impl FnOnce(&mut Settings)) -> Res
             return Err(format!("could not change launch at login: {e}"));
         }
     }
+    // --- wave4 ---
+    crate::wave4::settings_changed(shared);
+    // --- end wave4 ---
     Ok(())
 }
 

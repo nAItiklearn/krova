@@ -26,6 +26,13 @@ pub mod win;
 pub mod win_events;
 #[cfg(windows)]
 pub mod win_overlay;
+// --- wave4 ---
+pub mod pointer;
+#[cfg(windows)]
+pub mod win_ffm;
+#[cfg(windows)]
+pub mod win_hover;
+// --- end wave4 ---
 
 pub use hotkeys::{HotkeyEvent, HotkeySpec};
 
@@ -338,6 +345,23 @@ pub trait Platform: Send + Sync {
     fn start_watcher(&self, _sink: EventSink<WatchEvent>) -> Result<WatchHandle, PlatformError> {
         Err(PlatformError::Unsupported)
     }
+
+    // --- wave4 ---
+    /// What the wave 4 features can do here (all false by default).
+    fn wave4_capabilities(&self) -> pointer::Wave4Capabilities {
+        pointer::Wave4Capabilities::default()
+    }
+
+    /// Watch for the cursor coming to rest (focus follows mouse, hover zone
+    /// picker) until the handle is dropped. `config` is read at every rest.
+    fn start_pointer_watch(
+        &self,
+        _config: Arc<pointer::PointerConfig>,
+        _sink: EventSink<pointer::PointerEvent>,
+    ) -> Result<WatchHandle, PlatformError> {
+        Err(PlatformError::Unsupported)
+    }
+    // --- end wave4 ---
 }
 
 /// Platform for OSes Krova does not support; every operation fails cleanly.

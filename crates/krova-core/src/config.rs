@@ -119,6 +119,14 @@ pub struct Settings {
     /// `<shortcut_modifier>+Space` opens the layout switcher on the monitor under
     /// the cursor. Independent of `keyboard_shortcuts`.
     pub layout_switcher_shortcut: bool,
+    // --- wave4 ---
+    /// Activate the window under the cursor once it rests (opt-in).
+    pub focus_follows_mouse: bool,
+    /// How long the cursor rests first, in ms (150..=800).
+    pub focus_follows_mouse_delay_ms: i32,
+    /// The activation modifier held over a title bar opens a small zone picker.
+    pub hover_picker: bool,
+    // --- end wave4 ---
 }
 
 /// `#rrggbb` (any case, optional `#`, surrounding spaces ignored) as lowercase `#rrggbb`.
@@ -142,6 +150,10 @@ impl Settings {
         };
         self.edge_size_px = self.edge_size_px.clamp(2, 64);
         self.zone_gap_px = self.zone_gap_px.clamp(0, MAX_ZONE_GAP_PX);
+        // --- wave4 ---
+        self.focus_follows_mouse_delay_ms =
+            crate::ffm::clamp_delay(self.focus_follows_mouse_delay_ms);
+        // --- end wave4 ---
         self.highlight_color =
             normalize_hex_color(&self.highlight_color).unwrap_or(defaults.highlight_color);
         self
@@ -166,6 +178,11 @@ impl Default for Settings {
             linked_dividers: true,
             zone_gap_px: 0,
             layout_switcher_shortcut: true,
+            // --- wave4 ---
+            focus_follows_mouse: false,
+            focus_follows_mouse_delay_ms: crate::ffm::DEFAULT_DELAY_MS,
+            hover_picker: false,
+            // --- end wave4 ---
         }
     }
 }

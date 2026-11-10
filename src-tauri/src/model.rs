@@ -138,6 +138,12 @@ pub struct AppState {
     pub capabilities: CapabilitiesState,
     /// The layout switcher's shortcut (`<mods>+Space`): at most one entry in `failed`.
     pub layout_switcher: ShortcutStatus,
+    // --- wave4 ---
+    /// Wave 4 fields (`wave4_capabilities`, `pointer`, `language`, `languages`),
+    /// flattened into the top level. Filled in by `commands::build_state`.
+    #[serde(flatten)]
+    pub wave4: crate::wave4::Wave4State,
+    // --- end wave4 ---
 }
 
 pub struct AppModel {
@@ -242,6 +248,9 @@ impl AppModel {
             shortcuts,
             capabilities: capabilities.into(),
             layout_switcher,
+            // --- wave4 ---
+            wave4: Default::default(),
+            // --- end wave4 ---
         }
     }
 
