@@ -1,2 +1,5 @@
 .results/
 .report/
+.shots/
+.screenshots/
+.demo-dist/

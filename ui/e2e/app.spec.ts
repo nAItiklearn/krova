@@ -1,6 +1,17 @@
 // App shell: first load, monitor tabs, navigation, permission banner, demo hooks.
 
-import { demo, editorUi, expect, openApp, openSettings, test } from './fixtures';
+import {
+  SECTIONS,
+  demo,
+  editorUi,
+  expect,
+  gotoSection,
+  openApp,
+  openArrange,
+  openHome,
+  sectionContent,
+  test,
+} from './fixtures';
 
 test.describe('first load', () => {
   test('shows the demo badge, both monitors and logs no console errors', async ({
@@ -25,16 +36,14 @@ test.describe('first load', () => {
     await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'false');
 
     await expect(page.getByTestId('version')).toHaveText(/^Krova v\d+\.\d+\.\d+/);
-    await expect(page.getByTestId('privacy')).toContainText('nothing leaves your computer');
+    await expect(page.getByTestId('privacy')).toContainText(/no telemetry/i);
 
     // No banner when the (fake) permission is not required.
     await expect(page.getByTestId('permission-banner')).toHaveCount(0);
 
-    // Visit the other view too before judging the console.
-    await page.getByTestId('nav-settings').click();
-    await expect(page.getByTestId('settings')).toBeVisible();
-    await page.getByTestId('nav-editor').click();
-    await expect(page.getByTestId('canvas')).toBeVisible();
+    // Visit every section before judging the console.
+    for (const section of SECTIONS) await gotoSection(page, section);
+    await gotoSection(page, 'layouts');
 
     expect(guard.consoleErrors, 'console errors').toEqual([]);
     expect(guard.pageErrors, 'uncaught page errors').toEqual([]);
@@ -145,56 +154,81 @@ test.describe('monitor tabs', () => {
 });
 
 test.describe('navigation', () => {
-  test('the nav buttons switch between Editor and Settings', async ({ page }) => {
-    await openApp(page);
-    const editorNav = page.getByTestId('nav-editor');
-    const settingsNav = page.getByTestId('nav-settings');
-
-    await expect(editorNav).toHaveAttribute('aria-current', 'page');
-    await expect(settingsNav).not.toHaveAttribute('aria-current', /.+/);
-
-    await settingsNav.click();
-    await expect(page.getByTestId('settings')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Settings', level: 2 })).toBeVisible();
+  test('the app opens on the Overview', async ({ page }) => {
+    await openHome(page);
+    await expect(page.getByTestId('nav-overview')).toHaveAttribute('aria-current', 'page');
     await expect(page.getByTestId('canvas')).toHaveCount(0);
-    await expect(settingsNav).toHaveAttribute('aria-current', 'page');
-    await expect(editorNav).not.toHaveAttribute('aria-current', /.+/);
-
-    await editorNav.click();
-    await expect(page.getByTestId('canvas')).toBeVisible();
-    await expect(page.getByTestId('settings')).toHaveCount(0);
   });
 
-  test('Left and Right arrows move between the nav buttons', async ({ page }) => {
-    await openApp(page);
-    const editorNav = page.getByTestId('nav-editor');
-    const settingsNav = page.getByTestId('nav-settings');
+  test('each sidebar button opens its section and only that one', async ({ page }) => {
+    await openHome(page);
+    for (const section of SECTIONS) {
+      const nav = page.getByTestId(`nav-${section}`);
+      await nav.click();
+      await expect(sectionContent(page, section)).toBeVisible();
+      await expect(nav).toHaveAttribute('aria-current', 'page');
+      await expect(page.locator('nav [aria-current="page"]')).toHaveCount(1);
+      for (const other of SECTIONS) {
+        if (other !== section) await expect(sectionContent(page, other)).toHaveCount(0);
+      }
+    }
+  });
 
-    await editorNav.focus();
-    await page.keyboard.press('ArrowRight');
-    await expect(settingsNav).toBeFocused();
-    await expect(page.getByTestId('settings')).toBeVisible();
+  test('each section has its page heading', async ({ page }) => {
+    await openArrange(page);
+    await expect(page.getByRole('heading', { name: 'Arrange', level: 2 })).toBeVisible();
+    await gotoSection(page, 'privacy');
+    await expect(page.getByRole('heading', { name: 'Privacy & about', level: 2 })).toBeVisible();
+  });
 
-    await page.keyboard.press('ArrowLeft');
-    await expect(editorNav).toBeFocused();
-    await expect(page.getByTestId('canvas')).toBeVisible();
+  test('Up and Down arrows, Home and End move between the sidebar buttons', async ({ page }) => {
+    await openHome(page);
+    const nav = (section: string) => page.getByTestId(`nav-${section}`);
+
+    await nav('overview').focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(nav(SECTIONS[1])).toBeFocused();
+    await expect(sectionContent(page, SECTIONS[1])).toBeVisible();
+
+    await page.keyboard.press('ArrowUp');
+    await expect(nav('overview')).toBeFocused();
+    await expect(sectionContent(page, 'overview')).toBeVisible();
+
+    await page.keyboard.press('ArrowUp'); // wraps around
+    await expect(nav(SECTIONS[SECTIONS.length - 1])).toBeFocused();
+
+    await page.keyboard.press('Home');
+    await expect(nav(SECTIONS[0])).toBeFocused();
+    await page.keyboard.press('End');
+    await expect(nav(SECTIONS[SECTIONS.length - 1])).toBeFocused();
+    await expect(sectionContent(page, SECTIONS[SECTIONS.length - 1])).toBeVisible();
+  });
+
+  test('only the current sidebar button is in the Tab order (roving tabindex)', async ({ page }) => {
+    await openHome(page);
+    await expect(page.getByTestId('nav-overview')).toHaveAttribute('tabindex', '0');
+    await expect(page.getByTestId('nav-arrange')).toHaveAttribute('tabindex', '-1');
+    await gotoSection(page, 'arrange');
+    await expect(page.getByTestId('nav-arrange')).toHaveAttribute('tabindex', '0');
+    await expect(page.getByTestId('nav-overview')).toHaveAttribute('tabindex', '-1');
   });
 
   test('the "navigate" demo hook switches views like the tray menu', async ({ page }) => {
     await openApp(page);
 
+    // "settings" from the tray opens the Overview, "editor" opens Layouts.
     await demo(page, 'navigate', 'settings');
-    await expect(page.getByTestId('settings')).toBeVisible();
-    await expect(page.getByTestId('nav-settings')).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByTestId('view-overview')).toBeVisible();
+    await expect(page.getByTestId('nav-overview')).toHaveAttribute('aria-current', 'page');
 
     await demo(page, 'navigate', 'editor');
     await expect(page.getByTestId('canvas')).toBeVisible();
-    await expect(page.getByTestId('nav-editor')).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByTestId('nav-layouts')).toHaveAttribute('aria-current', 'page');
 
     // An unknown view is ignored.
     await demo(page, 'navigate', 'bogus');
     await expect(page.getByTestId('canvas')).toBeVisible();
-    await expect(page.getByTestId('nav-editor')).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByTestId('nav-layouts')).toHaveAttribute('aria-current', 'page');
   });
 });
 
@@ -216,8 +250,9 @@ test.describe('Accessibility permission banner', () => {
     await expect(page.getByRole('alert')).toBeVisible();
 
     // The banner stays on every view.
-    await page.getByTestId('nav-settings').click();
-    await expect(page.getByTestId('settings')).toBeVisible();
+    await gotoSection(page, 'arrange');
+    await expect(banner).toBeVisible();
+    await gotoSection(page, 'overview');
     await expect(banner).toBeVisible();
   });
 
@@ -258,10 +293,10 @@ test.describe('Accessibility permission banner', () => {
 });
 
 test.describe('demo hooks and persistence', () => {
-  test('toggleEnabled behaves like the tray item and the Settings switch follows', async ({
+  test('toggleEnabled behaves like the tray item and the Arrange switch follows', async ({
     page,
   }) => {
-    await openSettings(page);
+    await openArrange(page);
     const enabled = page.getByTestId('setting-enabled');
     await expect(enabled).toBeChecked();
 
@@ -283,14 +318,14 @@ test.describe('demo hooks and persistence', () => {
     await expect(ui.status).toHaveText('Saved "Halves".');
 
     await page.goto('/');
-    await expect(ui.canvas).toBeVisible();
+    await gotoSection(page, 'layouts');
     await expect(ui.zones).toHaveCount(4);
     await expect(ui.caption).toContainText('4 zones');
 
     const reloaded = page.waitForEvent('load');
     await page.getByRole('button', { name: 'Reset' }).click();
     await reloaded;
-    await expect(ui.canvas).toBeVisible();
+    await gotoSection(page, 'layouts');
     await expect(ui.zones).toHaveCount(2);
     expect(await page.evaluate(() => localStorage.getItem('krova-demo'))).toBeNull();
   });
@@ -304,6 +339,7 @@ test.describe('demo hooks and persistence', () => {
     expect(await page.evaluate(() => localStorage.getItem('krova-demo'))).toBeNull();
 
     await page.goto('/?nopersist');
+    await gotoSection(page, 'layouts');
     await expect(ui.zones).toHaveCount(2);
   });
 

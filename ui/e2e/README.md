@@ -28,6 +28,24 @@ run against whatever code that server serves (for example another checkout).
 and runs against it; the specs read the origin from `baseURL`, nothing else
 depends on 1420.
 
+### Against a static demo build (busy machine, long runs)
+
+```
+PW_PREVIEW=1 PW_PORT=1491 npm run e2e
+```
+
+`PW_PREVIEW=1` makes the config build the demo once (`vite build --mode demo
+--outDir e2e/.demo-dist`, git-ignored) and serve it with `vite preview` instead of
+the dev server. The dev server compiles modules on demand and reloads when files in
+the checkout change (other work, another agent), which shows up as timeouts and
+flakiness on a loaded machine; the static build does neither. Combine it with a
+free `PW_PORT` so no stale server is reused. The build runs on every start of the
+web server, so changes to the app are picked up on the next run.
+
+If the machine is already busy (CPU at 100 % from other work), also lower the
+worker count, for example `PW_WORKERS=2`: with 4 workers a test can pass and still
+time out while its context closes and its trace is written.
+
 ### Browser
 
 No browser is downloaded. The default is the Microsoft Edge that ships with

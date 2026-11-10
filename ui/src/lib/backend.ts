@@ -33,6 +33,11 @@ import {
 
 export type Unlisten = () => void;
 
+/** The anchor types live in the bindings; re-exported for the panel page. */
+export type { PanelAnchor } from "./bindings";
+/** Where a notch can sit; the quick panel opens from that side. */
+export type PanelCorner = import("./bindings").NotchCorner;
+
 export interface Backend {
   /** `mock` = browser-only demo mode: nothing is written to a real config. */
   readonly kind: "tauri" | "mock";

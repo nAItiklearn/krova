@@ -2,14 +2,42 @@
 // the initial load. Everything that talks to Rust goes through `api`.
 
 import { api, errorMessage } from './backend';
-import type { AppState, NavigateTarget, View } from './bindings';
+import type { AppState, NavigateTarget } from './bindings';
+
+/** The sections of the main window (the sidebar). */
+export type Section =
+  | 'overview'
+  | 'layouts'
+  | 'arrange'
+  | 'workspaces'
+  | 'focus'
+  | 'shortcuts'
+  | 'appearance'
+  | 'corners'
+  | 'displays'
+  | 'screen'
+  | 'privacy';
+
+const SECTIONS: Section[] = [
+  'overview',
+  'layouts',
+  'arrange',
+  'workspaces',
+  'focus',
+  'shortcuts',
+  'appearance',
+  'corners',
+  'displays',
+  'screen',
+  'privacy',
+];
 
 class AppStore {
   /** Replaced wholesale on every backend response, never mutated in place. */
   state = $state.raw<AppState | null>(null);
   loadError = $state<string | null>(null);
   loading = $state(true);
-  view = $state<View>('editor');
+  view = $state<Section>('overview');
 
   setState(s: AppState): void {
     this.state = s;
@@ -36,9 +64,12 @@ class AppStore {
     }
   }
 
-  /** Only the editor window's own views are shown; `switcher` (if sent) is ignored here. */
-  navigate(view: NavigateTarget): void {
-    if (view === 'editor' || view === 'settings') this.view = view;
+  /** Backend targets map onto sections ("editor" opens Layouts, "settings" the Overview);
+   *  a section name is accepted as is. Other targets (switcher, panel) are ignored here. */
+  navigate(view: NavigateTarget | Section): void {
+    if (view === 'editor') this.view = 'layouts';
+    else if (view === 'settings') this.view = 'overview';
+    else if (SECTIONS.includes(view as Section)) this.view = view as Section;
   }
 }
 

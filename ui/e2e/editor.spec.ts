@@ -5,7 +5,7 @@
 // 0.5 % rounding steps and the 1 % centre snap so one pixel of rounding never
 // changes the outcome.
 
-import { editorUi, expect, openApp, tabTo, test } from './fixtures';
+import { editorUi, expect, gotoSection, openApp, tabTo, test } from './fixtures';
 
 const TOO_SMALL = 'the change would leave a zone smaller than the minimum size';
 
@@ -101,9 +101,8 @@ test.describe('templates and saving', () => {
     await expect(ui.zones).toHaveCount(4);
     await expect(ui.unsavedNote).toBeVisible();
 
-    await page.getByTestId('nav-settings').click();
-    await expect(page.getByTestId('settings')).toBeVisible();
-    await page.getByTestId('nav-editor').click();
+    await gotoSection(page, 'arrange');
+    await gotoSection(page, 'layouts');
     await expect(ui.zones).toHaveCount(4);
     await expect(ui.unsavedNote).toBeVisible();
   });

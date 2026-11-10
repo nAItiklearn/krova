@@ -23,9 +23,22 @@ export default defineConfig({
     // WebView2 (Chromium >= 105) on Windows, WKWebView on macOS 13+ (Safari 16).
     target: ['chrome105', 'safari15'],
     sourcemap: false,
-    // Single chunk, so no preload links; this also keeps the bundle free of Vite's
-    // fetch()-based modulepreload polyfill (nothing in the app calls fetch itself).
+    // No fetch()-based modulepreload polyfill (nothing in the app calls fetch itself);
+    // the shared chunk is still linked with <link rel="modulepreload">.
     modulePreload: { polyfill: false },
+    rollupOptions: {
+      // One page per window: the editor/settings app (index.html), the layout
+      // switcher (switcher.html) and the quick panel the notch opens (panel.html), and the
+      // hover zone picker (picker.html).
+      // Each loads only its own entry; shared code lands in common chunks.
+      // Paths are relative to the project root (this folder; npm scripts run here).
+      input: {
+        main: 'index.html',
+        switcher: 'switcher.html',
+        panel: 'panel.html',
+        picker: 'picker.html',
+      },
+    },
   },
   test: {
     environment: 'node',

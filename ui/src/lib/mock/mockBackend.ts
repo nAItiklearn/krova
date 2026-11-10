@@ -129,6 +129,8 @@ export interface DemoControls {
   setCapabilities(mode: CapabilitiesMode): void;
   /** Pretend the panel was opened from this rect (the notch): emits "panel-anchor". */
   anchorPanel(anchor: PanelAnchor): void;
+  /** The same as `anchorPanel` (the name the panel page and its e2e tests use). */
+  panelAnchor(anchor: PanelAnchor): void;
   /** Pretend another window came to the front (for the "Not arranged" chip). */
   setFrontApp(front: FrontApp): void;
   /** Back to the initial demo state (also clears localStorage). */
@@ -724,6 +726,9 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
     anchorPanel(anchor) {
       lastAnchor = clone(anchor);
       for (const cb of anchorListeners) cb(clone(anchor));
+    },
+    panelAnchor(anchor) {
+      demo.anchorPanel(anchor);
     },
     reset() {
       paused = false;

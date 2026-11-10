@@ -5,7 +5,7 @@
 // (data-testid="status"); the pasted text and the panel stay where they are.
 
 import type { Page } from '@playwright/test';
-import { editorUi, expect, openApp, tabTo, test } from './fixtures';
+import { editorUi, expect, gotoSection, openApp, tabTo, test } from './fixtures';
 
 const exportButton = (page: Page) => page.getByTestId('export-layout');
 const importButton = (page: Page) => page.getByTestId('import-layout');
@@ -195,6 +195,9 @@ test.describe('Copy', () => {
 
     const copy = page.getByTestId('export-copy');
     await expect(copy).toHaveText('Copy');
+    // `install` alone lets time run: on a busy machine the "Copied" moment could pass
+    // between the checks below. Stop the clock; only fastForward moves it from here.
+    await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1_000);
     await copy.click();
 
     await expect(copy).toHaveText('Copied');
@@ -282,9 +285,12 @@ test.describe('Copy', () => {
         Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
         document.execCommand = (command: string) => command === 'copy';
       });
+      await page.clock.install();
       await openApp(page);
       const ui = editorUi(page);
       await openExport(page);
+      // "Copied" only shows for a moment: stop the clock so it cannot pass between the checks.
+      await page.clock.pauseAt((await page.evaluate(() => Date.now())) + 1_000);
       await page.getByTestId('export-copy').click();
       await expect(ui.status).toHaveText('Copied the layout text to the clipboard.');
       await expect(page.getByTestId('export-copy')).toHaveText('Copied');
@@ -520,7 +526,9 @@ test.describe('Import errors', () => {
   });
 
   test('a monitor can hold at most 64 layouts', async ({ page }) => {
-    test.slow();
+    // 61 imports through the UI, and the trace of all of them is written when the
+    // context closes; on a busy machine that alone took more than test.slow()'s 180 s.
+    test.setTimeout(300_000);
     await openApp(page);
     const ui = editorUi(page);
 
@@ -555,7 +563,7 @@ test.describe('persistence', () => {
     await expect(ui.status).toContainText('Imported "Pasted layout"');
 
     await page.goto('/');
-    await expect(ui.canvas).toBeVisible();
+    await gotoSection(page, 'layouts');
     await expect(ui.layoutItems).toHaveCount(5);
     await expect(ui.layoutItem('Pasted layout')).toHaveAttribute('data-layout-id', 'pasted');
   });

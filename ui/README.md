@@ -154,10 +154,67 @@ Win-key choices), `shortcuts-status` (live region),
 `export-text`, `export-copy` (`data-copied`), `export-close`, `import-panel`,
 `import-text`, `import-submit`, `import-close`.
 
+## Layout switcher window
+
+`switcher.html` + `src/switcher.ts` are a second Vite entry (multi-page
+`build.rollupOptions.input` in `vite.config.ts`) for the `switcher` Tauri
+window. It loads only the deck, not the editor or settings:
+`src/components/switcher/` (`Switcher.svelte` root: data, theme, backend calls,
+window hide; `Deck.svelte`: gestures, keyboard, toast, live region;
+`Card.svelte`; `deck.ts`: geometry and gesture rules) and `src/lib/motion.ts`
+(the shared spring: damped harmonic oscillator, fixed 240 Hz substeps, rubber
+band, flick projection, reduced-motion jump). The interaction follows
+`docs/prototypes/layout-switcher/index.html`.
+
+Try it in demo mode: `npm run demo`, then open
+<http://localhost:1420/switcher.html> (add `?nopersist` to keep edits in memory).
+After applying a layout or pressing Esc the deck fades out and a **Reopen layout
+switcher** button appears; `window.__krovaDemo.navigate('switcher')` does the same
+as the real shortcut. E2E: `npx playwright test e2e/switcher.spec.ts`
+(screenshots go to the git-ignored `e2e/.shots/`).
+
+| Input | Does |
+| --- | --- |
+| Up / Down, drag, wheel | flip through (flick momentum, rubber band at the ends) |
+| Enter, Space, tap | apply (`setActiveLayout`), then close |
+| Alt+Up / Alt+Down, grip drag | reorder (`moveLayout`) |
+| Delete, Backspace, swipe sideways | delete (`deleteLayout`), Undo toast for 5 s |
+| Ctrl+Z, Undo button | `insertLayout` at the old index, active again if it was |
+| Esc, tap on the backdrop, window loses focus | close |
+
+Backend calls run one at a time in order; the deck updates optimistically and
+adopts the backend state once the queue is empty (on an error it re-reads it).
+
+What the backend has to set on the `switcher` window:
+
+- `url: "switcher.html"`, label `switcher`; `decorations: false`,
+  `transparent: true`, `shadow: false`, `resizable: false`, `skipTaskbar: true`,
+  `alwaysOnTop: true`, `visible: false` at creation. On Windows, transparency also
+  needs a transparent webview background (Tauri sets it with `transparent: true`; the
+  page itself paints nothing outside the scrim).
+- Size and position: the work area (or the whole rect) of the monitor from
+  `switcher_monitor`, in physical pixels.
+- `backdrop-filter` only blurs the page's own content, not the desktop behind a
+  transparent window. For a real frosted backdrop apply a window effect: Windows 11
+  `Effect::Acrylic` (or Mica), macOS `Effect::HudWindow`/`UnderWindowBackground`
+  (`windowEffects` in the window config or `set_effects`). Without it the scrim is a
+  plain translucent tint, which still reads fine.
+- On the shortcut: store the monitor, position the window, `show()` + `set_focus()`,
+  then emit `navigate` with payload `"switcher"` (the page re-reads
+  `switcher_monitor` and `get_state` and animates in). The page hides itself with
+  `getCurrentWindow().hide()` when it closes (after apply, Esc, backdrop click or
+  focus loss); keep the window alive between uses. Destroying it is fine too: on
+  load the page opens straight away.
+- Capability for the `switcher` window: `core:default` (events),
+  `core:window:allow-hide`, plus the commands `get_state`, `switcher_monitor`,
+  `set_active_layout`, `delete_layout`, `insert_layout`, `move_layout`. The same
+  CSP as `index.html` is in `switcher.html`.
+
 ## Layout of the source
 
 ```
-src/main.ts                 entry
+src/main.ts                 entry (main window)
+src/switcher.ts             entry of the layout switcher window (switcher.html)
 src/App.svelte              shell: nav, banner, views, footer, theme
 src/app.css                 design tokens (light/dark), shared controls
 src/components/             Editor, LayoutCanvas, Toolbar, MonitorTabs, LayoutPanel, LayoutTransfer,
@@ -168,11 +225,13 @@ src/lib/mock/               mockBackend, edit.ts (edit.rs / zone.rs mirror), exc
                             (export/import mirror), templates.ts, tests
 src/lib/*.svelte.ts         app / editor / settings stores (Svelte 5 runes)
 src/lib/geometry.ts         hit-testing, divider discovery, previews (UI only)
+src/lib/motion.ts           springs, rubber band, flick velocity (shared physics)
+src/components/switcher/    layout switcher: Switcher, Deck, Card, deck.ts
 ```
 
 ## Security notes
 
-`index.html` carries the CSP `default-src 'self'; style-src 'self'
+`index.html` (and `switcher.html`) carries the CSP `default-src 'self'; style-src 'self'
 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ipc:
 http://ipc.localhost`. The code uses no inline scripts or inline event handler
 attributes (Svelte attaches listeners from the bundle) and the app code has no
