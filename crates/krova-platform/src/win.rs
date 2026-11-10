@@ -807,7 +807,7 @@ impl Platform for WindowsPlatform {
         crate::pointer::Wave4Capabilities {
             focus_follows_mouse: true,
             hover_picker: true,
-            open_url: false,
+            open_url: true,
         }
     }
 
@@ -817,6 +817,10 @@ impl Platform for WindowsPlatform {
         sink: EventSink<crate::pointer::PointerEvent>,
     ) -> Result<WatchHandle, PlatformError> {
         crate::win_hover::start(config, sink)
+    }
+
+    fn open_url(&self, url: &str) -> Result<(), PlatformError> {
+        crate::win_shell::open_url(url)
     }
     // --- end wave4 ---
 }

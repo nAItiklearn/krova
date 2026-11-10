@@ -110,3 +110,53 @@ mod tests {
         assert_eq!(c.hover_modifier(), Modifier::Ctrl);
     }
 }
+
+/// A URL Krova is willing to hand to the OS shell: `https://`, a host, printable
+/// ASCII only, no quotes or angle brackets, at most 2048 bytes. The shell opens
+/// whatever it is given, so anything else (a file path, `javascript:`, an
+/// argument smuggled in with a quote) is refused.
+pub fn is_safe_https_url(url: &str) -> bool {
+    let Some(rest) = url.strip_prefix("https://") else {
+        return false;
+    };
+    let host = rest.split(['/', '?', '#']).next().unwrap_or("");
+    url.len() <= 2048
+        && !host.is_empty()
+        && !host.contains('@')
+        && url.bytes().all(|b| {
+            b.is_ascii_graphic() && !matches!(b, b'"' | b'\'' | b'<' | b'>' | b'`' | b'\\')
+        })
+}
+
+#[cfg(test)]
+mod url_tests {
+    use super::is_safe_https_url;
+
+    #[test]
+    fn only_plain_https_urls_pass() {
+        assert!(is_safe_https_url(
+            "https://github.com/nAItiklearn/krova/releases"
+        ));
+        assert!(is_safe_https_url("https://example.org/a?b=c#d"));
+        for bad in [
+            "http://github.com/",
+            "file:///C:/Windows/System32/calc.exe",
+            "C:\\Windows\\notepad.exe",
+            "https://github.com/a\\b",
+            "javascript:alert(1)",
+            "https://",
+            "https:///path",
+            "https://user@evil.example/",
+            "https://github.com/a b",
+            "https://github.com/\"--x",
+            "https://github.com/\u{7f}",
+            "https://github.com/é",
+        ] {
+            assert!(!is_safe_https_url(bad), "{bad}");
+        }
+        assert!(!is_safe_https_url(&format!(
+            "https://a.b/{}",
+            "x".repeat(2048)
+        )));
+    }
+}

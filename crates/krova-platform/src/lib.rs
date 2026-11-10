@@ -32,6 +32,8 @@ pub mod pointer;
 pub mod win_ffm;
 #[cfg(windows)]
 pub mod win_hover;
+#[cfg(windows)]
+pub mod win_shell;
 // --- end wave4 ---
 
 pub use hotkeys::{HotkeyEvent, HotkeySpec};
@@ -359,6 +361,12 @@ pub trait Platform: Send + Sync {
         _config: Arc<pointer::PointerConfig>,
         _sink: EventSink<pointer::PointerEvent>,
     ) -> Result<WatchHandle, PlatformError> {
+        Err(PlatformError::Unsupported)
+    }
+
+    /// Open an `https://` URL in the default browser (the "Check for updates"
+    /// releases page). Anything that is not a plain https URL is refused.
+    fn open_url(&self, _url: &str) -> Result<(), PlatformError> {
         Err(PlatformError::Unsupported)
     }
     // --- end wave4 ---

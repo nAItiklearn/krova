@@ -359,6 +359,25 @@ pub async fn place_hovered(
     Ok(())
 }
 
+// ------------------------------------------------------- check for updates
+
+/// Where "Check for updates" goes. Fixed at compile time; Krova never fetches it
+/// itself (no network in the app): the browser opens it, because the user asked.
+pub const RELEASES_URL: &str = "https://github.com/nAItiklearn/krova/releases";
+
+/// Open the releases page in the default browser.
+pub fn open_releases(shared: &Shared) -> Result<(), String> {
+    shared
+        .platform
+        .open_url(RELEASES_URL)
+        .map_err(|e| format!("could not open the releases page: {e}"))
+}
+
+#[tauri::command]
+pub fn open_releases_page(shared: State<'_, Arc<Shared>>) -> Result<(), String> {
+    open_releases(&shared)
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
@@ -492,6 +511,16 @@ mod tests {
         let err = place_hovered_on(&shared, &hovered, 1).unwrap_err();
         assert_eq!(err, "that window can no longer be moved");
         assert!(lock(&shared.registry).get(WindowKey(42)).is_none());
+    }
+
+    #[test]
+    fn the_releases_page_is_a_fixed_https_address() {
+        assert!(krova_platform::pointer::is_safe_https_url(RELEASES_URL));
+        assert!(RELEASES_URL.starts_with("https://github.com/"));
+        let shared = shared_with(vec![]);
+        // The null platform cannot open a browser: a readable error, no panic.
+        let err = open_releases(&shared).unwrap_err();
+        assert!(err.starts_with("could not open the releases page"), "{err}");
     }
 
     #[test]

@@ -52,6 +52,7 @@ pub fn run() {
             // --- wave4 ---
             wave4::set_reserved_edges,
             wave4::place_hovered,
+            wave4::open_releases_page,
             // --- end wave4 ---
         ])
         .on_window_event(|window, event| match event {

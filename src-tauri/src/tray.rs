@@ -35,6 +35,9 @@ pub fn build(app: &AppHandle, state: &AppState) -> tauri::Result<()> {
         state.autostart,
         None::<&str>,
     )?;
+    // --- wave4 ---
+    let updates = MenuItem::with_id(app, "updates", "Check for updates…", true, None::<&str>)?;
+    // --- end wave4 ---
     let quit = MenuItem::with_id(app, "quit", "Quit Krova", true, None::<&str>)?;
     let sep_top = PredefinedMenuItem::separator(app)?;
     let sep_bottom = PredefinedMenuItem::separator(app)?;
@@ -46,6 +49,7 @@ pub fn build(app: &AppHandle, state: &AppState) -> tauri::Result<()> {
             &edit,
             &settings,
             &autostart,
+            &updates, // --- wave4 ---
             &sep_bottom,
             &quit,
         ],
@@ -83,6 +87,13 @@ fn handle_menu_event(app: &AppHandle, event: MenuEvent) {
         }
         "edit" => ui_window::show(app, Some("editor")),
         "settings" => ui_window::show(app, Some("settings")),
+        // --- wave4 ---
+        "updates" => {
+            if let Err(e) = crate::wave4::open_releases(&shared) {
+                eprintln!("krova: {e}");
+            }
+        }
+        // --- end wave4 ---
         // An explicit exit request: lib.rs lets `Some(code)` through and only
         // vetoes the implicit "last window closed" exit.
         "quit" => app.exit(0),
