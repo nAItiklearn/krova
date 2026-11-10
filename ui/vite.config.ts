@@ -28,13 +28,15 @@ export default defineConfig({
     modulePreload: { polyfill: false },
     rollupOptions: {
       // One page per window: the editor/settings app (index.html), the layout
-      // switcher (switcher.html) and the quick panel the notch opens (panel.html).
+      // switcher (switcher.html) and the quick panel the notch opens (panel.html), and the
+      // hover zone picker (picker.html).
       // Each loads only its own entry; shared code lands in common chunks.
       // Paths are relative to the project root (this folder; npm scripts run here).
       input: {
         main: 'index.html',
         switcher: 'switcher.html',
         panel: 'panel.html',
+        picker: 'picker.html',
       },
     },
   },

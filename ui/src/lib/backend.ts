@@ -7,7 +7,16 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { AppState, Axis, Layout, NavigateTarget, Settings } from './bindings';
+import type {
+  AppState,
+  Axis,
+  HoverPicker,
+  Layout,
+  NavigateTarget,
+  ReservedEdges,
+  RestoreReport,
+  Settings,
+} from './bindings';
 import { createMockBackend, type DemoControls, type MockBackend } from './mock/mockBackend';
 
 export type Unlisten = () => void;
@@ -98,6 +107,38 @@ export interface Backend {
   onPanelAnchor(cb: (anchor: PanelAnchor) => void): Promise<Unlisten>;
   /** Backend event "state-changed". */
   onStateChanged(cb: (state: AppState) => void): Promise<Unlisten>;
+
+  // --- wave3 ---
+  /** Focus dim on/off (`settings.focus.enabled`). */
+  toggleFocusDim(): Promise<AppState>;
+  /** Calm desk on (minimise windows outside zones) or off (bring back those still minimised). */
+  toggleCalmDesk(): Promise<AppState>;
+  /** Save the windows on screen as a workspace; with `id`, replace that one. */
+  captureWorkspace(name: string, id?: string | null): Promise<AppState>;
+  renameWorkspace(id: string, name: string): Promise<AppState>;
+  deleteWorkspace(id: string): Promise<AppState>;
+  /**
+   * Put each program of the workspace into its zone (launching missing ones when
+   * `launch`, waiting up to 10 s each) and minimise every other window. Resolves when
+   * done; a `state-changed` follows.
+   */
+  restoreWorkspace(id: string, launch: boolean): Promise<RestoreReport>;
+  // --- end wave3 ---
+  // --- wave4 ---
+  /** Store a monitor's reserved edges (logical px, each clamped to 0..400). */
+  setReservedEdges(monitorId: string, reserved: ReservedEdges): Promise<AppState>;
+  /**
+   * Put the window under the hover picker into a zone of its monitor's active layout.
+   * Rejects if no picker is open or the window can no longer be moved.
+   */
+  placeHovered(zoneId: number): Promise<void>;
+  /** Open the releases page in the browser (Krova itself makes no network request). */
+  openReleasesPage(): Promise<void>;
+  /** Backend event "hover-picker": the modifier is held on a window's title bar. */
+  onHoverPicker(cb: (picker: HoverPicker) => void): Promise<Unlisten>;
+  /** Backend event "hover-picker-end": close the picker. */
+  onHoverPickerEnd(cb: () => void): Promise<Unlisten>;
+  // --- end wave4 ---
 }
 
 /** Commands reject with a string; be tolerant of Error objects too. */
@@ -144,6 +185,23 @@ export const tauriBackend: Backend = {
   onNavigate: (cb) => listen<NavigateTarget>('navigate', (e) => cb(e.payload)),
   onPanelAnchor: (cb) => listen<PanelAnchor>('panel-anchor', (e) => cb(e.payload)),
   onStateChanged: (cb) => listen<AppState>('state-changed', (e) => cb(e.payload)),
+
+  // --- wave3 ---
+  toggleFocusDim: () => invoke<AppState>('toggle_focus_dim'),
+  toggleCalmDesk: () => invoke<AppState>('toggle_calm_desk'),
+  captureWorkspace: (name, id) => invoke<AppState>('capture_workspace', { name, id: id ?? null }),
+  renameWorkspace: (id, name) => invoke<AppState>('rename_workspace', { id, name }),
+  deleteWorkspace: (id) => invoke<AppState>('delete_workspace', { id }),
+  restoreWorkspace: (id, launch) => invoke<RestoreReport>('restore_workspace', { id, launch }),
+  // --- end wave3 ---
+  // --- wave4 ---
+  setReservedEdges: (monitorId, reserved) =>
+    invoke<AppState>('set_reserved_edges', { monitorId, reserved }),
+  placeHovered: (zoneId) => invoke<void>('place_hovered', { zoneId }),
+  openReleasesPage: () => invoke<void>('open_releases_page'),
+  onHoverPicker: (cb) => listen<HoverPicker>('hover-picker', (e) => cb(e.payload)),
+  onHoverPickerEnd: (cb) => listen<null>('hover-picker-end', () => cb()),
+  // --- end wave4 ---
 };
 
 /** True when running inside the Tauri webview. */

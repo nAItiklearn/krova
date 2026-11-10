@@ -73,6 +73,25 @@ export interface Settings {
    * the cursor. Independent of `keyboard_shortcuts`. Default true.
    */
   layout_switcher_shortcut: boolean;
+  // --- wave3 ---
+  /** Focus dim. Off by default. */
+  focus: FocusSettings;
+  calm_desk: CalmDeskSettings;
+  /** While on, Krova's overlays show only zone shapes, never app names or icons. Default false. */
+  share_safe: boolean;
+  /** Window highlight. Mode `none` by default. */
+  highlight: HighlightSettings;
+  // --- end wave3 ---
+  // --- wave4 ---
+  /** Activate the window under the cursor once it rests. Default false. */
+  focus_follows_mouse: boolean;
+  /** How long the cursor rests first, in ms, integer 150..800. Default 350. */
+  focus_follows_mouse_delay_ms: number;
+  /** The activation modifier held over a title bar opens a zone picker. Default false. */
+  hover_picker: boolean;
+  /** Language of the native strings (tray, notifications). Default `system`. */
+  language: Language;
+  // --- end wave4 ---
 }
 
 export interface MonitorProfile {
@@ -83,12 +102,20 @@ export interface MonitorProfile {
   last_rect: PxRect;
   layouts: Layout[];
   active_layout: string;
+  // --- wave4 ---
+  /** Edges kept free for third-party docks and bars. Missing in old configs. */
+  reserved?: ReservedEdges;
+  // --- end wave4 ---
 }
 
 export interface Config {
   schema_version: number;
   settings: Settings;
   monitors: MonitorProfile[];
+  // --- wave3 ---
+  /** Saved workspaces, at most 32. */
+  workspaces: Workspace[];
+  // --- end wave3 ---
 }
 
 /** A currently connected monitor (app glue, not persisted). */
@@ -134,6 +161,18 @@ export interface AppState {
    * one sentence, e.g. "Ctrl+Alt+Shift+Space is already used by another app".
    */
   layout_switcher: ShortcutStatus;
+  // --- wave3 ---
+  wave3: Wave3State;
+  // --- end wave3 ---
+  // --- wave4 ---
+  wave4_capabilities: Wave4Capabilities;
+  /** The resting-cursor watcher behind focus follows mouse and the hover picker. */
+  pointer: PointerStatus;
+  /** The language the native strings are shown in now (never `system`). */
+  language: Exclude<Language, 'system'>;
+  /** The choices for `Settings.language`, `system` first. */
+  languages: LanguageOption[];
+  // --- end wave4 ---
 }
 
 /**
@@ -152,3 +191,154 @@ export type View = 'editor' | 'settings';
  * `switcher` yet must ignore it.
  */
 export type NavigateTarget = View | 'switcher';
+
+// --- wave3 ---
+// Workspaces, focus dim, calm desk, share-safe and window highlight
+// (crates/krova-core: workspace.rs, focus.rs, calm.rs; src-tauri/src/wave3.rs).
+
+export interface FocusSettings {
+  enabled: boolean;
+  /** How dark the rest of the screen gets, 0.2..0.8. Default 0.45. */
+  opacity: number;
+}
+
+export interface CalmDeskSettings {
+  /** Every monitor (default) or only the one under the cursor. */
+  all_monitors: boolean;
+}
+
+/** `active` = the focused window, `all` = every window, `glow` = a soft glow on the focused one. */
+export type HighlightMode = 'none' | 'active' | 'all' | 'glow';
+
+export interface HighlightSettings {
+  mode: HighlightMode;
+  /** `#rrggbb`, or null for the accent colour. */
+  color: string | null;
+  /** 1..6 px at 100 % scale. Default 2. */
+  width_px: number;
+}
+
+/** One program of a workspace: its executable path, never a title or arguments. */
+export interface WorkspaceEntry {
+  exe: string;
+  monitor_id: string;
+  zone_id: number;
+}
+
+export interface WorkspaceLayout {
+  monitor_id: string;
+  layout_id: string;
+}
+
+export interface Workspace {
+  id: string;
+  /** 1..64 characters, no control, zero-width or direction characters. */
+  name: string;
+  /** The layout that was active on each monitor at capture time. */
+  layouts: WorkspaceLayout[];
+  /** At most 64. */
+  entries: WorkspaceEntry[];
+}
+
+export type EntryOutcome =
+  | 'placed'
+  | 'launched'
+  | 'timed_out'
+  | 'not_running'
+  | 'refused'
+  | 'no_zone'
+  | 'failed';
+
+export interface EntryResult {
+  /** File name only (`code.exe`), never a folder. */
+  program: string;
+  monitor_id: string;
+  zone_id: number;
+  outcome: EntryOutcome;
+}
+
+export interface RestoreReport {
+  workspace_id: string;
+  entries: EntryResult[];
+  /** How many other windows were minimised (never closed). */
+  minimized: number;
+}
+
+export interface Wave3Capabilities {
+  workspaces: boolean;
+  calm_desk: boolean;
+  focus_dim: boolean;
+  highlight: boolean;
+  /** Windows 11 draws thin borders itself. */
+  dwm_borders: boolean;
+}
+
+export interface CalmDeskState {
+  active: boolean;
+  count: number;
+}
+
+export interface Wave3State {
+  capabilities: Wave3Capabilities;
+  calm_desk: CalmDeskState;
+  focus_active: boolean;
+  share_safe: boolean;
+  visuals_error: string | null;
+  /** Id of the workspace being restored right now. */
+  restoring: string | null;
+}
+// --- end wave3 ---
+// --- wave4 ---
+
+/** `system` follows the Windows display language (English if Krova has no table for it). */
+export type Language = 'system' | 'en' | 'es' | 'de' | 'ja' | 'zh-Hans';
+
+export interface LanguageOption {
+  id: Language;
+  /** The language's own name ("Deutsch", "日本語"); "System" for `system`. */
+  name: string;
+}
+
+/**
+ * Logical pixels (96 dpi) kept free on each side of a monitor, integers 0..400.
+ * Krova multiplies them by the monitor scale and subtracts them from the OS work
+ * area; `MonitorSnapshot.work` is already the reduced area. If the two sides of an
+ * axis would leave less than 200 px, that axis is ignored.
+ */
+export interface ReservedEdges {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+export interface Wave4Capabilities {
+  focus_follows_mouse: boolean;
+  hover_picker: boolean;
+  open_releases_page: boolean;
+}
+
+export interface PointerStatus {
+  /** The watcher runs: a pointer feature is on and Krova is enabled. */
+  active: boolean;
+  /** Times Windows refused to activate a window since Krova started. */
+  focus_refused: number;
+}
+
+/** A zone of the hover picker, in physical pixels, gap applied. */
+export interface HoverZone {
+  id: number;
+  rect: PxRect;
+}
+
+/** Payload of the backend "hover-picker" event. Never carries a window title. */
+export interface HoverPicker {
+  /** `MonitorProfile.id` of the monitor under the cursor. */
+  monitor_id: string;
+  window_rect: PxRect;
+  /** `[x, y]`, virtual-screen pixels. */
+  cursor: [number, number];
+  layout_id: string;
+  zones: HoverZone[];
+}
+// --- end wave4 ---

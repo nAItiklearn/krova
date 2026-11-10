@@ -9,13 +9,28 @@ export type Section =
   | 'overview'
   | 'layouts'
   | 'arrange'
+  | 'workspaces'
+  | 'focus'
   | 'shortcuts'
   | 'appearance'
   | 'corners'
   | 'displays'
+  | 'screen'
   | 'privacy';
 
-const SECTIONS: Section[] = ['overview', 'layouts', 'arrange', 'shortcuts', 'appearance', 'corners', 'displays', 'privacy'];
+const SECTIONS: Section[] = [
+  'overview',
+  'layouts',
+  'arrange',
+  'workspaces',
+  'focus',
+  'shortcuts',
+  'appearance',
+  'corners',
+  'displays',
+  'screen',
+  'privacy',
+];
 
 class AppStore {
   /** Replaced wholesale on every backend response, never mutated in place. */
