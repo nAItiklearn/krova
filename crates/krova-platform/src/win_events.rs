@@ -40,9 +40,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
     PeekMessageW, RegisterClassExW, TranslateMessage, EVENT_SYSTEM_MOVESIZEEND,
     EVENT_SYSTEM_MOVESIZESTART, HMENU, MSG, MWMO_INPUTAVAILABLE, OBJID_WINDOW,
     PBT_APMRESUMEAUTOMATIC, PBT_APMRESUMESUSPEND, PM_NOREMOVE, PM_REMOVE, QS_ALLINPUT,
-    SPI_SETWORKAREA, WINEVENT_OUTOFCONTEXT, WINEVENT_SKIPOWNPROCESS, WM_DISPLAYCHANGE, WM_HOTKEY,
-    WM_POWERBROADCAST, WM_QUIT, WM_SETTINGCHANGE, WNDCLASSEXW, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
-    WS_POPUP,
+    SPI_SETWORKAREA, WINEVENT_OUTOFCONTEXT, WINEVENT_SKIPOWNPROCESS, WM_CLOSE, WM_DISPLAYCHANGE,
+    WM_HOTKEY, WM_POWERBROADCAST, WM_QUIT, WM_SETTINGCHANGE, WNDCLASSEXW, WS_EX_NOACTIVATE,
+    WS_EX_TOOLWINDOW, WS_POPUP,
 };
 
 use crate::hotkeys::{action_for_id, refusal_message, HotkeyEvent, HotkeySpec, Key, Refusal};
@@ -292,6 +292,11 @@ unsafe extern "system" fn watch_wnd_proc(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
+    // Another program can post WM_CLOSE to any window it can enumerate; the default
+    // handling would destroy this one and Krova would stop hearing about displays.
+    if msg == WM_CLOSE {
+        return LRESULT(0);
+    }
     let display_may_have_changed = match msg {
         WM_DISPLAYCHANGE => true,
         WM_SETTINGCHANGE => wparam.0 == SPI_SETWORKAREA.0 as usize,
@@ -492,6 +497,7 @@ mod tests {
     fn the_watcher_starts_reports_nothing_idle_and_stops() {
         use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::Arc;
+        let _turn = take_turn();
         let seen = Arc::new(AtomicUsize::new(0));
         let counter = Arc::clone(&seen);
         let handle = start_watcher(Arc::new(move |_| {
@@ -504,6 +510,72 @@ mod tests {
         // After dropping, a new one can start again.
         let again = start_watcher(Arc::new(|_| {})).expect("restart after stop");
         drop(again);
+    }
+
+    /// The watcher's hidden window, found by class name (this process only has one).
+    fn find_watch_window() -> Option<HWND> {
+        use windows::Win32::UI::WindowsAndMessaging::FindWindowW;
+        let class: Vec<u16> = "KrovaDisplayWatch\0".encode_utf16().collect();
+        // SAFETY: the class name buffer is NUL-terminated and outlives the call.
+        unsafe { FindWindowW(PCWSTR(class.as_ptr()), PCWSTR::null()) }.ok()
+    }
+
+    #[test]
+    fn the_watcher_window_ignores_wm_close_from_other_programs() {
+        use std::sync::Arc;
+        use windows::Win32::UI::WindowsAndMessaging::{
+            IsWindow, SendMessageTimeoutW, SMTO_ABORTIFHUNG,
+        };
+        let _turn = take_turn();
+        let handle = start_watcher(Arc::new(|_| {})).expect("watcher starts");
+        let window = find_watch_window().expect("the watcher has a window");
+        for _ in 0..3 {
+            // SAFETY: a plain cross-thread send to a window this process owns; the
+            // watcher thread pumps messages, and the timeout bounds the wait.
+            let sent = unsafe {
+                SendMessageTimeoutW(
+                    window,
+                    WM_CLOSE,
+                    WPARAM(0),
+                    LPARAM(0),
+                    SMTO_ABORTIFHUNG,
+                    2000,
+                    None,
+                )
+            };
+            assert_ne!(sent.0, 0, "the window answered");
+        }
+        // SAFETY: IsWindow is harmless on any handle.
+        assert!(
+            unsafe { IsWindow(window) }.as_bool(),
+            "WM_CLOSE must not destroy the watcher's window"
+        );
+        drop(handle);
+        // A normal stop still removes it.
+        assert!(find_watch_window().is_none());
+    }
+
+    #[test]
+    fn a_window_has_an_owner_that_is_stable_and_names_this_process() {
+        use crate::Platform;
+        use std::sync::Arc;
+        let _turn = take_turn();
+        let handle = start_watcher(Arc::new(|_| {})).expect("watcher starts");
+        let window = find_watch_window().expect("the watcher has a window");
+        let platform = crate::win::WindowsPlatform::new();
+        let id = WindowId(window.0 as usize as u64);
+        let first = platform.window_owner(id).expect("own process is readable");
+        let second = platform.window_owner(id).expect("and again");
+        assert_eq!(first, second, "the owner does not change between readings");
+        assert_eq!(first.pid, std::process::id());
+        assert!(first.started > 0);
+        drop(handle);
+        assert_eq!(
+            platform.window_owner(id),
+            None,
+            "a destroyed window has no owner"
+        );
+        assert_eq!(platform.window_owner(WindowId(0)), None);
     }
 
     #[test]

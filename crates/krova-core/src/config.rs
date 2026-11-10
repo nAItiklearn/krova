@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::geometry::PxRect;
 use crate::monitor::{match_monitors, MonitorDescriptor};
-use crate::zone::{templates, Layout};
+use crate::zone::{has_hidden_char, strip_hidden, templates, Layout};
 
 pub const SCHEMA_VERSION: u32 = 1;
 
@@ -25,6 +25,10 @@ pub enum ConfigError {
     Json(#[from] serde_json::Error),
     #[error("config schema {found} is newer than supported {supported}")]
     TooNew { found: u32, supported: u32 },
+    /// What would be written is larger than a file Krova is willing to read back, so
+    /// the next start would set it aside as corrupt and lose it. Nothing is written.
+    #[error("the config is too large to save ({size} bytes; the limit is {limit})")]
+    TooLarge { size: u64, limit: u64 },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -208,7 +212,20 @@ impl MonitorProfile {
 
     /// Drop invalid layouts, reseed if none are left, repair a dangling active id.
     fn sanitize(&mut self) {
-        self.layouts.retain(|l| l.validate().is_ok());
+        // Invisible characters in a name are removed rather than costing the user
+        // the whole layout; a layout that stays invalid after that is dropped.
+        for l in &mut self.layouts {
+            if has_hidden_char(&l.id) || has_hidden_char(&l.name) {
+                l.id = strip_hidden(&l.id);
+                l.name = strip_hidden(&l.name);
+            }
+        }
+        let mut seen = std::collections::HashSet::new();
+        self.layouts
+            .retain(|l| l.validate().is_ok() && seen.insert(l.id.clone()));
+        if has_hidden_char(&self.active_layout) {
+            self.active_layout = strip_hidden(&self.active_layout);
+        }
         self.layouts.truncate(MAX_LAYOUTS_PER_MONITOR);
         if self.layouts.is_empty() {
             self.layouts = templates();
@@ -291,6 +308,13 @@ impl Config {
         }
         let tmp = path.with_extension("json.tmp");
         let json = serde_json::to_vec_pretty(self)?;
+        // Never write what `load` would refuse to read: that would lose the config.
+        if json.len() as u64 > MAX_CONFIG_BYTES {
+            return Err(ConfigError::TooLarge {
+                size: json.len() as u64,
+                limit: MAX_CONFIG_BYTES,
+            });
+        }
         {
             let mut f = fs::File::create(&tmp)?;
             f.write_all(&json)?;
@@ -310,10 +334,12 @@ impl Config {
             .iter()
             .map(MonitorProfile::descriptor)
             .collect();
-        let matches = match_monitors(current, &stored);
+        let mut matches = match_monitors(current, &stored);
+        // Profiles in use right now: never evicted to make room for a new one.
+        let mut in_use: Vec<usize> = matches.iter().flatten().copied().collect();
         let mut out = Vec::with_capacity(current.len());
-        for (d, m) in current.iter().zip(matches) {
-            let idx = match m {
+        for (k, d) in current.iter().enumerate() {
+            let idx = match matches[k] {
                 Some(i) => {
                     let p = &mut self.monitors[i];
                     p.last_rect = d.rect;
@@ -326,9 +352,32 @@ impl Config {
                     i
                 }
                 None => {
+                    // At the cap, the oldest profile of a monitor that is not
+                    // connected makes room. With nothing to evict (more monitors
+                    // are connected than the cap allows) the rest get no profile.
+                    if self.monitors.len() >= MAX_MONITORS {
+                        let Some(evict) = (0..self.monitors.len()).find(|i| !in_use.contains(i))
+                        else {
+                            break;
+                        };
+                        self.monitors.remove(evict);
+                        // Every index above the removed profile moves down by one.
+                        for used in in_use.iter_mut().chain(out.iter_mut()) {
+                            if *used > evict {
+                                *used -= 1;
+                            }
+                        }
+                        for slot in matches.iter_mut().flatten() {
+                            if *slot > evict {
+                                *slot -= 1;
+                            }
+                        }
+                    }
                     let id = self.next_monitor_id();
                     self.monitors.push(MonitorProfile::from_descriptor(id, d));
-                    self.monitors.len() - 1
+                    let new = self.monitors.len() - 1;
+                    in_use.push(new);
+                    new
                 }
             };
             out.push(idx);
@@ -995,8 +1044,15 @@ mod hardening_tests {
         let dir = tempfile::tempdir().unwrap();
         let p = dir.path().join("config.json");
         let mut c = Config::default();
-        for i in 0..MAX_MONITORS + 5 {
+        for i in 0..MAX_MONITORS {
             c.resolve_monitors(&[one_monitor(&format!("HW{i}"))]);
+        }
+        // `resolve_monitors` keeps to the cap itself, so an oversized file (written by
+        // hand or by another version) is built directly.
+        for i in 0..5 {
+            let mut extra = c.monitors[0].clone();
+            extra.id = format!("extra-{i}");
+            c.monitors.push(extra);
         }
         assert!(c.monitors.len() > MAX_MONITORS);
         for i in 0..MAX_LAYOUTS_PER_MONITOR + 5 {
@@ -1151,5 +1207,142 @@ mod tests {
         assert_eq!(ids.len(), 2);
         assert_ne!(ids[0], ids[1]);
         assert!(c.monitors[1].active().is_some());
+    }
+
+    #[test]
+    fn profiles_are_capped_and_the_oldest_disconnected_one_makes_room() {
+        let mut c = Config::default();
+        // Fill the cap with monitors one after the other (each unplugged later).
+        for n in 0..MAX_MONITORS {
+            c.resolve_monitors(&[desc(&format!("HW{n}"), 0)]);
+        }
+        assert_eq!(c.monitors.len(), MAX_MONITORS);
+        assert_eq!(c.monitors[0].hardware_id.as_deref(), Some("HW0"));
+
+        // A brand-new monitor: the oldest profile (HW0) is dropped, the newest stays.
+        let idx = c.resolve_monitors(&[desc("NEW", 0)]);
+        assert_eq!(c.monitors.len(), MAX_MONITORS, "never above the cap");
+        assert_eq!(idx.len(), 1);
+        assert_eq!(c.monitors[idx[0]].hardware_id.as_deref(), Some("NEW"));
+        assert!(c
+            .monitors
+            .iter()
+            .all(|m| m.hardware_id.as_deref() != Some("HW0")));
+        assert!(c
+            .monitors
+            .iter()
+            .any(|m| m.hardware_id.as_deref() == Some("HW1")));
+    }
+
+    #[test]
+    fn a_connected_monitor_is_never_evicted_to_make_room() {
+        let mut c = Config::default();
+        for n in 0..MAX_MONITORS {
+            c.resolve_monitors(&[desc(&format!("HW{n}"), 0)]);
+        }
+        // HW0 is the oldest, but it is connected right now together with a new one.
+        let idx = c.resolve_monitors(&[desc("HW0", 0), desc("NEW", 1920)]);
+        assert_eq!(c.monitors.len(), MAX_MONITORS);
+        assert_eq!(idx.len(), 2);
+        assert_eq!(c.monitors[idx[0]].hardware_id.as_deref(), Some("HW0"));
+        assert_eq!(c.monitors[idx[1]].hardware_id.as_deref(), Some("NEW"));
+        // HW1, the next oldest, was the one that left.
+        assert!(c
+            .monitors
+            .iter()
+            .all(|m| m.hardware_id.as_deref() != Some("HW1")));
+    }
+
+    #[test]
+    fn eviction_keeps_every_returned_index_pointing_at_the_right_profile() {
+        let mut c = Config::default();
+        for n in 0..MAX_MONITORS {
+            c.resolve_monitors(&[desc(&format!("HW{n}"), 0)]);
+        }
+        // Two matched monitors that sit after the evicted one, then a new monitor.
+        let idx = c.resolve_monitors(&[desc("HW10", 0), desc("HW20", 1920), desc("NEW", 3840)]);
+        let hw: Vec<_> = idx
+            .iter()
+            .map(|&i| c.monitors[i].hardware_id.clone().unwrap())
+            .collect();
+        assert_eq!(hw, ["HW10", "HW20", "NEW"]);
+        assert_eq!(c.monitors.len(), MAX_MONITORS);
+    }
+
+    #[test]
+    fn more_connected_monitors_than_the_cap_get_no_profile_instead_of_breaking_it() {
+        let mut c = Config::default();
+        let all: Vec<_> = (0..MAX_MONITORS + 5)
+            .map(|n| desc(&format!("HW{n}"), (n as i32) * 100))
+            .collect();
+        let idx = c.resolve_monitors(&all);
+        assert_eq!(c.monitors.len(), MAX_MONITORS);
+        assert_eq!(
+            idx.len(),
+            MAX_MONITORS,
+            "the rest are left without a profile"
+        );
+        for (n, &i) in idx.iter().enumerate() {
+            assert_eq!(
+                c.monitors[i].hardware_id.as_deref(),
+                Some(format!("HW{n}").as_str())
+            );
+        }
+    }
+
+    #[test]
+    fn saving_a_config_larger_than_the_load_cap_is_refused_and_writes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        let mut c = Config::default();
+        c.resolve_monitors(&[desc("A", 0)]);
+        c.save(&path).unwrap();
+        let before = std::fs::read(&path).unwrap();
+
+        // Pad the settings until the JSON is past the cap.
+        c.settings.highlight_color = "x".repeat(MAX_CONFIG_BYTES as usize + 10);
+        let err = c.save(&path).unwrap_err();
+        assert!(matches!(err, ConfigError::TooLarge { .. }), "{err}");
+        assert!(err.to_string().contains("too large"));
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            before,
+            "the old file is untouched"
+        );
+        assert!(!path.with_extension("json.tmp").exists());
+    }
+
+    #[test]
+    fn a_config_just_under_the_cap_still_round_trips() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        let mut c = Config::default();
+        c.resolve_monitors(&[desc("A", 0)]);
+        c.save(&path).unwrap();
+        let (loaded, status) = Config::load(&path).unwrap();
+        assert_eq!(status, LoadStatus::Loaded);
+        assert_eq!(loaded.monitors.len(), 1);
+        assert!(
+            std::fs::metadata(&path).unwrap().len() < MAX_CONFIG_BYTES / 100,
+            "a normal config is tiny next to the cap"
+        );
+    }
+
+    #[test]
+    fn invisible_characters_in_a_stored_layout_name_are_removed_on_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        let mut c = Config::default();
+        c.resolve_monitors(&[desc("A", 0)]);
+        c.monitors[0].layouts[0].name = "Ha\u{202E}lves\u{200B}".to_owned();
+        let json = serde_json::to_vec(&c).unwrap();
+        std::fs::write(&path, json).unwrap();
+        let (loaded, _) = Config::load(&path).unwrap();
+        let halves = loaded.monitors[0]
+            .layouts
+            .iter()
+            .find(|l| l.id == "halves")
+            .expect("the layout survives");
+        assert_eq!(halves.name, "Halves");
     }
 }

@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
 
-use krova_core::registry::KeyAction;
+use krova_core::registry::{KeyAction, WindowOwner};
 use krova_core::{DragEvent, Modifier, MonitorDescriptor, PxRect};
 
 pub mod hotkeys;
@@ -324,6 +324,14 @@ pub trait Platform: Send + Sync {
         false
     }
 
+    /// Who owns the window: its process id and the process creation time. A window
+    /// handle can be reused by the OS for another window after the first closed; two
+    /// readings with the same owner are the same program. `None` when the window is
+    /// gone or the process cannot be inspected. No name or title is read.
+    fn window_owner(&self, _window: WindowId) -> Option<WindowOwner> {
+        None
+    }
+
     /// Register the global shortcuts. They stay registered until the handle is
     /// dropped. Shortcuts the OS refuses are reported in the handle, not as an error.
     fn start_hotkeys(
@@ -478,6 +486,7 @@ mod tests {
         assert_eq!(p.foreground_window(), None);
         assert_eq!(p.cursor_position(), None);
         assert!(!p.is_movable_target(w));
+        assert_eq!(p.window_owner(w), None);
         let spec = HotkeySpec {
             modifier: krova_core::ShortcutModifier::WinAlt,
             window_moves: true,

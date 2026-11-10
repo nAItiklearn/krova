@@ -64,7 +64,7 @@ pub enum RuleError {
 /// direction overrides, embeddings and isolates, and the other invisible format
 /// characters. They have no place in a program name or an id: they make two
 /// different names look the same, or reorder what the user reads.
-fn is_hidden(c: char) -> bool {
+pub(crate) fn is_hidden(c: char) -> bool {
     c.is_control()
         || (c.is_whitespace() && c != ' ')
         || matches!(

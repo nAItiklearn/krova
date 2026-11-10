@@ -21,7 +21,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use krova_core::linked::{plan_linked_resize, MIN_LINKED_SIDE_PX};
-use krova_core::registry::{plan_reconnect, KeyAction, WindowKey, WindowSnapshot};
+use krova_core::registry::{plan_reconnect, KeyAction, WindowKey, WindowSnapshot, MAX_AGE};
 use krova_core::{
     Action, DragEvent, MonitorView, MoveMode, PxRect, Session, Settings, SnapSettings, SnapTarget,
 };
@@ -497,9 +497,12 @@ impl<'a> Engine<'a> {
         let key = WindowKey(window.0);
         {
             let mut registry = lock(&shared.registry);
-            // Windows that have been closed since are dropped now and then.
+            // Windows that have been closed since are dropped now and then, and so
+            // are entries nobody has refreshed for hours.
             registry.retain(|k, _| shared.platform.window_exists(WindowId(k.0)));
-            registry.insert(key, slot.record(rect));
+            registry.expire(Instant::now(), MAX_AGE);
+            let owner = shared.platform.window_owner(window);
+            registry.insert(key, slot.record(rect, owner));
         }
         self.placed_at.insert(key, Instant::now());
         self.placed_at
@@ -647,7 +650,11 @@ impl<'a> Engine<'a> {
             return;
         }
 
-        let registry = lock(&shared.registry).clone();
+        let registry = {
+            let mut live = lock(&shared.registry);
+            live.expire(Instant::now(), MAX_AGE);
+            live.clone()
+        };
         let returned: HashSet<&str> = current
             .iter()
             .map(|m| m.profile_id.as_str())
@@ -830,27 +837,39 @@ impl<'a> Engine<'a> {
 }
 
 /// What is known about a registered window right now.
+///
+/// A handle that is not a movable window any more (an elevated program, a window
+/// that lost its title bar, a tooltip the OS gave the number to) counts as gone: it
+/// is forgotten and never moved. A minimized window is the exception, because
+/// `is_movable_target` is false for it only on account of being minimized.
 fn snapshot(
     platform: &dyn krova_platform::Platform,
     model: &AppModel,
     window: WindowId,
 ) -> WindowSnapshot {
+    let gone = WindowSnapshot {
+        exists: false,
+        minimized: false,
+        maximized: false,
+        rect: None,
+        monitor_profile_id: None,
+        owner: None,
+    };
     if !platform.window_exists(window) {
-        return WindowSnapshot {
-            exists: false,
-            minimized: false,
-            maximized: false,
-            rect: None,
-            monitor_profile_id: None,
-        };
+        return gone;
+    }
+    let minimized = platform.is_minimized(window);
+    if !minimized && !platform.is_movable_target(window) {
+        return gone;
     }
     let rect = platform.window_rect(window).ok();
     WindowSnapshot {
         exists: true,
-        minimized: platform.is_minimized(window),
+        minimized,
         maximized: platform.is_maximized(window),
         rect,
         monitor_profile_id: rect.and_then(|r| model.profile_at(r)),
+        owner: platform.window_owner(window),
     }
 }
 

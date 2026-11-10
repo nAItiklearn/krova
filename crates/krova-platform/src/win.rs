@@ -21,6 +21,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use krova_core::registry::WindowOwner;
 use krova_core::window::ANIMATION_MS;
 use krova_core::{
     animate_step, clamp_to_limits, DragEvent, FrameInsets, Modifier, MonitorDescriptor, PxRect,
@@ -28,8 +29,8 @@ use krova_core::{
 };
 use windows::core::{HRESULT, PCWSTR};
 use windows::Win32::Foundation::{
-    CloseHandle, BOOL, ERROR_ACCESS_DENIED, HANDLE, HINSTANCE, HWND, LPARAM, LRESULT, POINT, RECT,
-    TRUE, WPARAM,
+    CloseHandle, BOOL, ERROR_ACCESS_DENIED, FILETIME, HANDLE, HINSTANCE, HWND, LPARAM, LRESULT,
+    POINT, RECT, TRUE, WPARAM,
 };
 use windows::Win32::Graphics::Dwm::{
     DwmGetWindowAttribute, DWMWA_CLOAKED, DWMWA_EXTENDED_FRAME_BOUNDS,
@@ -41,8 +42,8 @@ use windows::Win32::Graphics::Gdi::{
 use windows::Win32::Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::{
-    GetCurrentProcess, GetCurrentProcessId, GetCurrentThreadId, OpenProcess, OpenProcessToken,
-    PROCESS_QUERY_LIMITED_INFORMATION,
+    GetCurrentProcess, GetCurrentProcessId, GetCurrentThreadId, GetProcessTimes, OpenProcess,
+    OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
 };
 use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
@@ -213,6 +214,31 @@ fn target_is_protected(h: HWND) -> bool {
     let elevated = process_elevated(process).unwrap_or(true);
     let _ = unsafe { CloseHandle(process) };
     elevated
+}
+
+/// The program a window belongs to: process id plus process creation time. The pair
+/// outlives a window handle that the OS reuses for another window.
+fn owner_of(h: HWND) -> Option<WindowOwner> {
+    let mut pid = 0u32;
+    unsafe { GetWindowThreadProcessId(h, Some(&mut pid)) };
+    if pid == 0 {
+        return None;
+    }
+    let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }.ok()?;
+    let (mut created, mut exited, mut kernel, mut user) = (
+        FILETIME::default(),
+        FILETIME::default(),
+        FILETIME::default(),
+        FILETIME::default(),
+    );
+    let read =
+        unsafe { GetProcessTimes(process, &mut created, &mut exited, &mut kernel, &mut user) };
+    let _ = unsafe { CloseHandle(process) };
+    read.ok()?;
+    Some(WindowOwner {
+        pid,
+        started: (u64::from(created.dwHighDateTime) << 32) | u64::from(created.dwLowDateTime),
+    })
 }
 
 /// Is this one of Krova's own windows (the settings window, the overlay)?
@@ -783,6 +809,14 @@ impl Platform for WindowsPlatform {
             && snappable(h)
             && !is_own_process_window(h)
             && !target_is_protected(h)
+    }
+
+    fn window_owner(&self, window: WindowId) -> Option<WindowOwner> {
+        let h = hwnd(window);
+        if !unsafe { IsWindow(h) }.as_bool() {
+            return None;
+        }
+        owner_of(h)
     }
 
     fn start_hotkeys(

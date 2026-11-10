@@ -37,6 +37,21 @@ pub enum LayoutError {
     TooManyZones,
     #[error("layout id or name is too long (at most 64 characters)")]
     TextTooLong,
+    #[error("the layout id or name has control, invisible or direction-changing characters")]
+    HiddenCharacter,
+}
+
+/// Whether `s` holds a control, zero-width, line-separating or direction-changing
+/// character (see `app_rules`; the rule is shared).
+pub fn has_hidden_char(s: &str) -> bool {
+    s.chars().any(crate::app_rules::is_hidden)
+}
+
+/// `s` without its hidden characters.
+pub fn strip_hidden(s: &str) -> String {
+    s.chars()
+        .filter(|&c| !crate::app_rules::is_hidden(c))
+        .collect()
 }
 
 impl Layout {
@@ -65,6 +80,11 @@ impl Layout {
         let too_long = |s: &str| s.chars().take(MAX_NAME_LEN + 1).count() > MAX_NAME_LEN;
         if too_long(&self.id) || too_long(&self.name) {
             return Err(LayoutError::TextTooLong);
+        }
+        // Invisible and direction-changing characters make two names look alike or
+        // reorder what the user reads. Same rule as the app rules' program names.
+        if has_hidden_char(&self.id) || has_hidden_char(&self.name) {
+            return Err(LayoutError::HiddenCharacter);
         }
         let mut seen = HashSet::new();
         for z in &self.zones {
@@ -344,5 +364,62 @@ mod tests {
         assert_eq!(l.validate(), Err(LayoutError::InvalidRect(1)));
         l.zones[0].rect = Rect::new(0.0, 0.0, MIN_ZONE_SIDE, 1.0);
         assert_eq!(l.validate(), Ok(()));
+    }
+
+    #[test]
+    fn invisible_and_direction_changing_characters_in_ids_and_names_are_refused() {
+        // Right-to-left override, zero-width space, line separator, byte order mark,
+        // an isolate, a soft hyphen and a plain control character.
+        for bad in [
+            "\u{202E}evil",
+            "a\u{200B}b",
+            "line\u{2028}break",
+            "\u{FEFF}x",
+            "a\u{2066}b",
+            "co\u{00AD}op",
+            "tab\there",
+            "nul\u{0}",
+        ] {
+            let mut in_name = templates()[0].clone();
+            in_name.name = bad.to_owned();
+            assert_eq!(
+                in_name.validate(),
+                Err(LayoutError::HiddenCharacter),
+                "{bad:?}"
+            );
+            let mut in_id = templates()[0].clone();
+            in_id.id = bad.to_owned();
+            assert_eq!(
+                in_id.validate(),
+                Err(LayoutError::HiddenCharacter),
+                "{bad:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn ordinary_names_in_any_script_are_fine() {
+        for good in [
+            "Halves",
+            "My layout 2",
+            "Zweispalter",
+            "分屏",
+            "Ёлка",
+            "🙂 grid",
+        ] {
+            let mut l = templates()[0].clone();
+            l.name = good.to_owned();
+            assert_eq!(l.validate(), Ok(()), "{good}");
+        }
+        assert!(LayoutError::HiddenCharacter
+            .to_string()
+            .contains("invisible"));
+    }
+
+    #[test]
+    fn hidden_characters_can_be_found_and_stripped() {
+        assert!(has_hidden_char("a\u{200D}b"));
+        assert!(!has_hidden_char("ab c"));
+        assert_eq!(strip_hidden("a\u{200D}b\u{202E}c d"), "abc d");
     }
 }

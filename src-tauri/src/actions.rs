@@ -3,7 +3,7 @@
 
 use krova_core::linked::EDGE_TOLERANCE_PX;
 use krova_core::registry::{
-    monitor_for_rect, plan_keyboard_move, zone_for_rect, KeyAction, SnapRecord,
+    monitor_for_rect, plan_keyboard_move, zone_for_rect, KeyAction, SnapRecord, WindowOwner,
 };
 use krova_core::{MonitorView, PxRect};
 
@@ -20,13 +20,15 @@ pub struct Slot {
 }
 
 impl Slot {
-    /// The registry record for a window that now occupies `rect` in this slot.
-    pub fn record(self, rect: PxRect) -> SnapRecord {
+    /// The registry record for a window that now occupies `rect` in this slot,
+    /// remembering whose window it was (`owner`).
+    pub fn record(self, rect: PxRect, owner: Option<WindowOwner>) -> SnapRecord {
         SnapRecord {
             monitor_profile_id: self.profile_id,
             layout_id: self.layout_id,
             zone_id: self.zone_id,
             rect,
+            owner,
         }
     }
 }
@@ -177,6 +179,7 @@ mod tests {
             layout_id: "thirds".into(),
             zone_id: 3,
             rect: wide,
+            owner: None,
         };
         // With the record the window is in zone 3, so "next" wraps around to 1 ...
         let m = plan_key_move(KeyAction::NextZone, &views, &ids(), wide, Some(&record), 0).unwrap();
@@ -195,6 +198,7 @@ mod tests {
             layout_id: "halves".into(),
             zone_id: 1,
             rect: PxRect::new(0, 0, 960, 1040),
+            owner: None,
         };
         // The window now sits in the right half: the record is 960 px off.
         let moved = PxRect::new(980, 20, 800, 600);
