@@ -334,6 +334,14 @@ pub enum LaunchRefusal {
     NotExe,
     #[error("programs in a temporary folder are never started")]
     InTempDir,
+    #[error("programs in Downloads, on the Desktop, in AppData\\Roaming or in a temporary folder are never started")]
+    InBlockedFolder,
+    #[error("paths naming an alternate data stream are never started")]
+    AlternateStream,
+    #[error("paths with a folder or file name ending in a dot or a space are never started")]
+    TrailingDotOrSpace,
+    #[error("only programs on a fixed local drive are started")]
+    NotFixedDrive,
     #[error("network paths are never started")]
     Network,
     #[error("the path contains hidden characters")]
@@ -341,9 +349,13 @@ pub enum LaunchRefusal {
 }
 
 /// Whether a stored path may be launched: an absolute local drive path (`C:\...`)
-/// ending in `.exe`, with no `..` component, not on a network share and not inside
-/// one of `temp_dirs`. The platform additionally checks that the file exists.
-pub fn check_launch_path(path: &str, temp_dirs: &[String]) -> Result<(), LaunchRefusal> {
+/// ending in `.exe`, with no `..` component, no alternate data stream (`:` after
+/// the drive), no folder or file name ending in `.` or a space, not on a network
+/// share and not inside one of `blocked_dirs` (temp folders, Downloads, Desktop,
+/// `AppData\Roaming`; compared without case). The platform runs it twice: on the
+/// stored path, and again on the final path of the opened file before launching
+/// exactly that path (F-26); it also requires a fixed drive.
+pub fn check_launch_path(path: &str, blocked_dirs: &[String]) -> Result<(), LaunchRefusal> {
     if path.chars().any(is_hidden_char) {
         return Err(LaunchRefusal::Hidden);
     }
@@ -357,17 +369,26 @@ pub fn check_launch_path(path: &str, temp_dirs: &[String]) -> Result<(), LaunchR
     if !drive || p.split('\\').any(|c| c == ".." || c == ".") {
         return Err(LaunchRefusal::NotAbsolute);
     }
+    if p[2..].contains(':') {
+        return Err(LaunchRefusal::AlternateStream);
+    }
+    if p[3..]
+        .split('\\')
+        .any(|c| c.is_empty() || c.ends_with('.') || c.ends_with(' '))
+    {
+        return Err(LaunchRefusal::TrailingDotOrSpace);
+    }
     if !p.to_ascii_lowercase().ends_with(".exe") {
         return Err(LaunchRefusal::NotExe);
     }
     let lower = p.to_lowercase();
-    for t in temp_dirs {
+    for t in blocked_dirs {
         let mut t = t.replace('/', "\\").to_lowercase();
         while t.ends_with('\\') {
             t.pop();
         }
         if !t.is_empty() && lower.starts_with(&format!("{t}\\")) {
-            return Err(LaunchRefusal::InTempDir);
+            return Err(LaunchRefusal::InBlockedFolder);
         }
     }
     // Belt and braces: any folder literally called Temp or Tmp.
@@ -378,6 +399,17 @@ pub fn check_launch_path(path: &str, temp_dirs: &[String]) -> Result<(), LaunchR
         return Err(LaunchRefusal::InTempDir);
     }
     Ok(())
+}
+
+/// Turn a `GetFinalPathNameByHandleW` result into a plain drive path:
+/// `\\?\C:\x` becomes `C:\x`. Network paths (`\\?\UNC\...`, `\\server\...`) give
+/// `None`.
+pub fn normalize_final_path(raw: &str) -> Option<String> {
+    let p = raw.strip_prefix("\\\\?\\").unwrap_or(raw);
+    if p.starts_with("\\\\") || p.get(..4).is_some_and(|u| u.eq_ignore_ascii_case("UNC\\")) {
+        return None;
+    }
+    Some(p.to_owned())
 }
 
 /// Result of restoring one entry, for the UI.
@@ -400,14 +432,18 @@ pub enum EntryOutcome {
     Failed,
 }
 
-/// One line of a restore report. `program` is the file name only (no folders), so
-/// the UI never has to show a full path.
+/// One line of a restore report. `program` is the file name only (no folders).
+/// `path` is set only for `refused` entries: the full path that was refused (the
+/// final path of the file when it could be opened, else the stored one), so the
+/// UI can say exactly what was not started.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EntryResult {
     pub program: String,
     pub monitor_id: String,
     pub zone_id: u32,
     pub outcome: EntryOutcome,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -620,7 +656,7 @@ mod tests {
         assert!(check_launch_path("d:/tools/App.EXE", &temps).is_ok());
         assert_eq!(
             check_launch_path("C:\\Users\\me\\AppData\\Local\\Temp\\x\\a.exe", &temps),
-            Err(LaunchRefusal::InTempDir)
+            Err(LaunchRefusal::InBlockedFolder)
         );
         assert_eq!(
             check_launch_path("C:\\Windows\\Temp\\a.exe", &[]),
@@ -650,6 +686,51 @@ mod tests {
             check_launch_path("C:\\a\u{202E}exe.txt", &temps),
             Err(LaunchRefusal::Hidden)
         );
+    }
+
+    #[test]
+    fn streams_trailing_dots_and_user_folders_are_refused() {
+        let blocked = vec![
+            "C:\\Users\\me\\Downloads".to_owned(),
+            "C:\\Users\\me\\OneDrive\\Desktop\\".to_owned(),
+            "c:\\users\\me\\appdata\\roaming".to_owned(),
+        ];
+        let refused = |p: &str| check_launch_path(p, &blocked).unwrap_err();
+        use LaunchRefusal::*;
+        assert_eq!(refused("C:\\Apps\\good.exe:evil.exe"), AlternateStream);
+        assert_eq!(refused("C:\\Apps\\a.exe::$DATA.exe"), AlternateStream);
+        assert_eq!(refused("C:\\Apps.\\a.exe"), TrailingDotOrSpace);
+        assert_eq!(refused("C:\\Apps \\a.exe"), TrailingDotOrSpace);
+        assert_eq!(refused("C:\\Apps\\\\a.exe"), TrailingDotOrSpace);
+        assert_eq!(
+            refused("C:\\USERS\\Me\\downloads\\setup.exe"),
+            InBlockedFolder
+        );
+        assert_eq!(
+            refused("C:\\Users\\me\\OneDrive\\Desktop\\t.exe"),
+            InBlockedFolder
+        );
+        assert_eq!(
+            refused("C:\\Users\\me\\AppData\\Roaming\\x\\a.exe"),
+            InBlockedFolder
+        );
+        // A sibling whose name only starts like a blocked folder is fine.
+        assert!(check_launch_path("C:\\Users\\me\\Downloads2\\a.exe", &blocked).is_ok());
+        assert!(check_launch_path("C:\\Users\\me\\AppData\\Local\\A\\a.exe", &blocked).is_ok());
+    }
+
+    #[test]
+    fn final_paths_lose_the_verbatim_prefix_and_network_ones_are_dropped() {
+        assert_eq!(
+            normalize_final_path("\\\\?\\C:\\Program Files\\A\\a.exe").as_deref(),
+            Some("C:\\Program Files\\A\\a.exe")
+        );
+        assert_eq!(
+            normalize_final_path("D:\\a.exe").as_deref(),
+            Some("D:\\a.exe")
+        );
+        assert_eq!(normalize_final_path("\\\\?\\UNC\\srv\\share\\a.exe"), None);
+        assert_eq!(normalize_final_path("\\\\srv\\share\\a.exe"), None);
     }
 
     #[test]

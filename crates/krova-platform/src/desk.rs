@@ -47,6 +47,21 @@ pub trait Visuals: Send {
     fn set_config(&self, config: VisualsConfig);
 }
 
+/// Why [`Desk::launch`] did not start a program. `path` is the full path that was
+/// refused (the final path of the opened file when it got that far), for the
+/// restore report.
+#[derive(Debug)]
+pub struct LaunchFailure {
+    pub path: Option<String>,
+    pub error: PlatformError,
+}
+
+impl LaunchFailure {
+    pub fn new(path: Option<String>, error: PlatformError) -> Self {
+        Self { path, error }
+    }
+}
+
 pub trait Desk: Send + Sync {
     fn capabilities(&self) -> DeskCapabilities {
         DeskCapabilities::default()
@@ -82,16 +97,28 @@ pub trait Desk: Send + Sync {
         Vec::new()
     }
 
+    /// Folders programs are never launched from: [`Desk::temp_dirs`] plus, on
+    /// Windows, Downloads, Desktop and `AppData\Roaming` (F-26).
+    fn blocked_dirs(&self) -> Vec<String> {
+        self.temp_dirs()
+    }
+
     /// Whether a regular file exists at `path`.
     fn file_exists(&self, path: &str) -> bool {
         std::path::Path::new(path).is_file()
     }
 
     /// Start a program from its executable path, with no arguments, in its own
-    /// folder. The caller has already checked the path with
-    /// `krova_core::workspace::check_launch_path`.
-    fn launch(&self, _exe: &str) -> Result<(), PlatformError> {
-        Err(PlatformError::Unsupported)
+    /// folder. The caller has already checked the stored path with
+    /// `krova_core::workspace::check_launch_path`; the platform opens the file so
+    /// it cannot be replaced, checks its final path again against `blocked_dirs`
+    /// (and that it is on a fixed drive) and launches exactly that path, which it
+    /// returns (F-26).
+    fn launch(&self, exe: &str, _blocked_dirs: &[String]) -> Result<String, LaunchFailure> {
+        Err(LaunchFailure::new(
+            Some(exe.to_owned()),
+            PlatformError::Unsupported,
+        ))
     }
 
     /// Wait (event-driven, no polling) until each of `exes` has a new arrangeable
@@ -166,7 +193,7 @@ mod tests {
         assert_eq!(d.capabilities(), DeskCapabilities::default());
         assert!(d.arrangeable_windows(true).is_empty());
         assert!(d.minimize(WindowId(1)).is_err());
-        assert!(d.launch("C:\\a.exe").is_err());
+        assert!(d.launch("C:\\a.exe", &[]).is_err());
         assert_eq!(
             d.wait_for_windows(&["a".into(), "b".into()], &[], Duration::ZERO),
             vec![None, None]

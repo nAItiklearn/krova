@@ -255,6 +255,11 @@ export interface EntryResult {
   monitor_id: string;
   zone_id: number;
   outcome: EntryOutcome;
+  /**
+   * Only for `refused`: the full path that was refused (the file's final path,
+   * links resolved, when it could be opened; otherwise the stored path). Absent otherwise.
+   */
+  path?: string | null;
 }
 
 export interface RestoreReport {

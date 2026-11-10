@@ -432,14 +432,17 @@ fn restore_inner(shared: &Shared, id: &str, launch: bool) -> Result<RestoreRepor
     };
 
     let windows = desk.arrangeable_windows(true);
-    let temps = desk.temp_dirs();
+    // F-26: temp folders, Downloads, Desktop and AppData\Roaming.
+    let blocked = desk.blocked_dirs();
     let pairs: Vec<(u64, Option<String>)> =
         windows.iter().map(|d| (d.id.0, d.exe.clone())).collect();
     let plan = kws::plan_restore(&ws, &pairs, launch, |p| {
-        check_launch_path(p, &temps).is_ok() && desk.file_exists(p)
+        check_launch_path(p, &blocked).is_ok() && desk.file_exists(p)
     });
 
     let mut outcomes: Vec<Option<EntryOutcome>> = vec![None; ws.entries.len()];
+    // The full path each refused entry was refused for (F-26).
+    let mut refused_paths: Vec<Option<String>> = vec![None; ws.entries.len()];
     let mut assigned: Vec<(usize, WindowId, EntryOutcome)> = plan
         .reuse
         .iter()
@@ -447,18 +450,22 @@ fn restore_inner(shared: &Shared, id: &str, launch: bool) -> Result<RestoreRepor
         .collect();
 
     // Launch every missing program first, then wait for all of them together.
-    let mut started: Vec<usize> = Vec::new();
+    // The platform launches the final path of the file it checked; wait for that one.
+    let mut started: Vec<(usize, String)> = Vec::new();
     for &i in &plan.launch {
-        match desk.launch(&ws.entries[i].exe) {
-            Ok(()) => started.push(i),
-            Err(_) => outcomes[i] = Some(EntryOutcome::Refused),
+        match desk.launch(&ws.entries[i].exe, &blocked) {
+            Ok(path) => started.push((i, path)),
+            Err(f) => {
+                outcomes[i] = Some(EntryOutcome::Refused);
+                refused_paths[i] = Some(f.path.unwrap_or_else(|| ws.entries[i].exe.clone()));
+            }
         }
     }
     if !started.is_empty() {
-        let exes: Vec<String> = started.iter().map(|&i| ws.entries[i].exe.clone()).collect();
+        let exes: Vec<String> = started.iter().map(|(_, p)| p.clone()).collect();
         let known: Vec<WindowId> = windows.iter().map(|d| d.id).collect();
         let found = desk.wait_for_windows(&exes, &known, Duration::from_millis(LAUNCH_WAIT_MS));
-        for (&i, got) in started.iter().zip(found) {
+        for (&(i, _), got) in started.iter().zip(found) {
             match got {
                 Some(win) => assigned.push((i, win, EntryOutcome::Launched)),
                 None => outcomes[i] = Some(EntryOutcome::TimedOut),
@@ -467,6 +474,9 @@ fn restore_inner(shared: &Shared, id: &str, launch: bool) -> Result<RestoreRepor
     }
     for &i in &plan.missing {
         let refused = launch && !ws.entries[i].exe.is_empty();
+        if refused {
+            refused_paths[i] = Some(ws.entries[i].exe.clone());
+        }
         outcomes[i] = Some(if refused {
             EntryOutcome::Refused
         } else {
@@ -524,11 +534,16 @@ fn restore_inner(shared: &Shared, id: &str, launch: bool) -> Result<RestoreRepor
             .entries
             .iter()
             .zip(outcomes)
-            .map(|(e, o)| EntryResult {
-                program: program_name(&e.exe),
-                monitor_id: e.monitor_id.clone(),
-                zone_id: e.zone_id,
-                outcome: o.unwrap_or(EntryOutcome::Failed),
+            .zip(refused_paths)
+            .map(|((e, o), path)| {
+                let outcome = o.unwrap_or(EntryOutcome::Failed);
+                EntryResult {
+                    program: program_name(&e.exe),
+                    monitor_id: e.monitor_id.clone(),
+                    zone_id: e.zone_id,
+                    outcome,
+                    path: path.filter(|_| outcome == EntryOutcome::Refused),
+                }
             })
             .collect(),
         minimized,
@@ -685,9 +700,27 @@ mod tests {
         fn file_exists(&self, path: &str) -> bool {
             !path.contains("gone")
         }
-        fn launch(&self, exe: &str) -> Result<(), PlatformError> {
+        fn launch(
+            &self,
+            exe: &str,
+            blocked_dirs: &[String],
+        ) -> Result<String, krova_platform::desk::LaunchFailure> {
+            // Like the real desk: a path that resolves into a blocked folder is
+            // refused with that final path.
+            if let Some(real) = exe.strip_prefix("C:\\Apps\\link-") {
+                let fin = format!("C:\\Users\\me\\Downloads\\{real}");
+                if check_launch_path(&fin, blocked_dirs).is_err() {
+                    return Err(krova_platform::desk::LaunchFailure::new(
+                        Some(fin),
+                        PlatformError::Os("refused".into()),
+                    ));
+                }
+            }
             lock(&self.launched).push(exe.to_owned());
-            Ok(())
+            Ok(exe.to_owned())
+        }
+        fn blocked_dirs(&self) -> Vec<String> {
+            vec!["C:\\Users\\me\\Downloads".into()]
         }
         fn wait_for_windows(
             &self,
@@ -778,7 +811,18 @@ mod tests {
         }
     }
 
+    /// The share-safe mirror is one process-wide switch and every test here calls
+    /// `apply_settings`, so they run one at a time: `setup` takes this lock and the
+    /// test thread holds it until it ends.
+    static SERIAL: Mutex<()> = Mutex::new(());
+    thread_local! {
+        static HELD: std::cell::RefCell<Option<std::sync::MutexGuard<'static, ()>>> =
+            const { std::cell::RefCell::new(None) };
+    }
+
     fn setup() -> (Shared, Arc<FakeDesk>, Arc<FakePlatform>) {
+        let guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        HELD.with(|h| *h.borrow_mut() = Some(guard));
         let dir = tempfile::tempdir().unwrap();
         let mut model = AppModel::new(Config::default(), dir.path().join("c.json"), false);
         model.refresh_monitors(vec![monitor()]).unwrap();
@@ -840,6 +884,32 @@ mod tests {
     }
 
     #[test]
+    fn a_launch_whose_real_path_is_blocked_is_refused_with_that_path() {
+        let (shared, desk, _) = setup();
+        let rect = PxRect::new(0, 0, 1000, 1000);
+        *lock(&desk.windows) = vec![
+            win(1, "C:\\Apps\\link-tool.exe", rect),
+            win(2, "C:\\Users\\me\\Downloads\\setup.exe", rect),
+        ];
+        let ws = capture_workspace(&shared, "A", None).unwrap();
+        *lock(&desk.windows) = vec![];
+        let r = restore_workspace(&shared, &ws.id, true).unwrap();
+        // The stored path looked fine; its final path is in Downloads.
+        assert_eq!(r.entries[0].outcome, EntryOutcome::Refused);
+        assert_eq!(
+            r.entries[0].path.as_deref(),
+            Some("C:\\Users\\me\\Downloads\\tool.exe")
+        );
+        // A stored path in Downloads is never even tried.
+        assert_eq!(r.entries[1].outcome, EntryOutcome::Refused);
+        assert_eq!(
+            r.entries[1].path.as_deref(),
+            Some("C:\\Users\\me\\Downloads\\setup.exe")
+        );
+        assert!(lock(&desk.launched).is_empty());
+    }
+
+    #[test]
     fn restore_without_launching_reports_what_is_not_running() {
         let (shared, desk, _) = setup();
         *lock(&desk.windows) = vec![win(
@@ -854,6 +924,7 @@ mod tests {
         // With launching on, a path that is gone is refused, never started.
         let r = restore_workspace(&shared, &ws.id, true).unwrap();
         assert_eq!(r.entries[0].outcome, EntryOutcome::Refused);
+        assert_eq!(r.entries[0].path.as_deref(), Some("C:\\Apps\\gone\\x.exe"));
         assert!(lock(&desk.launched).is_empty());
         assert!(restore_workspace(&shared, "nope", true).is_err());
         assert!(lock(&shared.wave3.restoring).is_none());

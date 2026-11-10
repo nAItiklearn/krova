@@ -22,6 +22,10 @@ features = [
     "Win32_Globalization",
     "Win32_Graphics_Gdi",
     "Win32_Security",
+    # F-26: CreateFileW / GetFinalPathNameByHandleW / GetDriveTypeW (workspace launch)
+    "Win32_Storage_FileSystem",
+    # F-26: CoTaskMemFree after SHGetKnownFolderPath
+    "Win32_System_Com",
     "Win32_System_LibraryLoader",
     "Win32_System_Threading",
     "Win32_UI_Accessibility",

@@ -36,7 +36,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WINEVENT_SKIPOWNPROCESS, WM_APP, WM_QUIT, WS_CAPTION, WS_EX_TOOLWINDOW,
 };
 
-use crate::desk::{Desk, DeskCapabilities, DeskWindow, Visuals};
+use crate::desk::{Desk, DeskCapabilities, DeskWindow, LaunchFailure, Visuals};
 use crate::{PlatformError, WindowId};
 use krova_core::focus::{VisualsConfig, WIN11_BUILD};
 
@@ -385,6 +385,139 @@ fn wait_thread(
     let _ = out.send(found);
 }
 
+// ------------------------------------------------------- safe launching (F-26)
+
+/// `GetDriveTypeW` result for a fixed local disk.
+const DRIVE_FIXED: u32 = 3;
+
+/// An open file handle, closed on drop.
+struct FileHandle(windows::Win32::Foundation::HANDLE);
+
+impl Drop for FileHandle {
+    fn drop(&mut self) {
+        // SAFETY: a handle we opened and own.
+        let _ = unsafe { CloseHandle(self.0) };
+    }
+}
+
+/// Open `path` for reading, sharing read only: while the handle is held nobody can
+/// write, rename or delete the file (no `FILE_SHARE_WRITE` / `FILE_SHARE_DELETE`).
+/// `directory` opens a folder instead (for resolving blocked folders).
+fn open_locked(path: &str, directory: bool) -> Option<FileHandle> {
+    use windows::Win32::Storage::FileSystem::{
+        CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_FLAG_BACKUP_SEMANTICS, FILE_GENERIC_READ,
+        FILE_SHARE_READ, OPEN_EXISTING,
+    };
+    let w = wide(path);
+    let flags = if directory {
+        FILE_FLAG_BACKUP_SEMANTICS
+    } else {
+        FILE_ATTRIBUTE_NORMAL
+    };
+    // SAFETY: `w` is NUL-terminated and outlives the call.
+    unsafe {
+        CreateFileW(
+            PCWSTR(w.as_ptr()),
+            FILE_GENERIC_READ.0,
+            FILE_SHARE_READ,
+            None,
+            OPEN_EXISTING,
+            flags,
+            None,
+        )
+    }
+    .ok()
+    .map(FileHandle)
+}
+
+/// The final (link-resolved, normalised) path of an open file, as `C:\...`.
+/// `Err` carries the raw path when it is not a plain drive path.
+fn final_path(h: &FileHandle) -> Result<String, Option<String>> {
+    use windows::Win32::Storage::FileSystem::{
+        GetFinalPathNameByHandleW, FILE_NAME_NORMALIZED, GETFINALPATHNAMEBYHANDLE_FLAGS,
+        VOLUME_NAME_DOS,
+    };
+    let mut buf = vec![0u16; 1024];
+    // SAFETY: the buffer outlives the call; its length is passed with it.
+    let n = unsafe {
+        GetFinalPathNameByHandleW(
+            h.0,
+            &mut buf,
+            GETFINALPATHNAMEBYHANDLE_FLAGS(FILE_NAME_NORMALIZED.0 | VOLUME_NAME_DOS.0),
+        )
+    } as usize;
+    if n == 0 || n >= buf.len() {
+        return Err(None);
+    }
+    let raw = String::from_utf16_lossy(&buf[..n]);
+    krova_core::workspace::normalize_final_path(&raw).ok_or(Some(raw))
+}
+
+/// `GetDriveTypeW` of the drive of `path` (`C:\...`).
+fn drive_type(path: &str) -> u32 {
+    let Some(root) = path.get(..3) else {
+        return 0;
+    };
+    let w = wide(root);
+    // SAFETY: NUL-terminated buffer outliving the call.
+    unsafe { windows::Win32::Storage::FileSystem::GetDriveTypeW(PCWSTR(w.as_ptr())) }
+}
+
+/// A known folder (Downloads, Desktop, Roaming AppData) of the current user.
+fn known_folder(id: &windows::core::GUID) -> Option<String> {
+    use windows::Win32::System::Com::CoTaskMemFree;
+    use windows::Win32::UI::Shell::{SHGetKnownFolderPath, KF_FLAG_DEFAULT};
+    // SAFETY: `id` is a valid folder id; the returned buffer is freed below.
+    let p = unsafe { SHGetKnownFolderPath(id, KF_FLAG_DEFAULT, None) }.ok()?;
+    // SAFETY: a NUL-terminated string from the shell.
+    let s = unsafe { p.to_string() }.ok();
+    // SAFETY: allocated by SHGetKnownFolderPath with the COM allocator.
+    unsafe { CoTaskMemFree(Some(p.0 as *const c_void)) };
+    s.filter(|s| !s.trim().is_empty())
+}
+
+/// Every blocked folder as given and, when it can be opened, as its final path
+/// (a redirected or linked Desktop is caught either way).
+fn with_final_paths(dirs: Vec<String>) -> Vec<String> {
+    let mut out = Vec::with_capacity(dirs.len() * 2);
+    for d in dirs {
+        if let Some(Ok(f)) = open_locked(&d, true).map(|h| final_path(&h)) {
+            if !f.eq_ignore_ascii_case(&d) {
+                out.push(f);
+            }
+        }
+        out.push(d);
+    }
+    out
+}
+
+/// Open `exe`, resolve its final path, check that path again and that it is on a
+/// fixed drive. The handle is returned with the path and must be held until the
+/// program has been started.
+fn locked_launch_path(
+    exe: &str,
+    blocked: &[String],
+) -> Result<(FileHandle, String), LaunchFailure> {
+    let os = |m: &str| PlatformError::Os(m.to_owned());
+    let handle = open_locked(exe, false).ok_or_else(|| {
+        LaunchFailure::new(Some(exe.to_owned()), os("the program is no longer there"))
+    })?;
+    let path = final_path(&handle).map_err(|raw| {
+        LaunchFailure::new(
+            Some(raw.unwrap_or_else(|| exe.to_owned())),
+            os("the program's real location is not a local drive"),
+        )
+    })?;
+    if let Err(e) = krova_core::workspace::check_launch_path(&path, blocked) {
+        return Err(LaunchFailure::new(Some(path), os(&e.to_string())));
+    }
+    if drive_type(&path) != DRIVE_FIXED {
+        let e = krova_core::workspace::LaunchRefusal::NotFixedDrive;
+        return Err(LaunchFailure::new(Some(path), os(&e.to_string())));
+    }
+    Ok((handle, path))
+}
+
 impl Desk for WinDesk {
     fn capabilities(&self) -> DeskCapabilities {
         DeskCapabilities {
@@ -456,10 +589,30 @@ impl Desk for WinDesk {
         dirs
     }
 
-    fn launch(&self, exe: &str) -> Result<(), PlatformError> {
-        if !self.file_exists(exe) {
-            return Err(PlatformError::Os("the program is no longer there".into()));
+    fn blocked_dirs(&self) -> Vec<String> {
+        use windows::Win32::UI::Shell::{
+            FOLDERID_Desktop, FOLDERID_Downloads, FOLDERID_RoamingAppData,
+        };
+        let mut dirs = self.temp_dirs();
+        for id in [
+            FOLDERID_Downloads,
+            FOLDERID_Desktop,
+            FOLDERID_RoamingAppData,
+        ] {
+            dirs.extend(known_folder(&id));
         }
+        if let Ok(roaming) = std::env::var("APPDATA") {
+            dirs.push(roaming);
+        }
+        dirs.retain(|d| !d.trim().is_empty());
+        with_final_paths(dirs)
+    }
+
+    fn launch(&self, exe: &str, blocked_dirs: &[String]) -> Result<String, LaunchFailure> {
+        // Held until ShellExecuteExW returns (SEE_MASK_NOASYNC: the process exists
+        // by then), so the file launched is the file checked.
+        let (_handle, exe) = locked_launch_path(exe, blocked_dirs)?;
+        let exe = exe.as_str();
         let file = wide(exe);
         let dir = std::path::Path::new(exe)
             .parent()
@@ -477,7 +630,13 @@ impl Desk for WinDesk {
         info.nShow = SW_SHOWNOACTIVATE.0;
         // SAFETY: every pointer in `info` points at a buffer that outlives the call.
         unsafe { ShellExecuteExW(&mut info) }
-            .map_err(|e| PlatformError::Os(format!("could not start the program: {e}")))
+            .map(|()| exe.to_owned())
+            .map_err(|e| {
+                LaunchFailure::new(
+                    Some(exe.to_owned()),
+                    PlatformError::Os(format!("could not start the program: {e}")),
+                )
+            })
     }
 
     fn wait_for_windows(
@@ -533,6 +692,65 @@ mod tests {
     }
 
     #[test]
+    fn launch_paths_are_resolved_locked_and_rechecked() {
+        let d = WinDesk::new();
+        let blocked = d.blocked_dirs();
+        let lower: Vec<String> = blocked.iter().map(|b| b.to_lowercase()).collect();
+        if let Ok(roaming) = std::env::var("APPDATA") {
+            assert!(lower.contains(&roaming.to_lowercase()), "{blocked:?}");
+        }
+        assert!(
+            lower.iter().any(|b| b.ends_with("downloads")),
+            "{blocked:?}"
+        );
+        assert!(lower.iter().any(|b| b.ends_with("desktop")), "{blocked:?}");
+
+        // Our own test binary lives in target\ (a fixed drive, not blocked).
+        let me = std::env::current_exe().unwrap().display().to_string();
+        let (h, path) = locked_launch_path(&me, &blocked).expect("own exe is launchable");
+        assert!(!path.starts_with("\\\\"), "{path}");
+        let name = std::path::Path::new(&me)
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .to_lowercase();
+        assert!(path.to_lowercase().ends_with(&name), "{path}");
+        // While held, the file cannot be opened for writing.
+        let w = wide(&me);
+        use windows::Win32::Storage::FileSystem::{
+            CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_GENERIC_WRITE, FILE_SHARE_READ,
+            FILE_SHARE_WRITE, OPEN_EXISTING,
+        };
+        // SAFETY: NUL-terminated path outliving the call.
+        let writer = unsafe {
+            CreateFileW(
+                PCWSTR(w.as_ptr()),
+                FILE_GENERIC_WRITE.0,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                None,
+                OPEN_EXISTING,
+                FILE_ATTRIBUTE_NORMAL,
+                None,
+            )
+        };
+        assert!(writer.is_err(), "the locked exe must not be writable");
+        drop(h);
+
+        // Blocking the folder it really lives in refuses it, with the final path.
+        let dir = std::path::Path::new(&path)
+            .parent()
+            .unwrap()
+            .display()
+            .to_string();
+        let err = locked_launch_path(&me, &[dir]).err().expect("refused");
+        assert_eq!(err.path.as_deref(), Some(path.as_str()));
+        // A missing file is refused with the stored path.
+        let gone = "C:\\definitely\\not\\here.exe";
+        let err = d.launch(gone, &blocked).expect_err("refused");
+        assert_eq!(err.path.as_deref(), Some(gone));
+    }
+
+    #[test]
     fn temp_dirs_are_known() {
         let dirs = WinDesk::new().temp_dirs();
         assert!(!dirs.is_empty());
@@ -571,7 +789,7 @@ mod tests {
             std::env::var("SystemRoot").unwrap()
         );
         let known: Vec<WindowId> = d.arrangeable_windows(true).iter().map(|w| w.id).collect();
-        d.launch(&exe).expect("notepad starts");
+        d.launch(&exe, &d.blocked_dirs()).expect("notepad starts");
         // Windows 11's Notepad is a packaged app whose process path differs; accept
         // either the classic path or nothing on such systems.
         let got = d.wait_for_windows(&[exe], &known, Duration::from_secs(10));
