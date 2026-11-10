@@ -110,13 +110,36 @@ test.describe('quick panel', () => {
     expect(seen).toEqual(expected);
   });
 
-  test('quick toggles are pressable and say they are coming soon', async ({ page }) => {
+  test('focus, calm desk and share-safe drive the backend; show zones is coming soon', async ({ page }) => {
     await openPanel(page);
     const focus = page.getByTestId('panel-toggle-focus');
     await expect(focus).toHaveAttribute('aria-pressed', 'false');
     await focus.click();
     await expect(focus).toHaveAttribute('aria-pressed', 'true');
-    await expect(focus).toHaveAccessibleDescription(/Coming soon/);
+    await expect(focus).not.toHaveAccessibleDescription(/Coming soon/);
+    await focus.click();
+    await expect(focus).toHaveAttribute('aria-pressed', 'false');
+
+    const calm = page.getByTestId('panel-toggle-calm');
+    await calm.click();
+    await expect(calm).toHaveAttribute('aria-pressed', 'true');
+    await expect(calm).toHaveAccessibleDescription(/minimised; press again to bring them back/);
+    await calm.click();
+    await expect(calm).toHaveAttribute('aria-pressed', 'false');
+
+    const share = page.getByTestId('panel-toggle-share');
+    await share.click();
+    await expect(share).toHaveAttribute('aria-pressed', 'true');
+    // Focus dim goes through the backend after the pending share-safe save.
+    await focus.click();
+    await expect(focus).toHaveAttribute('aria-pressed', 'true');
+    await expect(share).toHaveAttribute('aria-pressed', 'true');
+
+    const zones = page.getByTestId('panel-toggle-zones');
+    await zones.click();
+    await expect(zones).toHaveAttribute('aria-pressed', 'true');
+    await expect(zones).toHaveAccessibleDescription(/Coming soon/);
+    await expect(page.getByTestId('panel-toggle-error')).toHaveCount(0);
   });
 
   test('actions hand off to the main window and close the panel', async ({ page }) => {
