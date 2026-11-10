@@ -237,7 +237,7 @@ const scenarios: Scenario[] = [
   {
     name: 'shortcuts, not active note',
     query: '?nopersist&shortcuts=off',
-    fixme: 'the new Shortcuts view has no "not active" note (shortcuts-inactive) yet',
+
     arrange: async (page) => {
       await gotoSection(page, 'shortcuts');
       await expect(page.getByTestId('shortcuts-inactive')).toBeVisible();

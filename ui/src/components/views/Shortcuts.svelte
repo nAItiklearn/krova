@@ -11,6 +11,7 @@
   import { ext } from '../../lib/ext.svelte';
   import { settings } from '../../lib/settings.svelte';
   import type { ShortcutModifier } from '../../lib/bindings';
+  import { shortcutKeys, usesWinKey } from '../../lib/platform';
 
   type GroupName = 'Windows' | 'Layouts' | 'Krova';
   interface Action {
@@ -188,12 +189,22 @@
     win_ctrl: 'Win+Ctrl',
   };
 
+  const savedOn = $derived(app.state?.config.settings.keyboard_shortcuts ?? false);
+  const active = $derived(app.state?.shortcuts?.active ?? false);
+  const canShort = $derived(capabilities?.shortcuts ?? false);
+  const modKeys = $derived(shortcutKeys(s.shortcut_modifier, canShort));
+  const winHint = $derived(canShort && s.keyboard_shortcuts && usesWinKey(s.shortcut_modifier));
+
   let sheet = $state(false);
   let sheetEl: HTMLElement | undefined = $state();
   $effect(() => {
     if (sheet) sheetEl?.focus();
   });
 </script>
+
+{#snippet combo(tail: string[], to?: string)}
+  {#each [...modKeys, ...tail] as key, i (i)}{#if i > 0}{' + '}{/if}<kbd>{key}</kbd>{/each}{#if to}{' to '}<kbd>{to}</kbd>{/if}
+{/snippet}
 
 {#snippet keycaps(chord: string | null, family?: string)}
   {#if chord}
@@ -303,21 +314,39 @@
         id="set-shortcut-mod"
         data-testid="setting-shortcut_modifier"
         value={s.shortcut_modifier}
+        aria-describedby={winHint ? 'set-shortcut-win-hint' : undefined}
         disabled={(capabilities ? !capabilities.shortcuts : false) || !s.keyboard_shortcuts}
         onchange={(e) => settings.update({ shortcut_modifier: e.currentTarget.value as ShortcutModifier })}
       >
         {#each Object.entries(MOD_LABEL) as [v, l] (v)}<option value={v}>{l}</option>{/each}
       </select>
     </Row>
-    {#if failed.length}
-      <div class="pad" role="status" aria-live="polite" data-testid="shortcuts-status">
+    {#if winHint}
+      <p class="pad desc" id="set-shortcut-win-hint" data-testid="shortcuts-win-hint">
+        Windows keeps many Windows-key shortcuts for itself, so some of these may not register. Ctrl + Alt + Shift is the
+        safest choice.
+      </p>
+    {/if}
+    <div class="pad live" role="status" aria-live="polite" data-testid="shortcuts-status">
+      {#if canShort && failed.length > 0}
         <div class="notice warn" data-testid="shortcuts-failed">
           <div>
-            Some keys are taken by another app:
-            <ul>{#each failed as f (f)}<li>{f}</li>{/each}</ul>
+            These shortcuts could not be registered:
+            <ul>{#each failed as f, i (i)}<li>{f}</li>{/each}</ul>
+            Another app is probably using them. Choose other keys, or close that app.
           </div>
         </div>
-      </div>
+      {:else if canShort && savedOn && !active}
+        <p class="notice" data-testid="shortcuts-inactive">Keyboard shortcuts are not active right now.</p>
+      {/if}
+    </div>
+    {#if canShort}
+      <dl class="pad keymap" data-testid="shortcuts-keymap">
+        <div class="km"><dt data-testid="keymap-left">{@render combo(['Left'])}</dt><dd>Move the focused window to the previous zone</dd></div>
+        <div class="km"><dt data-testid="keymap-right">{@render combo(['Right'])}</dt><dd>Move the focused window to the next zone</dd></div>
+        <div class="km"><dt data-testid="keymap-number">{@render combo(['1'], '9')}</dt><dd>Move the focused window to that zone number</dd></div>
+        <div class="km"><dt data-testid="keymap-up">{@render combo(['Up'])}</dt><dd>Send the focused window to the next monitor, keeping its zone number</dd></div>
+      </dl>
     {/if}
   </Group>
 </Page>
@@ -524,6 +553,28 @@
   }
   .pad {
     padding: 12px 16px;
+  }
+  .live:empty {
+    display: none;
+  }
+  .desc {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+  .keymap {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+  }
+  .km {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  .km dd {
+    margin: 0;
+    color: var(--text-muted);
   }
   select {
     min-width: 170px;

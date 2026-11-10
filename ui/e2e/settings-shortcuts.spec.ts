@@ -75,8 +75,7 @@ test.describe('Keyboard shortcuts group: defaults', () => {
     await expect(page.getByTestId('shortcuts-unavailable')).toHaveCount(0);
   });
 
-  test.fixme('shows the key map for the default modifier', async ({ page }) => {
-    // fixme: the new Shortcuts view has no key map (shortcuts-keymap, keymap-*) yet.
+  test('shows the key map for the default modifier', async ({ page }) => {
     await openShortcuts(page);
     await expectKeymap(page, 'Ctrl + Alt + Shift');
     await expect(page.getByTestId('keymap-left').locator('kbd')).toHaveText([
@@ -101,8 +100,7 @@ test.describe('Keyboard shortcuts group: defaults', () => {
 
   });
 
-  test.fixme('the key map is a real description list with key caps', async ({ page }) => {
-    // fixme: the new Shortcuts view has no key map (shortcuts-keymap) yet.
+  test('the key map is a real description list with key caps', async ({ page }) => {
     await openShortcuts(page);
     const keymap = page.getByTestId('shortcuts-keymap');
     await expect(keymap).toHaveJSProperty('tagName', 'DL');
@@ -143,7 +141,7 @@ test.describe('Keyboard shortcuts group: changing it', () => {
       await expectSaved(page);
     });
 
-    test.fixme(`choosing "${choice.label}" rewrites the key map and hints at Win-key trouble`, async ({ page }) => {
+    test(`choosing "${choice.label}" rewrites the key map and hints at Win-key trouble`, async ({ page }) => {
       // fixme: the new Shortcuts view has no key map (keymap-*) or Win-key hint (shortcuts-win-hint) yet.
       await openShortcuts(page);
       // Start from something else so a change really happens.
@@ -168,8 +166,7 @@ test.describe('Keyboard shortcuts group: changing it', () => {
     });
   }
 
-  test.fixme('the key map follows the choice at once, before the save is done', async ({ page }) => {
-    // fixme: the new Shortcuts view has no key map (keymap-*) yet.
+  test('the key map follows the choice at once, before the save is done', async ({ page }) => {
     await openShortcuts(page);
     await modifierSelect(page).selectOption('win_ctrl');
     await expectKeymap(page, 'Win + Ctrl');
@@ -226,8 +223,7 @@ test.describe('Keyboard shortcuts group: what the backend reports', () => {
     await expect(page.getByTestId('shortcuts-inactive')).toHaveCount(0);
   });
 
-  test.fixme('?shortcuts=off says the shortcuts are not active', async ({ page }) => {
-    // fixme: the new Shortcuts view has no "not active" note (shortcuts-inactive) yet.
+  test('?shortcuts=off says the shortcuts are not active', async ({ page }) => {
     await openShortcuts(page, '?nopersist&shortcuts=off');
     const note = page.getByTestId('shortcuts-inactive');
     await expect(note).toBeVisible();
@@ -237,8 +233,7 @@ test.describe('Keyboard shortcuts group: what the backend reports', () => {
     await expect(shortcutsSwitch(page)).toBeEnabled();
   });
 
-  test.fixme('the warning and the note follow the backend live', async ({ page }) => {
-    // fixme: the new Shortcuts view has no "not active" note (shortcuts-inactive) yet.
+  test('the warning and the note follow the backend live', async ({ page }) => {
     await openShortcuts(page);
     await expect(page.getByTestId('shortcuts-failed')).toHaveCount(0);
 
