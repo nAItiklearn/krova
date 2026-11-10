@@ -21,8 +21,8 @@ pub mod window;
 pub mod zone;
 
 pub use config::{
-    Config, ConfigError, LoadStatus, Modifier, MonitorProfile, MoveMode, ProfileError, Settings,
-    ShortcutModifier, Theme, Appearance,
+    Appearance, Config, ConfigError, LoadStatus, Modifier, MonitorProfile, MoveMode, ProfileError,
+    Settings, ShortcutModifier, Theme,
 };
 pub use edge::{edge_snap, EdgeSnap};
 pub use edit::{Axis, EditError};

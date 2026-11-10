@@ -15,7 +15,6 @@ const DEFAULT_COLOR: [u8; 3] = [0xff, 0x5b, 0x1f];
 const GAP: i32 = 4;
 const BORDER: i32 = 2;
 
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct OverlayStyle {
     pub color: [u8; 3],
@@ -445,9 +444,17 @@ mod tests {
         s.gapped = true;
         s.style = s.style.with_shape(10, 2, 1.0);
         let buf = render(&s);
-        assert_eq!(alpha(at(&buf, 100, 0, 0)), 0, "the very corner is outside the arc");
+        assert_eq!(
+            alpha(at(&buf, 100, 0, 0)),
+            0,
+            "the very corner is outside the arc"
+        );
         assert_eq!(alpha(at(&buf, 100, 99, 99)), 0);
-        assert_eq!(alpha(at(&buf, 100, 50, 0)), 255, "the straight edge is border");
+        assert_eq!(
+            alpha(at(&buf, 100, 50, 0)),
+            255,
+            "the straight edge is border"
+        );
         assert!(alpha(at(&buf, 100, 50, 50)) > 0, "the middle is filled");
         // Square corners with radius 0.
         s.style = s.style.with_shape(0, 2, 1.0);
@@ -460,6 +467,9 @@ mod tests {
         assert_eq!((st.radius, st.border), (15, 3));
         let st = st.with_shape(99, 99, f64::NAN);
         assert_eq!((st.radius, st.border), (16, 6));
-        assert_eq!(OverlayStyle::from_settings("x", 0.5).color, [0xff, 0x5b, 0x1f]);
+        assert_eq!(
+            OverlayStyle::from_settings("x", 0.5).color,
+            [0xff, 0x5b, 0x1f]
+        );
     }
 }

@@ -103,7 +103,6 @@ impl ShortcutModifier {
 /// Largest gap (in pixels) between zones and around the screen edge.
 pub const MAX_ZONE_GAP_PX: i32 = 32;
 
-
 /// Default accent colour of every native overlay (zones, stack tabs, the notch).
 pub const DEFAULT_ACCENT: &str = "#ff5b1f";
 /// Largest corner radius, in logical pixels.
@@ -136,7 +135,8 @@ impl Default for Appearance {
 
 impl Appearance {
     pub fn sanitized(mut self) -> Self {
-        self.accent = normalize_hex_color(&self.accent).unwrap_or_else(|| DEFAULT_ACCENT.to_owned());
+        self.accent =
+            normalize_hex_color(&self.accent).unwrap_or_else(|| DEFAULT_ACCENT.to_owned());
         self.corner_radius_px = self.corner_radius_px.clamp(0, MAX_CORNER_RADIUS_PX);
         self.border_width_px = self
             .border_width_px
