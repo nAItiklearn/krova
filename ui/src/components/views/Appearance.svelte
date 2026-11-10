@@ -5,6 +5,7 @@
   import Group from '../ui/Group.svelte';
   import Row from '../ui/Row.svelte';
   import Segmented from '../ui/Segmented.svelte';
+  import SaveIndicator from '../SaveIndicator.svelte';
   import { app } from '../../lib/app.svelte';
   import { ext, type HighlightMode } from '../../lib/ext.svelte';
   import { settings } from '../../lib/settings.svelte';
@@ -70,6 +71,7 @@
 </script>
 
 <Page title="Appearance" sub="Make Krova look like yours. The desk below follows every change." testid="view-appearance">
+  {#snippet actions()}<SaveIndicator />{/snippet}
   <div class="desk" aria-hidden="true" style="--g: {gap}px">
     <div class="w w1" style={winStyle(0)}>
       <div class="bar"><i></i><span>Browser</span></div>

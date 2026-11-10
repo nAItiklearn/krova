@@ -6,6 +6,7 @@
   import Group from '../ui/Group.svelte';
   import Row from '../ui/Row.svelte';
   import Toggle from '../ui/Toggle.svelte';
+  import SaveIndicator from '../SaveIndicator.svelte';
   import { app } from '../../lib/app.svelte';
   import { ext } from '../../lib/ext.svelte';
   import { settings } from '../../lib/settings.svelte';
@@ -207,6 +208,7 @@
 
 <Page title="Shortcuts" sub="Click a shortcut and press new keys. Backspace turns it off." testid="view-shortcuts" wide>
   {#snippet actions()}
+    <SaveIndicator />
     <button type="button" class="btn" data-testid="open-cheat-sheet" onclick={() => (sheet = true)}>Cheat sheet</button>
     <button type="button" class="btn" onclick={() => ext.set('shortcuts', {})} disabled={Object.keys(map).length === 0}>
       Reset all
