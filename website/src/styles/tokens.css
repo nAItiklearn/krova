@@ -64,10 +64,10 @@
   --measure: 64ch;
 
   /* ---- Shape ---- */
-  --radius-s: 8px;
-  --radius-m: 14px;
-  --radius-l: 22px;
-  --radius-xl: 28px;
+  --radius-s: 6px;
+  --radius-m: 10px;
+  --radius-l: 14px;
+  --radius-xl: 14px; /* kept equal to --radius-l: three radii for the whole site */
   --radius-pill: 999px;
 
   /* ---- Motion ---- */
@@ -101,8 +101,14 @@
   --color-warn-bg: #fef9e7;
   --color-warn-border: #e6cf85;
 
-  --shadow-1: 0 1px 2px rgba(15, 16, 32, 0.04), 0 8px 24px rgba(15, 16, 32, 0.05);
-  --shadow-2: 0 1px 2px rgba(15, 16, 32, 0.05), 0 24px 64px rgba(30, 30, 90, 0.12);
+  --shadow-1: 0 1px 2px rgba(15, 16, 32, 0.04);
+  --shadow-2: 0 1px 2px rgba(15, 16, 32, 0.06), 0 12px 32px rgba(15, 16, 32, 0.08), 0 32px 80px rgba(30, 30, 90, 0.1);
+
+  /* ---- Window frame around product screenshots (neutral, Windows-style) ---- */
+  --win-bar: #f6f6f9;
+  --win-bar-fg: #55576d;
+  --win-edge: #d2d3e0;
+  --stage-bg: #f0f0f6;
 
   /* ---- Charts ---- */
   --chart-a: #4f46e5;
@@ -166,8 +172,12 @@
     --color-warn-bg: #1f1b0c;
     --color-warn-border: #6b5a1a;
 
-    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.28);
-    --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.45), 0 24px 64px rgba(0, 0, 0, 0.5);
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 12px 32px rgba(0, 0, 0, 0.5), 0 32px 80px rgba(0, 0, 0, 0.6);
+    --win-bar: #1a1b27;
+    --win-bar-fg: #a2a5bd;
+    --win-edge: #2c2e44;
+    --stage-bg: #07080d;
 
     --chart-a: #818cf8;
     --chart-b: #7d819f;
@@ -229,8 +239,12 @@
   --color-warn-bg: #1f1b0c;
   --color-warn-border: #6b5a1a;
 
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.28);
-  --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.45), 0 24px 64px rgba(0, 0, 0, 0.5);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.5), 0 12px 32px rgba(0, 0, 0, 0.5), 0 32px 80px rgba(0, 0, 0, 0.6);
+  --win-bar: #1a1b27;
+  --win-bar-fg: #a2a5bd;
+  --win-edge: #2c2e44;
+  --stage-bg: #07080d;
 
   --chart-a: #818cf8;
   --chart-b: #7d819f;

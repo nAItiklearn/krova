@@ -1,0 +1,289 @@
+---
+/**
+ * A flat diagram of one monitor built from Krova's own zone shapes (the stock layouts of
+ * ui/src/lib/mock/templates.ts and crates/krova-core/src/zone.rs). It is a diagram, not a screenshot, and
+ * is always labelled as one where it appears. Pure HTML and CSS, no script.
+ *
+ * state
+ *   zones     the zones drawn, numbered
+ *   drag      a window is dragged over the target zone while a key is held; zones are shown
+ *   snap      windows fill the listed zones
+ *   dividers  two snapped windows share an edge that is being dragged
+ *   gap       windows snapped with space between the zones
+ */
+type LayoutName = 'priority' | 'halves' | 'thirds' | 'grid';
+type State = 'zones' | 'drag' | 'snap' | 'dividers' | 'gap';
+
+interface Props {
+  layout?: LayoutName;
+  state?: State;
+  /** Zone (0-based) that is lit, or receives the window. */
+  target?: number;
+  /** Zones (0-based) that hold a window, for state "snap". Defaults to the target. */
+  fill?: number[];
+  /** Label of the held key in state "drag". */
+  keyLabel?: string;
+  label: string;
+}
+
+type Rect = [x: number, y: number, w: number, h: number];
+
+const layouts: Record<LayoutName, Rect[]> = {
+  priority: [
+    [0, 0, 0.25, 1],
+    [0.25, 0, 0.5, 1],
+    [0.75, 0, 0.25, 1],
+  ],
+  halves: [
+    [0, 0, 0.5, 1],
+    [0.5, 0, 0.5, 1],
+  ],
+  thirds: [
+    [0, 0, 1 / 3, 1],
+    [1 / 3, 0, 1 / 3, 1],
+    [2 / 3, 0, 1 / 3, 1],
+  ],
+  grid: [
+    [0, 0, 0.5, 0.5],
+    [0.5, 0, 0.5, 0.5],
+    [0, 0.5, 0.5, 0.5],
+    [0.5, 0.5, 0.5, 0.5],
+  ],
+};
+
+const { layout = 'priority', state = 'zones', target = 1, keyLabel = 'Shift', label } = Astro.props;
+const fill = Astro.props.fill ?? [target];
+const zones = layouts[layout];
+const t = zones[Math.min(target, zones.length - 1)];
+const pct = (n: number) => `${(n * 100).toFixed(3)}%`;
+const style = (r: Rect) => `--x:${pct(r[0])};--y:${pct(r[1])};--w:${pct(r[2])};--h:${pct(r[3])}`;
+const tstyle = `--tx:${t[0]};--tw:${t[2]};--ty:${t[1]};--th:${t[3]}`;
+---
+
+<div class={`scene scene--${state}`} role="img" aria-label={label} style={tstyle}>
+  <div class="screen" aria-hidden="true">
+    {
+      state === 'dividers' ? (
+        <Fragment>
+          <i class="w" style={style([0, 0, 0.62, 1])}><b /><b /><b /></i>
+          <i class="w" style={style([0.62, 0, 0.38, 1])}><b /><b /><b /></i>
+          <i class="old" />
+          <i class="grip" />
+        </Fragment>
+      ) : state === 'gap' ? (
+        zones.map((z) => (
+          <i class="w" style={style(z)}>
+            <b />
+            <b />
+            <b />
+          </i>
+        ))
+      ) : (
+        <Fragment>
+          {zones.map((z, i) => {
+            const held = state === 'snap' && fill.includes(i);
+            const lit = i === target && (state === 'drag' || state === 'zones');
+            return held ? (
+              <i class="w" style={style(z)}>
+                <b />
+                <b />
+                <b />
+              </i>
+            ) : (
+              <i class:list={['z', { lit }, { faint: state === 'snap' }]} style={style(z)}>
+                {state === 'zones' && <span>{i + 1}</span>}
+              </i>
+            );
+          })}
+          {state === 'drag' && (
+            <Fragment>
+              <i class="float">
+                <b />
+                <b />
+                <b />
+              </i>
+              <svg class="cursor" viewBox="0 0 16 20" width="14" height="18" focusable="false">
+                <path d="M1.5 1.5v14.2l3.6-3.4 2.5 5.7 2.4-1-2.5-5.6h5z" />
+              </svg>
+            </Fragment>
+          )}
+        </Fragment>
+      )
+    }
+    {state === 'drag' && <kbd>{keyLabel}</kbd>}
+    {state === 'gap' && <span class="measure">12 px</span>}
+  </div>
+</div>
+
+<style>
+  .scene {
+    width: 100%;
+  }
+
+  .screen {
+    --inset: 3px;
+    position: relative;
+    aspect-ratio: 16 / 10;
+    overflow: hidden;
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-m);
+    background: var(--color-surface);
+  }
+  .scene--gap .screen {
+    --inset: 7px;
+  }
+
+  /* Every box sits on the same grid: x, y, w, h are fractions of the screen. */
+  .z,
+  .w {
+    position: absolute;
+    left: calc(var(--x) + var(--inset));
+    top: calc(var(--y) + var(--inset));
+    width: calc(var(--w) - 2 * var(--inset));
+    height: calc(var(--h) - 2 * var(--inset));
+    border-radius: var(--radius-s);
+  }
+
+  .z {
+    display: grid;
+    place-items: center;
+    border: 1px dashed var(--color-border-strong);
+    background: var(--accent-tint);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    font-style: normal;
+    color: var(--color-text-soft);
+  }
+  .z.faint {
+    background: transparent;
+    border-color: var(--color-border);
+  }
+  .z.lit {
+    border: 1.5px solid var(--color-accent);
+    background: var(--accent-tint-strong);
+    color: var(--color-accent-text);
+  }
+
+  .w {
+    display: flex;
+    flex-direction: column;
+    gap: 0.28rem;
+    padding: 0.55rem 0.5rem 0.4rem;
+    border: 1px solid var(--color-border-strong);
+    background: var(--color-surface-2);
+    font-style: normal;
+  }
+  .w::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    height: 0.5rem;
+    border-radius: var(--radius-s) var(--radius-s) 0 0;
+    background: var(--color-surface-3);
+  }
+  .w b,
+  .float b {
+    display: block;
+    height: 0.2rem;
+    border-radius: 2px;
+    background: var(--color-border-strong);
+    opacity: 0.55;
+  }
+  .w b:nth-child(2),
+  .float b:nth-child(2) {
+    width: 72%;
+  }
+  .w b:nth-child(3),
+  .float b:nth-child(3) {
+    width: 48%;
+  }
+
+  /* The dragged window: smaller than the zone, offset, and above everything. */
+  .float {
+    position: absolute;
+    left: calc((var(--tx) + var(--tw) / 2) * 100% - 18% + 7%);
+    top: calc((var(--ty) + var(--th) / 2) * 100% - 24% + 6%);
+    width: 36%;
+    height: 48%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.28rem;
+    padding: 0.8rem 0.5rem 0.4rem;
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-s);
+    background: var(--color-surface);
+    box-shadow: 0 6px 18px rgba(15, 16, 32, 0.18);
+    font-style: normal;
+  }
+  .float::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    height: 0.6rem;
+    border-radius: var(--radius-s) var(--radius-s) 0 0;
+    background: var(--color-surface-3);
+  }
+  .cursor {
+    position: absolute;
+    left: calc((var(--tx) + var(--tw) / 2) * 100% - 18% + 7% + 1.4rem);
+    top: calc((var(--ty) + var(--th) / 2) * 100% - 24% + 6% - 0.05rem);
+    fill: var(--color-text);
+    stroke: var(--color-surface);
+    stroke-width: 1.2;
+    stroke-linejoin: round;
+  }
+
+  .screen kbd {
+    position: absolute;
+    left: 50%;
+    bottom: 0.55rem;
+    transform: translateX(-50%);
+    min-width: 0;
+    padding: 0.1rem 0.6rem;
+    border-color: var(--color-accent);
+    border-bottom-width: 3px;
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    font-weight: 650;
+  }
+
+  /* Dividers: the shared edge, where it was, and the grip that moves it. */
+  .old {
+    position: absolute;
+    top: 8%;
+    bottom: 8%;
+    left: 50%;
+    border-left: 1.5px dashed var(--color-text-soft);
+  }
+  .grip {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0.4rem;
+    height: 2rem;
+    border: 1px solid var(--color-accent);
+    border-radius: var(--radius-pill);
+    background: var(--color-surface);
+    transform: translate(-50%, -50%);
+  }
+  .scene--dividers .grip {
+    left: 62%;
+  }
+
+  .measure {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    padding: 0.05rem 0.45rem;
+    border: 1px solid var(--color-accent);
+    border-radius: var(--radius-pill);
+    background: var(--color-surface);
+    color: var(--color-accent-text);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    transform: translate(-50%, -50%);
+  }
+</style>

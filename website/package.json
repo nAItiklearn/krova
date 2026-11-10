@@ -15,6 +15,7 @@
     "build": "astro build",
     "preview": "astro preview",
     "check:links": "node scripts/check-links.mjs",
+    "screenshots": "node scripts/capture-screenshots.mjs",
     "astro": "astro"
   },
   "dependencies": {

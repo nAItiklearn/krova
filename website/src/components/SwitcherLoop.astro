@@ -1,0 +1,247 @@
+---
+import { url } from '../lib/url';
+
+/**
+ * A small looping copy of the layout switcher PROTOTYPE (docs/prototypes/layout-switcher/index.html): a deck of
+ * layout cards, the focused one in front and the next ones stacked behind it, flipped with a damped spring.
+ * The layout switcher is not in the app yet, so the picture is labelled "Prototype".
+ *
+ * Without JavaScript, or with prefers-reduced-motion, it is a still picture of the same stack (public/switcher-loop.js
+ * only moves the cards). The colours are the prototype's own and stay dark in both site themes, as the switcher
+ * is an overlay on a dimmed screen.
+ */
+type Rect = [number, number, number, number];
+const layouts: { name: string; zones: Rect[] }[] = [
+  { name: 'Coding', zones: [[0, 0, 0.5, 1], [0.5, 0, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5]] },
+  { name: 'Writing', zones: [[0, 0, 0.62, 1], [0.62, 0, 0.38, 1]] },
+  { name: 'Review', zones: [[0, 0, 0.5, 0.5], [0.5, 0, 0.5, 0.5], [0, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5]] },
+  { name: 'Focus', zones: [[0, 0, 0.22, 1], [0.22, 0, 0.56, 1], [0.78, 0, 0.22, 1]] },
+];
+const pct = (n: number) => `${(n * 100).toFixed(2)}%`;
+---
+
+<figure class="switcher" data-switcher>
+  <div
+    class="stage"
+    data-switcher-stage
+    role="img"
+    aria-label="Prototype of the layout switcher: a stack of layout cards (Coding, Writing, Review, Focus) that flips through the layouts of a monitor."
+  >
+    <p class="head" aria-hidden="true">Layouts<small>Display 1 &middot; 2560 &times; 1440</small></p>
+    <div class="deck" aria-hidden="true">
+      {
+        layouts.map((l, i) => (
+          <div class="card" data-card style={`--i:${i}`}>
+            <p class="meta">
+              <span class="name">{l.name}</span>
+              {i === 0 && <span class="badge">Active</span>}
+              <span class="sub">{l.zones.length} zones</span>
+            </p>
+            <div class="thumb">
+              {l.zones.map((z, j) => (
+                <span
+                  class="zone"
+                  style={`left:calc(${pct(z[0])} + 2px);top:calc(${pct(z[1])} + 2px);width:calc(${pct(z[2])} - 4px);height:calc(${pct(z[3])} - 4px)`}
+                >
+                  {j + 1}
+                </span>
+              ))}
+            </div>
+            <span class="shade" data-shade></span>
+          </div>
+        ))
+      }
+    </div>
+    <p class="hints" aria-hidden="true">&uarr; &darr; flip through &middot; Enter apply &middot; Esc close</p>
+  </div>
+  <figcaption>
+    <span class="proto">Prototype</span>
+    <span>Not in the app yet. The real switcher is being built.</span>
+    <button type="button" class="pause" data-switcher-toggle aria-pressed="false" hidden>
+      <svg class="i-pause" viewBox="0 0 12 12" aria-hidden="true"><rect x="2" y="1" width="3" height="10" rx="1"></rect><rect x="7" y="1" width="3" height="10" rx="1"></rect></svg>
+      <svg class="i-play" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.5v9l7.5-4.5z"></path></svg>
+      <span data-label>Pause animation</span>
+    </button>
+  </figcaption>
+</figure>
+<script is:inline defer src={url('/switcher-loop.js')}></script>
+
+<style>
+  .switcher {
+    width: 100%;
+    max-width: 26rem;
+  }
+
+  .stage {
+    position: relative;
+    container-type: inline-size;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-l);
+    background: #0b0d11;
+    color: #eef0f4;
+    font-size: clamp(10px, 3.1cqw, 13px);
+    line-height: 1.4;
+  }
+
+  .head {
+    position: absolute;
+    inset: 4.5cqw 0 auto;
+    z-index: 2000;
+    text-align: center;
+    font-weight: 600;
+  }
+  .head small {
+    display: block;
+    margin-top: 1px;
+    font-size: 0.85em;
+    font-weight: 400;
+    color: #9aa3b5;
+  }
+
+  .deck {
+    position: absolute;
+    inset: 0;
+  }
+
+  /* The still picture: the front card at the bottom, the others stacked behind it, title strip showing.
+     step = 50 prototype px at a 380 px card, scaled to this card's width: 62cqw / 380 * 50 = 8.16cqw. */
+  .card {
+    position: absolute;
+    left: 19cqw;
+    bottom: 11cqw;
+    width: 62cqw;
+    padding: 3cqw;
+    border: 1px solid rgb(255 255 255 / 0.08);
+    border-radius: 4cqw;
+    background: #171a21;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 4cqw 8cqw -3cqw rgb(0 0 0 / 0.6);
+    transform-origin: 50% 0;
+    transform: translateY(calc(var(--i) * -8.16cqw)) scale(calc(1 - var(--i) * 0.045));
+    z-index: calc(100 + (4 - var(--i)) * 10);
+  }
+  .card:first-child {
+    border-color: rgb(125 164 255 / 0.7);
+  }
+  /* Once the script runs it positions the cards from the top itself. */
+  [data-ready] .card {
+    top: 0;
+    bottom: auto;
+  }
+
+  .meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    height: 1.6em;
+    margin: 0 0 0.6em;
+    padding: 0 0.15em;
+  }
+  .name {
+    font-weight: 600;
+  }
+  .badge {
+    padding: 0 0.55em;
+    border-radius: 999px;
+    background: #7da4ff;
+    color: #0a1226;
+    font-size: 0.85em;
+    font-weight: 600;
+  }
+  .sub {
+    margin-left: auto;
+    font-size: 0.9em;
+    color: #9aa3b5;
+  }
+
+  .thumb {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border: 1px solid rgb(255 255 255 / 0.05);
+    border-radius: 0.7em;
+    background: #0f1218;
+  }
+  .zone {
+    position: absolute;
+    padding: 0.3em 0.5em;
+    border: 1px solid rgb(125 164 255 / 0.55);
+    border-radius: 0.4em;
+    background: rgb(125 164 255 / 0.16);
+    font-size: 0.85em;
+    color: #7da4ff;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .shade {
+    position: absolute;
+    inset: 0;
+    border-radius: 4cqw;
+    background: #05070a;
+    opacity: calc(min(0.5, var(--i) * 0.14));
+    pointer-events: none;
+  }
+
+  .hints {
+    position: absolute;
+    inset: auto 0 3.2cqw;
+    z-index: 2000;
+    text-align: center;
+    font-size: 0.85em;
+    color: #9aa3b5;
+  }
+
+  figcaption {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.6rem;
+    margin-top: var(--space-xs);
+    font-size: var(--text-xs);
+    color: var(--color-text-soft);
+  }
+  .proto {
+    padding: 0.05rem 0.5rem;
+    border: 1px solid var(--color-warn-border);
+    border-radius: var(--radius-pill);
+    background: var(--color-warn-bg);
+    color: var(--color-text);
+    font-weight: 600;
+  }
+
+  .pause {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 2rem;
+    margin-left: auto;
+    padding: 0 0.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pill);
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .pause[hidden] {
+    display: none;
+  }
+  .pause:hover {
+    color: var(--color-text);
+    border-color: var(--color-border-strong);
+  }
+  .pause svg {
+    width: 0.75rem;
+    height: 0.75rem;
+    fill: currentColor;
+  }
+  .pause .i-play,
+  .pause[aria-pressed='true'] .i-pause {
+    display: none;
+  }
+  .pause[aria-pressed='true'] .i-play {
+    display: block;
+  }
+</style>

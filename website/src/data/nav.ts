@@ -3,9 +3,13 @@
  * url() (src/lib/url.ts) by the components, so they respect BASE_PATH.
  */
 
+import { ISSUES_URL, REPO_LINKS_ENABLED, REPO_URL } from '../site';
+
 export interface NavLink {
   label: string;
   href: string;
+  /** A full URL to another site (opens in a new tab). Everything else is a path that goes through url(). */
+  external?: boolean;
 }
 
 export interface Guide {
@@ -67,6 +71,7 @@ export const navBeforeGuides: readonly NavLink[] = [
 
 /** Header links after the Guides dropdown. */
 export const navAfterGuides: readonly NavLink[] = [
+  { label: 'Roadmap', href: '/roadmap/' },
   { label: 'Changelog', href: '/changelog/' },
   { label: 'FAQ', href: '/#faq' },
 ];
@@ -84,7 +89,7 @@ export const footerColumns: readonly FooterColumn[] = [
       { label: 'Features', href: '/#features' },
       { label: 'Compare', href: '/#compare' },
       { label: 'Performance', href: '/performance/' },
-      { label: 'Changelog', href: '/changelog/' },
+      { label: 'Try the editor', href: '/#try' },
       { label: 'Download', href: '/download/' },
     ],
   },
@@ -96,15 +101,24 @@ export const footerColumns: readonly FooterColumn[] = [
     ],
   },
   {
+    title: 'Project',
+    links: [
+      { label: 'Roadmap', href: '/roadmap/' },
+      { label: 'Changelog', href: '/changelog/' },
+      // Repository links only exist while REPO_LINKS_ENABLED (src/site.ts).
+      ...(REPO_LINKS_ENABLED
+        ? [
+            { label: 'Source code', href: REPO_URL, external: true },
+            { label: 'Issues', href: ISSUES_URL, external: true },
+          ]
+        : []),
+    ],
+  },
+  {
     title: 'Support',
     links: [
       { label: 'Troubleshooting', href: '/support/' },
       { label: 'Report a problem', href: '/support/#report' },
-    ],
-  },
-  {
-    title: 'Legal',
-    links: [
       { label: 'Privacy', href: '/privacy/' },
       { label: 'License and terms', href: '/license/' },
     ],

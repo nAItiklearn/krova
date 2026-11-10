@@ -1,0 +1,122 @@
+---
+import Shot from './Shot.astro';
+import WindowFrame from './WindowFrame.astro';
+import Icon from './Icon.astro';
+
+const items = [
+  ['Activation key', 'Shift, Ctrl, Alt or the Windows key.'],
+  ['Move behavior', 'Glide in about 120 ms, or jump at once.'],
+  ['Edge snapping', 'Halves, quarters and maximize from the screen edges. Off by default.'],
+  ['Highlight', 'Pick the colour and the opacity of the lit zone.'],
+  ['Theme', 'Light, dark or follow your system.'],
+  ['Keyboard shortcuts', 'On or off, and which modifier keys. Windows only for now.'],
+  ['Space between zones', 'From 0 to 32 px.'],
+  ['Launch at login', 'Off by default; Krova waits in the tray.'],
+] as const;
+---
+
+<section id="customize" class="section" aria-labelledby="customize-title">
+  <div class="container">
+    <div class="layout">
+      <div class="text">
+        <p class="eyebrow">Settings</p>
+        <h2 id="customize-title">A short list of settings. <span class="soft">Saved as you go.</span></h2>
+        <dl>
+          {
+            items.map(([name, text]) => (
+              <div>
+                <dt>{name}</dt>
+                <dd>{text}</dd>
+              </div>
+            ))
+          }
+        </dl>
+        <p class="more"><a href="#try">Open the live demo <Icon name="arrow" /></a> and try the Settings tab.</p>
+      </div>
+
+      <figure class="shot">
+        <WindowFrame>
+          <Shot
+            name="settings"
+            alt="Krova's Settings window: General (Enable Krova, Launch at login), Snapping (activation modifier Shift, move behavior Animate, edge snapping off, edge size) and the start of Appearance."
+          />
+        </WindowFrame>
+        <figcaption>Settings, shown with default values.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<style>
+  .layout {
+    display: grid;
+    gap: var(--space-xl);
+    align-items: center;
+  }
+
+  .text h2 {
+    font-size: clamp(1.9rem, 1.2rem + 2.6vw, 3rem);
+    letter-spacing: -0.035em;
+  }
+
+  dl {
+    margin-top: var(--space-l);
+    border-top: 1px solid var(--color-border);
+  }
+  dl > div {
+    display: grid;
+    gap: 0.1rem 1rem;
+    padding: 0.7rem 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+  dt {
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+  dd {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+
+  .more {
+    margin-top: var(--space-m);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+  .more a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-weight: 600;
+  }
+  .more :global(.icon) {
+    width: 0.9rem;
+    height: 0.9rem;
+  }
+
+  .shot {
+    min-width: 0;
+  }
+  figcaption {
+    margin-top: var(--space-xs);
+    text-align: center;
+    font-size: var(--text-xs);
+    color: var(--color-text-soft);
+  }
+
+  @media (min-width: 40rem) {
+    dl > div {
+      grid-template-columns: 11rem 1fr;
+    }
+  }
+  @media (min-width: 64rem) {
+    .layout {
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+      gap: var(--space-2xl);
+    }
+    dl > div {
+      grid-template-columns: 9.5rem 1fr;
+    }
+  }
+</style>

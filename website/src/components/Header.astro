@@ -168,7 +168,7 @@ const inGuides = path.startsWith(url('/guides/'));
     align-items: center;
     gap: 0.25rem;
     min-height: 2.5rem;
-    padding: 0 0.7rem;
+    padding: 0 0.6rem;
     border-radius: var(--radius-pill);
     color: var(--color-text-muted);
     font-size: var(--text-sm);
@@ -409,7 +409,28 @@ const inGuides = path.startsWith(url('/guides/'));
     }
   }
 
-  @media (min-width: 60rem) {
+  /* Between the desktop breakpoint and a roomy screen: tighten, so the whole bar fits at 1024 px. */
+  @media (min-width: 64rem) and (max-width: 75rem) {
+    .nav-desktop a,
+    .dd > summary {
+      padding: 0 0.45rem;
+    }
+    .star-label {
+      display: none;
+    }
+    .star {
+      padding: 0 0.7rem;
+    }
+    .star-count {
+      padding-left: 0;
+      border-left: 0;
+    }
+    .bar {
+      gap: var(--space-s);
+    }
+  }
+
+  @media (min-width: 64rem) {
     .site-header {
       position: sticky;
       top: 0;

@@ -1,10 +1,13 @@
 ---
-import Desk from './illustrations/Desk.astro';
 import Icon from './Icon.astro';
+import Shot from './Shot.astro';
+import WindowFrame from './WindowFrame.astro';
 import { url } from '../lib/url';
-import { RELEASE_PUBLISHED, VERSION_LABEL } from '../site';
+import { MAC_RELEASED, RELEASE_PUBLISHED, VERSION_LABEL } from '../site';
 
-const status = RELEASE_PUBLISHED ? `${VERSION_LABEL}, early software` : `${VERSION_LABEL}, not released yet`;
+const status = RELEASE_PUBLISHED ? `${VERSION_LABEL}, early preview` : `${VERSION_LABEL}, not released yet`;
+const platforms = MAC_RELEASED ? 'Windows 10/11 and macOS 13+' : 'Windows 10/11';
+const buttonLabel = MAC_RELEASED ? 'Download' : 'Download for Windows';
 ---
 
 <section class="hero" aria-labelledby="hero-title">
@@ -18,59 +21,47 @@ const status = RELEASE_PUBLISHED ? `${VERSION_LABEL}, early software` : `${VERSI
       </p>
 
       <h1 id="hero-title">
-        Draw your
-        <span class="chip zones-chip" aria-hidden="true">
-          <svg viewBox="0 0 40 24" width="40" height="24" focusable="false">
-            <rect x="1" y="1" width="9" height="22" rx="2.5"></rect>
-            <rect x="12" y="1" width="16" height="22" rx="2.5" class="on"></rect>
-            <rect x="30" y="1" width="9" height="22" rx="2.5"></rect>
-          </svg>
-        </span>
-        zones.
-        <span class="soft line">Hold <span class="nw"><kbd class="chip">Shift</kbd>,</span> drop a window in.</span>
+        Draw your zones.
+        <span class="soft line">Hold Shift, drop a window in.</span>
       </h1>
 
       <p class="lead">
-        Krova is a free window zone manager for Windows 10/11 and macOS 13+. Drag a window, hold a key, release over a
-        zone, and it snaps to fit. On Windows it also moves windows between zones from the keyboard and puts them back
-        when a monitor returns. No account, no telemetry, no network calls by design.
+        A free, offline window zone manager for {MAC_RELEASED ? 'Windows and macOS' : 'Windows'}. No account, no telemetry, no
+        network calls.
       </p>
 
       <div class="actions">
         <a class="btn btn-primary" href={url('/download/')}>
           <Icon name="download" />
-          Download
+          {buttonLabel}
         </a>
-        <a class="btn btn-secondary" href="#try">
-          Try the editor
+        <a class="btn btn-secondary" href={url('/demo/')}>
+          Try it in the browser
           <Icon name="arrow" />
         </a>
       </div>
-      <p class="fine">Free &middot; MIT license &middot; Windows 10/11 &middot; macOS 13+ (untested on a real Mac)</p>
+      <p class="fine">
+        Free &middot; MIT license &middot; {platforms}{!MAC_RELEASED && <Fragment> &middot; macOS once it has been tested on a real Mac</Fragment>}
+      </p>
     </div>
 
     <figure class="stage">
-      <input type="checkbox" id="hero-pause" class="ill-pause-input visually-hidden" />
-      <Desk
-        state="hero"
-        stand
-        label="Illustration of a desktop with a layout of three vertical zones. A window is dragged while Shift is held, the zone under it lights up, and on release the window fills that zone."
-      />
-      <figcaption class="ill-caption">
-        <span>Illustration, not a screenshot. Shift is held while the window is dragged; releasing over a zone snaps it.</span>
-        <label class="ill-pause" for="hero-pause">
-          <svg class="i-pause" viewBox="0 0 12 12" aria-hidden="true"><rect x="2" y="1" width="3" height="10" rx="1"></rect><rect x="7" y="1" width="3" height="10" rx="1"></rect></svg>
-          <svg class="i-play" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.5v9l7.5-4.5z"></path></svg>
-          <span class="t-pause">Pause animation</span><span class="t-play">Play animation</span>
-        </label>
-      </figcaption>
+      <div>
+        <WindowFrame closed={false}>
+          <Shot
+            name="editor"
+            alt="Krova's layout editor on a sample monitor. The Priority layout has three zones; the wide middle one is selected. On the right: the layout name, the list of layouts on this monitor, templates, and export and import."
+          />
+        </WindowFrame>
+      </div>
+      <figcaption class="visually-hidden">Screenshot of Krova's editor, shown with two sample monitors.</figcaption>
     </figure>
   </div>
 </section>
 
 <style>
   .hero {
-    padding-block: clamp(2.5rem, 1rem + 5vw, 5rem) clamp(3rem, 1.5rem + 5vw, 6rem);
+    padding-block: clamp(2.5rem, 1rem + 5vw, 5rem) clamp(2.5rem, 1rem + 4vw, 4.5rem);
   }
 
   .copy {
@@ -92,7 +83,7 @@ const status = RELEASE_PUBLISHED ? `${VERSION_LABEL}, early software` : `${VERSI
     gap: 0.25rem;
     margin-left: 0.35rem;
     padding-left: 0.7rem;
-    border-left: 1px solid var(--color-border);
+    border-left: 1px solid var(--color-warn-border);
     color: var(--color-link);
   }
   .status .more :global(.icon) {
@@ -101,54 +92,17 @@ const status = RELEASE_PUBLISHED ? `${VERSION_LABEL}, early software` : `${VERSI
   }
 
   h1 {
-    max-width: 22ch;
-    font-size: clamp(2.35rem, 0.9rem + 5.2vw, 4.4rem);
+    font-size: clamp(2.35rem, 0.9rem + 5.2vw, 4.25rem);
     letter-spacing: -0.045em;
-    line-height: 1.04;
+    line-height: 1.02;
   }
   h1 .line {
     display: block;
   }
-  h1 .nw {
-    white-space: nowrap;
-  }
-
-  /* Inline UI chips inside the headline. */
-  h1 .chip {
-    margin-inline: 0.04em;
-    transform: translateY(-0.04em);
-  }
-  .zones-chip {
-    padding: 0.12em 0.2em;
-  }
-  .zones-chip svg {
-    width: 0.95em;
-    height: auto;
-  }
-  .zones-chip rect {
-    fill: var(--accent-tint);
-    stroke: var(--color-border-strong);
-    stroke-width: 1.4;
-  }
-  .zones-chip rect.on {
-    fill: var(--accent-tint-strong);
-    stroke: var(--color-accent);
-    stroke-width: 2;
-  }
-  h1 kbd.chip {
-    min-width: 0;
-    padding: 0.1em 0.38em 0.08em;
-    border-bottom-width: 0.08em;
-    font-family: inherit;
-    font-size: 0.62em;
-    font-weight: 650;
-    letter-spacing: -0.01em;
-    color: var(--color-text);
-  }
 
   .lead {
     margin-top: var(--space-m);
-    max-width: 38rem;
+    max-width: 34rem;
   }
 
   .actions {
@@ -165,8 +119,15 @@ const status = RELEASE_PUBLISHED ? `${VERSION_LABEL}, early software` : `${VERSI
     color: var(--color-text-soft);
   }
 
+  /* The desktop behind the window: one flat neutral surface. The window runs off its bottom edge. */
   .stage {
-    max-width: 60rem;
+    max-width: 66rem;
     margin: clamp(2.5rem, 1.5rem + 4vw, 4.5rem) auto 0;
+    padding: clamp(0.6rem, 0.2rem + 3vw, 2.75rem) clamp(0.6rem, 0.2rem + 3.5vw, 3.5rem) 0;
+    max-height: clamp(18rem, 6rem + 52vw, 41rem);
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-l);
+    background: var(--stage-bg);
   }
 </style>

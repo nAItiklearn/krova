@@ -1,31 +1,12 @@
 ---
-import Desk from './illustrations/Desk.astro';
-import EditorMock from './illustrations/EditorMock.astro';
-import MiniMonitor from './illustrations/MiniMonitor.astro';
-import FractionsDiagram from './FractionsDiagram.astro';
+import Shot from './Shot.astro';
+import ZoneScene from './ZoneScene.astro';
 
-const steps = [
-  {
-    n: '01',
-    title: 'Draw zones per monitor',
-    text: 'Open the layout editor, start from a template (halves, thirds, a 2x2 grid or priority) or split the screen yourself. Each monitor keeps its own layouts.',
-  },
-  {
-    n: '02',
-    title: 'Hold Shift and drag',
-    text: 'Start dragging any window and hold Shift, or the key you chose. The zones of the monitor under your cursor appear, and the one you are over lights up.',
-  },
-  {
-    n: '03',
-    title: 'Release over a zone',
-    text: 'Let go of the mouse and the window moves to fill the zone, in about 120 ms or instantly if you prefer. Release Shift first, or press Esc, and nothing moves. On Windows you can also skip the mouse: Ctrl+Alt+Shift with Left, Right or 1 to 9 moves the focused window to a zone.',
-  },
-  {
-    n: '04',
-    title: 'Layouts and windows come back',
-    text: 'Unplug a monitor and plug it in again. Krova recognises it and brings back the layouts you made for it. On Windows, the windows you snapped there go back into their zones too. That is kept in memory only, and macOS does not do it yet.',
-  },
-];
+/**
+ * Four short steps. Steps 1 and 4 show real cropped screenshots of the editor and of Settings; steps 2 and 3
+ * happen on the desktop, outside Krova's own window, so they are diagrams built from Krova's zone shapes and
+ * are labelled as diagrams.
+ */
 ---
 
 <section id="how" class="section" aria-labelledby="how-title">
@@ -35,302 +16,151 @@ const steps = [
       <h2 id="how-title">Draw once. <span class="soft">Snap from then on.</span></h2>
     </header>
 
-    <fieldset class="stepper">
-      <legend class="visually-hidden">The four steps. Use the arrow keys to move between them.</legend>
-      {
-        steps.map((s, i) => (
-          <input
-            type="radio"
-            name="how-step"
-            id={`step-${i + 1}`}
-            class="visually-hidden"
-            checked={i === 0}
-            aria-describedby={`step-${i + 1}-desc`}
-          />
-        ))
-      }
-
-      <div class="list">
-        {
-          steps.map((s, i) => (
-            <div class={`item item-${i + 1}`}>
-              <label for={`step-${i + 1}`}>
-                <span class="num">{s.n}</span>
-                <span class="ttl">{s.title}</span>
-              </label>
-              <div class="desc">
-                <p id={`step-${i + 1}-desc`}>{s.text}</p>
-              </div>
-            </div>
-          ))
-        }
-      </div>
-
-      <div class="visuals">
-        <figure class="visual v-1">
-          <EditorMock />
-          <figcaption>Illustration of the layout editor. The live editor is further down this page.</figcaption>
-        </figure>
-        <figure class="visual v-2">
-          <Desk state="dragging" label="Illustration: a window is dragged over the middle zone of a three-zone layout while Shift is held. The zone under the window is highlighted." />
-          <figcaption>Illustration: Shift held, zones shown, the middle zone lit.</figcaption>
-        </figure>
-        <figure class="visual v-3">
-          <Desk state="snapped" label="Illustration: after release, the window fills the middle zone of the layout." />
-          <figcaption>Illustration: the window now fills the zone.</figcaption>
-        </figure>
-        <figure class="visual v-4">
-          <div class="frames">
-            <div class="frame">
-              <div class="pair">
-                <MiniMonitor layout="priority" label="Display 1" win={[0, 1]} />
-                <MiniMonitor layout="grid" label="Display 2" win={[0, 3]} />
-              </div>
-              <p><b>1</b> Each monitor has its own layout, with windows snapped into its zones.</p>
-            </div>
-            <div class="frame">
-              <div class="pair">
-                <MiniMonitor layout="priority" label="Display 1" win={[0, 1]} />
-                <MiniMonitor layout="grid" off label="Unplugged" />
-              </div>
-              <p><b>2</b> Display 2 is unplugged. Krova keeps its layouts, and remembers which window was in which zone.</p>
-            </div>
-            <div class="frame">
-              <div class="pair">
-                <MiniMonitor layout="priority" label="Display 1" win={[0, 1]} />
-                <MiniMonitor layout="grid" label="Display 2" win={[0, 3]} />
-              </div>
-              <p><b>3</b> Plugged back in: its layouts return, and on Windows so do its windows.</p>
-            </div>
+    <ol class="steps">
+      <li class="step">
+        <div class="art">
+          <span class="kind">Screenshot</span>
+          <div class="crop">
+            <Shot
+              name="crop-zones"
+              alt="The zone editor: three zones on a monitor, the middle one selected, and a dashed guide at 50 percent showing where the next split would go."
+            />
           </div>
-          <figcaption>Illustration. Monitors are recognised by hardware identity, then device path, then last size and position. Window memory is Windows only for now; on macOS only the layouts come back.</figcaption>
-        </figure>
-      </div>
-    </fieldset>
+        </div>
+        <p class="num">1</p>
+        <h3>Draw zones</h3>
+        <p>Start from a template or split the screen yourself. Each monitor keeps its own layouts.</p>
+      </li>
 
-    <div class="fractions">
-      <header class="sub-head">
-        <h3>One layout, any monitor</h3>
-        <p class="lead">
-          Zones are saved as fractions of the screen. That is why a layout survives a new resolution, a different
-          scaling setting, or a different monitor.
-        </p>
-      </header>
-      <FractionsDiagram />
-    </div>
+      <li class="step">
+        <div class="art">
+          <span class="kind">Diagram</span>
+          <ZoneScene
+            state="drag"
+            layout="priority"
+            target={1}
+            label="Diagram: a window is dragged while Shift is held. The three zones of the monitor are shown and the middle one is lit."
+          />
+        </div>
+        <p class="num">2</p>
+        <h3>Hold Shift and drag</h3>
+        <p>Drag any window and hold Shift, or the key you chose. The zones of the monitor under the cursor appear.</p>
+      </li>
+
+      <li class="step">
+        <div class="art">
+          <span class="kind">Diagram</span>
+          <ZoneScene
+            state="snap"
+            layout="priority"
+            target={1}
+            label="Diagram: after release, the window fills the middle zone."
+          />
+        </div>
+        <p class="num">3</p>
+        <h3>Release over a zone</h3>
+        <p>Let go and the window fills the zone. Release Shift first, or press Esc, and nothing moves.</p>
+      </li>
+
+      <li class="step">
+        <div class="art">
+          <span class="kind">Screenshot</span>
+          <div class="crop">
+            <Shot
+              name="crop-keyboard"
+              alt="Settings, keyboard shortcuts: Ctrl+Alt+Shift with Left moves the focused window to the previous zone, Right to the next, 1 to 9 to that zone number, Up to the next monitor."
+            />
+          </div>
+        </div>
+        <p class="num">4</p>
+        <h3>Or skip the mouse <span class="tag">Windows</span></h3>
+        <p>Ctrl+Alt+Shift with Left or Right steps through the zones, 1 to 9 jumps to one.</p>
+      </li>
+    </ol>
   </div>
 </section>
 
 <style>
-  .stepper {
+  .steps {
     display: grid;
-    grid-template-areas:
-      'visuals'
-      'list';
-    gap: var(--space-l);
-    min-width: 0;
-    margin: 0;
-    padding: 0;
-    border: 0;
+    gap: var(--space-l) var(--space-m);
   }
 
-  .list {
-    grid-area: list;
-    display: grid;
-    align-content: start;
-    gap: 0.25rem;
-  }
-
-  .visuals {
-    grid-area: visuals;
-    display: grid;
-    min-width: 0;
-  }
-
-  .item {
-    padding: 0.2rem 0.4rem 0.2rem;
-    border: 1px solid transparent;
-    border-radius: var(--radius-m);
-    transition:
-      background-color var(--dur) var(--ease-out),
-      border-color var(--dur) var(--ease-out),
-      box-shadow var(--dur) var(--ease-out);
-  }
-
-  label {
+  .step {
     display: flex;
-    align-items: baseline;
-    gap: 0.75rem;
-    min-height: 2.75rem;
-    padding: 0.55rem 0.6rem;
+    flex-direction: column;
+  }
+
+  .art {
+    position: relative;
+    display: grid;
+    place-items: center;
+    height: 14.5rem;
+    padding: 2rem 1rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-l);
+    background: var(--color-surface-2);
+  }
+  .art > :global(.scene) {
+    max-width: 15.5rem;
+  }
+  .art .crop {
+    --crop-h: 11rem;
+  }
+
+  .kind {
+    position: absolute;
+    left: 0.75rem;
+    top: 0.65rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
     color: var(--color-text-soft);
-    font-size: var(--text-md);
-    font-weight: 650;
-    letter-spacing: var(--tracking-snug);
-    cursor: pointer;
   }
-  label:hover {
-    color: var(--color-text);
-  }
+
+
   .num {
+    margin-top: var(--space-m);
     font-family: var(--font-mono);
     font-size: var(--text-xs);
     font-weight: 500;
     letter-spacing: 0.04em;
+    color: var(--color-accent-text);
   }
-
-  .desc {
-    display: grid;
-    grid-template-rows: 0fr;
-    opacity: 0;
-    transition:
-      grid-template-rows var(--dur) var(--ease-out),
-      opacity var(--dur) var(--ease-out);
+  .step h3 {
+    margin-top: 0.15rem;
+    font-size: var(--text-md);
   }
-  .desc p {
-    overflow: hidden;
-    padding-inline: 0.6rem 0.6rem;
-    color: var(--color-text-muted);
+  .step h3 + p {
+    margin-top: var(--space-2xs);
     font-size: var(--text-sm);
     line-height: 1.55;
-  }
-
-  /* Small screens: only the active visual takes space, so there is no empty gap under it. */
-  .visual {
-    display: none;
-    min-width: 0;
-  }
-  @keyframes step-in {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
-
-  .visual figcaption {
-    margin-top: var(--space-s);
-    font-size: var(--text-sm);
-    color: var(--color-text-soft);
-  }
-
-  /* Active step: one rule set per radio (plain sibling selectors, no JavaScript, no :has). */
-  #step-1:checked ~ .list .item-1,
-  #step-2:checked ~ .list .item-2,
-  #step-3:checked ~ .list .item-3,
-  #step-4:checked ~ .list .item-4 {
-    background: var(--color-surface);
-    border-color: var(--color-border);
-    box-shadow: var(--shadow-1);
-  }
-  #step-1:checked ~ .list .item-1 label,
-  #step-2:checked ~ .list .item-2 label,
-  #step-3:checked ~ .list .item-3 label,
-  #step-4:checked ~ .list .item-4 label {
-    color: var(--color-text);
-  }
-  #step-1:checked ~ .list .item-1 .num,
-  #step-2:checked ~ .list .item-2 .num,
-  #step-3:checked ~ .list .item-3 .num,
-  #step-4:checked ~ .list .item-4 .num {
-    color: var(--color-accent-text);
-  }
-  #step-1:checked ~ .list .item-1 .desc,
-  #step-2:checked ~ .list .item-2 .desc,
-  #step-3:checked ~ .list .item-3 .desc,
-  #step-4:checked ~ .list .item-4 .desc {
-    grid-template-rows: 1fr;
-    opacity: 1;
-    padding-bottom: 0.8rem;
-  }
-  #step-1:checked ~ .visuals .v-1,
-  #step-2:checked ~ .visuals .v-2,
-  #step-3:checked ~ .visuals .v-3,
-  #step-4:checked ~ .visuals .v-4 {
-    display: block;
-    animation: step-in var(--dur) var(--ease-out);
-  }
-
-  #step-1:focus-visible ~ .list .item-1,
-  #step-2:focus-visible ~ .list .item-2,
-  #step-3:focus-visible ~ .list .item-3,
-  #step-4:focus-visible ~ .list .item-4 {
-    outline: 3px solid var(--color-focus);
-    outline-offset: 2px;
-  }
-
-  /* Step 4: three small frames */
-  .frames {
-    display: grid;
-    gap: var(--space-m);
-    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-    padding: var(--space-m);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-l);
-    background: var(--color-surface);
-    box-shadow: var(--shadow-1);
-  }
-  .pair {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-xs);
-    align-items: start;
-  }
-  .frame p {
-    margin-top: var(--space-xs);
-    font-size: var(--text-sm);
-    line-height: 1.4;
     color: var(--color-text-muted);
   }
-  .frame b {
-    margin-right: 0.3rem;
-    font-family: var(--font-mono);
-    color: var(--color-accent-text);
+
+  .tag {
+    display: inline-block;
+    margin-left: 0.3rem;
+    padding: 0.05rem 0.5rem;
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-pill);
+    background: var(--color-surface-2);
+    color: var(--color-text-muted);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0;
+    vertical-align: 0.1em;
+    white-space: nowrap;
   }
 
-  .fractions {
-    margin-top: clamp(3.5rem, 2rem + 6vw, 6rem);
-  }
-  .sub-head {
-    max-width: 40rem;
-    margin-bottom: var(--space-l);
-  }
-  .sub-head h3 {
-    font-size: var(--text-xl);
-  }
-  .sub-head .lead {
-    margin-top: var(--space-xs);
-    font-size: var(--text-base);
-  }
-
-  /* Wide screens: the four visuals share one cell, so the layout never jumps; they cross-fade. */
-  @media (min-width: 56rem) {
-    .stepper {
-      grid-template-areas: 'list visuals';
-      grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr);
-      gap: var(--space-xl);
-      align-items: center;
+  @media (min-width: 40rem) {
+    .steps {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
-    .visual {
-      display: block;
-      grid-area: 1 / 1;
-      opacity: 0;
-      visibility: hidden;
-      transition:
-        opacity var(--dur) var(--ease-out),
-        visibility var(--dur) step-end;
-    }
-    #step-1:checked ~ .visuals .v-1,
-    #step-2:checked ~ .visuals .v-2,
-    #step-3:checked ~ .visuals .v-3,
-    #step-4:checked ~ .visuals .v-4 {
-      opacity: 1;
-      visibility: visible;
-      animation: none;
-      transition:
-        opacity var(--dur) var(--ease-out),
-        visibility var(--dur) step-start;
+  }
+  @media (min-width: 64rem) {
+    .steps {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
     }
   }
 </style>

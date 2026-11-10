@@ -11,14 +11,15 @@ const demo = url('/demo/');
       <p class="eyebrow">Try it live</p>
       <h2 id="try-title">Try the editor. <span class="soft">No install needed.</span></h2>
       <p class="lead">
-        This is the real editor running on sample monitors. Nothing is saved to your computer&rsquo;s windows; snapping
-        itself needs the app.
+        This is the real editor running in your browser on two sample monitors. Snapping itself needs the app, so nothing
+        here touches your windows.
       </p>
     </header>
 
     <div class="frame">
       <div class="bar">
-        <span class="label">Live demo &middot; two sample monitors &middot; Editor and Settings tabs</span>
+        <img src={url('/favicon.svg')} width="16" height="16" alt="" />
+        <span class="label">Krova &middot; live demo &middot; Editor and Settings tabs</span>
         <a href={demo}>Open in its own tab <Icon name="external" /></a>
       </div>
       <iframe
@@ -35,7 +36,7 @@ const demo = url('/demo/');
 
     <ul class="notes">
       <li>Try a template, split a zone with <kbd>V</kbd> or <kbd>H</kbd>, drag a divider, or delete a zone.</li>
-      <li>Your edits are kept in this browser&rsquo;s local storage only. Nothing is sent anywhere.</li>
+      <li>Your edits stay in this browser&rsquo;s local storage. Nothing is sent anywhere.</li>
       <li>The demo has its own Theme setting, under Settings.</li>
     </ul>
   </div>
@@ -45,37 +46,48 @@ const demo = url('/demo/');
   .frame {
     max-width: 66rem;
     margin-inline: auto;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-xl);
-    background: var(--color-surface);
+    border: 1px solid var(--win-edge);
+    border-radius: var(--radius-m);
+    background: var(--win-bar);
     box-shadow: var(--shadow-2);
     overflow: hidden;
   }
 
   .bar {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--space-2xs) var(--space-m);
-    padding: 0.6rem var(--space-m);
-    border-bottom: 1px solid var(--color-border);
-    background: var(--color-surface-2);
-    font-size: var(--text-sm);
+    gap: 0.5rem 0.75rem;
+    min-height: 2.25rem;
+    padding: 0.25rem 0.5rem 0.25rem 0.75rem;
+    color: var(--win-bar-fg);
+    font-size: 0.75rem;
+  }
+  .bar img {
+    flex: none;
+    width: 1rem;
+    height: 1rem;
   }
   .label {
-    color: var(--color-text-muted);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .bar a {
     display: inline-flex;
+    flex: none;
     align-items: center;
     gap: 0.35rem;
-    min-height: 2.25rem;
+    min-height: 2rem;
+    padding-inline: 0.5rem;
+    color: var(--color-link);
     font-weight: 600;
+    white-space: nowrap;
   }
   .bar :global(.icon) {
-    width: 1rem;
-    height: 1rem;
+    width: 0.9rem;
+    height: 0.9rem;
   }
 
   iframe {
@@ -83,6 +95,7 @@ const demo = url('/demo/');
     width: 100%;
     height: 50rem;
     border: 0;
+    border-top: 1px solid var(--win-edge);
     background: var(--color-surface);
   }
 
@@ -108,6 +121,12 @@ const demo = url('/demo/');
   @media (max-width: 40rem) {
     iframe {
       height: 52rem;
+    }
+    .label {
+      display: none;
+    }
+    .bar a {
+      margin-left: auto;
     }
   }
 </style>

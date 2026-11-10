@@ -1,124 +1,183 @@
 ---
-import MiniMonitor from './illustrations/MiniMonitor.astro';
-import Cursor from './illustrations/Cursor.astro';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import Shot from './Shot.astro';
+import ZoneScene from './ZoneScene.astro';
+import Icon from './Icon.astro';
+import { url } from '../lib/url';
+import { REPO_LINKS_ENABLED, REPO_URL } from '../site';
+
+/**
+ * The feature grid. Each card has a small picture: a real cropped screenshot of Krova's own UI where the
+ * feature has a control in the UI, otherwise a flat diagram built from Krova's zone shapes. Diagrams say
+ * "Diagram" in their label. The licence card shows the first lines of the repository's LICENSE file.
+ */
+const licenseLines = readFileSync(resolve(process.cwd(), '../LICENSE'), 'utf8')
+  .replace(/\r\n/g, '\n')
+  .trim()
+  .split('\n')
+  .filter((l) => l.trim() !== '')
+  .slice(0, 2);
 ---
 
 <section id="features" class="section" aria-labelledby="features-title">
   <div class="container">
     <header class="sec-head">
       <p class="eyebrow">Features</p>
-      <h2 id="features-title">Drawn zones that remember their windows. <span class="soft">The memory part is Windows-only today.</span></h2>
+      <h2 id="features-title">What it does. <span class="soft">Windows-only parts are marked.</span></h2>
     </header>
 
     <ul class="grid">
+      <li class="card wide">
+        <div class="art">
+          <div class="crop">
+            <Shot
+              name="crop-zones"
+              alt="The zone editor: three zones on a monitor, the middle one selected, and a dashed guide at 50 percent."
+            />
+          </div>
+        </div>
+        <h3>Zones you draw</h3>
+        <p>
+          Start from halves, thirds, a 2x2 grid or priority, or split zones and drag the dividers until it fits. Undo as
+          you go.
+        </p>
+      </li>
+
+      <li class="card wide">
+        <div class="art">
+          <ZoneScene
+            state="drag"
+            layout="thirds"
+            target={1}
+            label="Diagram: a window is dragged over the middle zone of a three-zone layout while Shift is held."
+          />
+        </div>
+        <h3>Hold a key, drop in a zone</h3>
+        <p>
+          Hold Shift, Ctrl, Alt or the Windows key while you drag. Release over a zone to snap. Edge snapping for halves
+          and quarters is there too, off by default.
+        </p>
+      </li>
+
       <li class="card">
-        <div class="art" aria-hidden="true">
-          <div class="pair">
-            <MiniMonitor layout="priority" />
-            <MiniMonitor layout="grid" />
+        <div class="art">
+          <div class="crop">
+            <Shot
+              name="crop-layouts"
+              alt="The list of layouts on a monitor: Halves, Thirds, Grid 2x2 and Priority, each with a small preview. Halves is marked Active."
+            />
           </div>
         </div>
         <h3>A layout for every monitor</h3>
-        <p>Each monitor keeps its own layouts. Unplug one, plug it back in, and its layouts return.</p>
+        <p>Each monitor keeps its own layouts. Zones are proportions, so a layout survives a new resolution or scaling.</p>
       </li>
 
       <li class="card">
-        <div class="art" aria-hidden="true">
-          <div class="tpls">
-            <div class="ill-ed__thumb"><i style="--x:4%;--w:45%" /><i style="--x:51%;--w:45%" /></div>
-            <div class="ill-ed__thumb"><i style="--x:4%;--w:29%" /><i style="--x:35.5%;--w:29%" /><i style="--x:67%;--w:29%" /></div>
-            <div class="ill-ed__thumb">
-              <i style="--x:4%;--y:8%;--w:44%;--h:40%" /><i style="--x:52%;--y:8%;--w:44%;--h:40%" />
-              <i style="--x:4%;--y:52%;--w:44%;--h:40%" /><i style="--x:52%;--y:52%;--w:44%;--h:40%" />
-            </div>
-            <div class="ill-ed__thumb"><i style="--x:4%;--w:21%" /><i style="--x:27%;--w:46%" /><i style="--x:75%;--w:21%" /></div>
+        <div class="art">
+          <div class="crop">
+            <Shot
+              name="crop-keyboard"
+              alt="Keyboard shortcuts: Ctrl+Alt+Shift with Left, Right, 1 to 9 or Up moves the focused window to the previous zone, the next zone, a numbered zone or the next monitor."
+            />
           </div>
         </div>
-        <h3>A visual zone editor, and layout files</h3>
-        <p>Start from halves, thirds, a 2x2 grid or priority, or split and drag the dividers until it fits. Undo and save as you go. Copy a layout as plain text to keep it or to add it on another monitor or computer: zones are proportions, so one text fits any screen.</p>
+        <h3>Keyboard zone control <span class="tag">Windows</span></h3>
+        <p>Step through zones, jump to one by number, or send a window to the next monitor. Pick other keys if these are taken.</p>
       </li>
 
       <li class="card">
-        <div class="art" aria-hidden="true">
-          <div class="pair">
-            <MiniMonitor layout="grid" off label="Unplugged" />
-            <MiniMonitor layout="grid" label="Plugged back in" win={[0, 3]} />
+        <div class="art">
+          <div class="crop">
+            <Shot
+              name="crop-memory"
+              alt="The setting Restore windows on reconnect, switched on: when a monitor comes back, windows you snapped to it return to their zones. Kept in memory only."
+            />
           </div>
         </div>
-        <h3>Zones that remember their windows <span class="tag">Windows</span></h3>
-        <p>When a monitor comes back, the windows you snapped to it go back into their zones. It lives in memory only, with no window titles, and a window you move yourself is left alone. Tested with a simulated monitor change, not yet a real unplug.</p>
+        <h3>Windows come back <span class="tag">Windows</span></h3>
+        <p>
+          When a monitor returns, the windows you snapped there go back into their zones. Memory only, no window titles.
+          Tested with a simulated monitor change, not yet a real unplug.
+        </p>
       </li>
 
       <li class="card">
-        <div class="art" aria-hidden="true">
-          <div class="keyrows">
-            <p><kbd class="on">Ctrl</kbd><kbd class="on">Alt</kbd><kbd class="on">Shift</kbd></p>
-            <p><kbd>&larr;</kbd><kbd>&rarr;</kbd><kbd>1&ndash;9</kbd><kbd>&uarr;</kbd></p>
-          </div>
-        </div>
-        <h3>Move windows from the keyboard <span class="tag">Windows</span></h3>
-        <p>Ctrl+Alt+Shift with Left or Right steps through the zones, 1 to 9 jumps to one, Up sends the window to the next monitor. Pick other modifier keys if something else already uses these; Settings lists any it could not register.</p>
-      </li>
-
-      <li class="card">
-        <div class="art" aria-hidden="true">
-          <svg class="linked" viewBox="0 0 220 90" focusable="false">
-            <rect class="win" x="6" y="6" width="104" height="66" rx="7"></rect>
-            <rect class="win" x="118" y="6" width="96" height="66" rx="7"></rect>
-            <path class="old" d="M148 2v74"></path>
-            <path class="trail" d="M146 83H124"></path>
-            <path class="trail" d="M130 78l-6 5 6 5"></path>
-          </svg>
-          <div class="art-label"><span>drag an edge</span><span>neighbours follow</span></div>
+        <div class="art">
+          <ZoneScene
+            state="dividers"
+            label="Diagram: two snapped windows share an edge. The edge is dragged to the right and the neighbour follows."
+          />
         </div>
         <h3>Linked dividers <span class="tag tag--warn">Windows, early</span></h3>
-        <p>Resize a snapped window by its edge and the snapped windows that share that edge follow when you let go. Early: it works in tests with synthetic events, but a real mouse drag has not been confirmed yet.</p>
+        <p>
+          Resize a snapped window by its edge and the windows that share it follow. Works in tests; not yet confirmed
+          with a real mouse.
+        </p>
       </li>
 
       <li class="card">
-        <div class="art" aria-hidden="true">
-          <div class="keys">
-            <kbd class="on">Shift</kbd><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>Win</kbd>
-          </div>
-          <div class="art-label"><span>120 ms or instant</span><span>gap 0&ndash;32 px</span></div>
+        <div class="art">
+          <ZoneScene
+            state="gap"
+            layout="thirds"
+            label="Diagram: three snapped windows with 12 pixels between the zones."
+          />
         </div>
-        <h3>Your key, your pace, your gap</h3>
-        <p>Hold Shift by default, or Ctrl, Alt or the Windows key (Command on a Mac), to show the zones. Moves glide in about 120 ms or jump at once. Leave 0 to 32 px between zones if you like air around your windows.</p>
+        <h3>Space between zones</h3>
+        <p>Leave 0 to 32 px around snapped windows, or none.</p>
       </li>
 
       <li class="card">
-        <div class="art" aria-hidden="true">
-          <div class="pair">
-            <MiniMonitor layout="thirds" label="100%" />
-            <MiniMonitor layout="thirds" label="150%" />
+        <div class="art">
+          <div class="crop crop--cut">
+            <Shot
+              name="crop-export"
+              alt="Export and import: the Export layout button has been used and the layout is shown as plain text, with a Copy button."
+            />
           </div>
         </div>
-        <h3>Careful with windows</h3>
-        <p>On Windows, Krova accounts for mixed-DPI monitors (not yet verified on a mixed setup), the invisible borders around windows, each app&rsquo;s own minimum and maximum size, and the taskbar.</p>
+        <h3>Layout files</h3>
+        <p>Copy a layout as plain text and paste it on another monitor or computer. One text fits any screen.</p>
       </li>
 
-      <li class="card">
-        <div class="art" aria-hidden="true">
-          <div class="edge ill-wrap">
-            <div class="ill-monitor ill-monitor--mini">
-              <div class="ill-desk">
-                <div class="ill-work">
-                  <span class="ill-zone ill-zone--solid" style="--x:0.8%;--w:48.6%" />
-                  <span class="ill-zone ill-zone--soft" style="--x:50.6%;--w:48.6%" />
-                  <Cursor x="1%" y="38%" />
-                </div>
-              </div>
-            </div>
+      <li class="card wide">
+        <div class="art art--line">
+          <div class="crop crop--line">
+            <Shot
+              name="crop-footer"
+              alt="The line at the bottom of Krova's window: MIT licensed, no accounts, no telemetry, nothing leaves your computer."
+            />
           </div>
         </div>
-        <h3>Edge snapping, if you want it</h3>
-        <p>Drag to a side for a half, a corner for a quarter, the top to maximize. Off by default, and never on the border between two monitors.</p>
+        <h3>Private and offline</h3>
+        <p>
+          No account, no telemetry, no update checks, and no network calls by design. Window titles are never read or
+          stored. <a href={url('/privacy/')}>Read the details</a>.
+        </p>
+      </li>
+
+      <li class="card wide">
+        <div class="art art--line">
+          <pre class="license" aria-label="The first lines of the MIT license file"><code>{licenseLines.join('\n')}</code></pre>
+        </div>
+        <h3>Free and open source</h3>
+        <p>
+          MIT license: use it, change it, share it. Nothing to buy.
+          <a href={url('/license/')}>License and terms</a>{
+            REPO_LINKS_ENABLED && (
+              <Fragment>
+                {' '}&middot; <a href={REPO_URL}>Source code <Icon name="external" /></a>
+              </Fragment>
+            )
+          }.
+        </p>
       </li>
     </ul>
 
     <p class="also">
       Also: a tray icon with launch at login. Light and dark follow your system. Minimized, fullscreen and administrator
-      windows are skipped. Closing Krova&rsquo;s window closes the embedded browser too, so it waits in the tray using little memory.
+      windows are skipped.
     </p>
   </div>
 </section>
@@ -126,24 +185,72 @@ import Cursor from './illustrations/Cursor.astro';
 <style>
   .grid {
     display: grid;
-    gap: var(--space-m);
+    gap: var(--space-s);
   }
 
   .card {
     display: flex;
     flex-direction: column;
-    padding: var(--space-s);
-    border-radius: var(--radius-xl);
+    padding: 0.5rem;
+    box-shadow: none;
   }
 
   .art {
     display: grid;
     place-items: center;
-    min-height: 11rem;
-    margin-bottom: var(--space-m);
-    padding: var(--space-m);
-    border-radius: var(--radius-l);
+    height: 16rem;
+    margin-bottom: var(--space-s);
+    padding: 1rem;
+    border-radius: var(--radius-m);
     background: var(--color-surface-2);
+  }
+  .art :global(.scene) {
+    max-width: 17rem;
+  }
+  .art .crop {
+    --crop-h: 14rem;
+  }
+  .wide .art {
+    height: 17rem;
+  }
+  .wide .art :global(.scene) {
+    max-width: 22rem;
+  }
+  .wide .art .crop {
+    --crop-h: 15rem;
+  }
+
+  .art.art--line {
+    height: auto;
+    padding-block: var(--space-l);
+  }
+
+  /* A tall crop is cut, not shrunk: the top of the panel at full size. */
+  .crop--cut {
+    width: 18rem;
+    height: 14rem;
+  }
+  .crop--cut :global(img) {
+    width: 100%;
+    max-height: none;
+    object-fit: cover;
+    object-position: top;
+  }
+  .crop--line {
+    max-width: 38rem;
+  }
+
+  .license {
+    width: 100%;
+    max-width: 22rem;
+    margin: 0;
+    padding: var(--space-s) var(--space-m);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-m);
+    background: var(--color-surface);
+    font-size: var(--text-sm);
+    line-height: 1.6;
+    white-space: pre-wrap;
   }
 
   .card h3 {
@@ -158,127 +265,25 @@ import Cursor from './illustrations/Cursor.astro';
     line-height: 1.55;
     color: var(--color-text-muted);
   }
-
-  .pair {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-s);
-    width: 100%;
-    max-width: 18rem;
-    align-items: start;
-  }
-
-  .tpls {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.6rem;
-    width: 100%;
-    max-width: 14rem;
-  }
-  .tpls .ill-ed__thumb {
-    border: 1px solid var(--color-border);
-  }
-
-  .edge {
-    width: 100%;
-    max-width: 12rem;
-  }
-
-  .linked {
-    width: 100%;
-    max-width: 15rem;
-    height: auto;
-  }
-  .linked .win {
-    fill: var(--ill-hi-fill);
-    stroke: var(--ill-hi-stroke);
-    stroke-width: 2;
-  }
-  .linked .old {
-    fill: none;
-    stroke: var(--ill-line-strong);
-    stroke-width: 1.5;
-    stroke-dasharray: 4 4;
-  }
-  .linked .trail {
-    fill: none;
-    stroke: var(--color-text-soft);
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-  .art-label {
-    display: flex;
-    justify-content: space-between;
-    gap: var(--space-s);
-    width: 100%;
-    max-width: 15rem;
-    margin-top: var(--space-xs);
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-    color: var(--color-text-soft);
-  }
-
-  .keys {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 0.5rem;
-  }
-  .keys kbd {
-    min-width: 3rem;
-    padding: 0.5rem 0.8rem;
-    font-family: var(--font-sans);
-    font-size: var(--text-sm);
-    font-weight: 600;
-    color: var(--color-text-muted);
-  }
-  .keys kbd.on,
-  .keyrows kbd.on {
-    border-color: var(--ill-key-on-edge);
-    background: var(--ill-key-on-bg);
-    color: var(--ill-key-on-text);
-  }
-
-  .keyrows {
-    display: grid;
-    gap: 0.5rem;
-    justify-items: center;
-  }
-  .keyrows p {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 0.5rem;
-    margin: 0;
-    padding: 0;
-  }
-  .keyrows kbd {
-    min-width: 2.75rem;
-    padding: 0.5rem 0.7rem;
-    font-family: var(--font-sans);
-    font-size: var(--text-sm);
-    font-weight: 600;
-    color: var(--color-text-muted);
-  }
-  .keyrows kbd.on {
-    color: var(--ill-key-on-text);
+  .card p :global(.icon) {
+    display: inline;
+    width: 0.85em;
+    height: 0.85em;
+    vertical-align: -0.05em;
   }
 
   .tag {
     display: inline-block;
-    margin-left: 0.35rem;
-    padding: 0.08rem 0.5rem;
+    margin-left: 0.3rem;
+    padding: 0.05rem 0.5rem;
     border: 1px solid var(--color-border-strong);
     border-radius: var(--radius-pill);
     background: var(--color-surface-2);
     color: var(--color-text-muted);
-    font-family: var(--font-mono);
     font-size: var(--text-xs);
-    font-weight: 500;
-    letter-spacing: var(--tracking-mono);
-    text-transform: uppercase;
-    vertical-align: 0.15em;
+    font-weight: 600;
+    letter-spacing: 0;
+    vertical-align: 0.1em;
     white-space: nowrap;
   }
   .tag--warn {
@@ -288,7 +293,7 @@ import Cursor from './illustrations/Cursor.astro';
   }
 
   .also {
-    max-width: 48rem;
+    max-width: 44rem;
     margin: var(--space-l) auto 0;
     text-align: center;
     font-size: var(--text-sm);
@@ -299,16 +304,19 @@ import Cursor from './illustrations/Cursor.astro';
     .grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+    .wide {
+      grid-column: 1 / -1;
+    }
   }
-  /* Three columns, written as six so the last two of the eight cards share the final row (span 3 each). */
+  /* Six columns: wide cards take three, the rest take two. */
   @media (min-width: 64rem) {
     .grid {
       grid-template-columns: repeat(6, minmax(0, 1fr));
     }
-    .grid > .card {
+    .card {
       grid-column: span 2;
     }
-    .grid > .card:nth-child(n + 7) {
+    .card.wide {
       grid-column: span 3;
     }
   }
