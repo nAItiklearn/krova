@@ -179,6 +179,11 @@ pub struct MonitorProfile {
     pub last_rect: PxRect,
     pub layouts: Vec<Layout>,
     pub active_layout: String,
+    // --- wave4 ---
+    /// Edges kept free for third-party docks and bars (logical px, `edges.rs`).
+    #[serde(default)]
+    pub reserved: crate::edges::ReservedEdges,
+    // --- end wave4 ---
 }
 
 impl MonitorProfile {
@@ -191,6 +196,9 @@ impl MonitorProfile {
             last_rect: d.rect,
             layouts: templates(),
             active_layout: "halves".to_owned(),
+            // --- wave4 ---
+            reserved: crate::edges::ReservedEdges::default(),
+            // --- end wave4 ---
         }
     }
 
@@ -216,6 +224,9 @@ impl MonitorProfile {
         if self.active().is_none() {
             self.active_layout = self.layouts[0].id.clone();
         }
+        // --- wave4 ---
+        self.reserved = self.reserved.sanitized();
+        // --- end wave4 ---
     }
 }
 

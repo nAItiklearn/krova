@@ -13,6 +13,9 @@ mod engine;
 mod model;
 mod tray;
 mod ui_window;
+// --- wave4 ---
+mod wave4;
+// --- end wave4 ---
 
 use std::sync::Arc;
 
@@ -46,6 +49,9 @@ pub fn run() {
             commands::edit_remove_zone,
             commands::edit_move_divider,
             ui_window::take_pending_view,
+            // --- wave4 ---
+            wave4::set_reserved_edges,
+            // --- end wave4 ---
         ])
         .on_window_event(|window, event| match event {
             // The tray keeps the app alive. By default closing the window destroys

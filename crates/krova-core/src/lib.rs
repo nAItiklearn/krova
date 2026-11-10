@@ -6,6 +6,9 @@ pub mod app_rules;
 pub mod arrange;
 pub mod config;
 pub mod edge;
+// --- wave4 ---
+pub mod edges;
+// --- end wave4 ---
 pub mod edit;
 pub mod geometry;
 pub mod layout_io;
