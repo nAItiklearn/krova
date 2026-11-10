@@ -5,6 +5,8 @@
 pub mod app_rules;
 pub mod arrange;
 pub mod config;
+// --- corners ---
+pub mod corners;
 pub mod edge;
 // --- wave4 ---
 pub mod edges;

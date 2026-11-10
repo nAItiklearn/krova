@@ -42,6 +42,50 @@ export type Theme = 'system' | 'light' | 'dark';
  */
 export type ShortcutModifier = 'ctrl_alt' | 'win_alt' | 'ctrl_alt_shift' | 'win_ctrl';
 
+// --- corners ---
+/** What a hot corner does. Rust: `krova_core::corners::HotCornerAction`. */
+export type HotCornerAction =
+  | 'switcher'
+  | 'cheat_sheet'
+  | 'focus'
+  | 'calm_desk'
+  | 'pause'
+  | 'show_zones'
+  | 'panel';
+export type HotCorner = 'top_left' | 'top_right' | 'bottom_left' | 'bottom_right';
+
+/**
+ * `Settings.hot_corners`. Only outer corners count (a corner touching another
+ * monitor never fires). Defaults: top_right `switcher`, bottom_right `calm_desk`,
+ * others null, dwell 300, ignore_fullscreen true.
+ */
+export interface HotCornerSettings {
+  top_left: HotCornerAction | null;
+  top_right: HotCornerAction | null;
+  bottom_left: HotCornerAction | null;
+  bottom_right: HotCornerAction | null;
+  /** Integer ms the cursor must rest in the corner, clamped to 150..1000. */
+  dwell_ms: number;
+  /** Do nothing while a full-screen app is in front. */
+  ignore_fullscreen: boolean;
+}
+
+/** Payload of the backend event `hot-corner` (sent after a corner fired). */
+export interface HotCornerEvent {
+  corner: HotCorner;
+  action: HotCornerAction;
+  /** `MonitorProfile.id` of the monitor whose corner it was. */
+  monitor_id: string | null;
+}
+
+/** Returned by `hot_corners_status`. */
+export interface HotCornerStatus {
+  /** This OS build can watch the screen corners (false on macOS for now). */
+  supported: boolean;
+  /** Corners are watched now: supported, Krova on, at least one corner set. */
+  active: boolean;
+}
+
 export interface Settings {
   enabled: boolean;
   modifier: Modifier;
@@ -96,6 +140,9 @@ export interface Settings {
   /** The notch at a screen edge. Rust fills in defaults field by field. */
   notch: NotchSettings;
   // --- notch ---
+  // --- corners ---
+  /** What each outer screen corner does when the cursor rests in it. */
+  hot_corners: HotCornerSettings;
 }
 
 // --- notch ---

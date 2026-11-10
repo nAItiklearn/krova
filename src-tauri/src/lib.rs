@@ -5,6 +5,8 @@
 
 mod actions;
 mod commands;
+// --- corners ---
+mod corners;
 #[cfg(all(test, windows))]
 mod desktop_reconnect_tests;
 #[cfg(all(test, windows))]
@@ -75,6 +77,8 @@ pub fn run() {
             notch::hide_panel,
             notch::panel_anchor,
             // --- notch ---
+            // --- corners ---
+            corners::hot_corners_status,
         ])
         .on_window_event(|window, event| match event {
             // --- notch --- (the quick panel hides instead of closing; see notch.rs)
@@ -160,5 +164,12 @@ fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // --- notch ---
     notch::start(app.handle());
     // --- notch ---
+    // --- corners ---
+    corners::start(app.handle(), &shared);
+    // --- integration ---
+    // Hot corner actions owned by wave 3. `show_zones` stays an event: there is
+    // no "show the zones" overlay call outside a drag yet.
+    wave3::register_corner_actions(app.handle(), &shared);
+    // --- end integration ---
     Ok(())
 }

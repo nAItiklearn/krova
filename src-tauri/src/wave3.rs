@@ -193,6 +193,38 @@ pub fn start(shared: &Shared) {
     apply_settings(shared);
 }
 
+// --- integration ---
+/// Plug wave 3's toggles into the hot corners: `focus` flips focus dim,
+/// `calm_desk` flips calm desk. Each persists and pushes `state-changed`, like
+/// the commands. Handlers run on the corners dispatch thread, never the hook.
+pub fn register_corner_actions(app: &tauri::AppHandle, shared: &Arc<Shared>) {
+    use krova_core::corners::HotCornerAction;
+
+    fn run(
+        app: &tauri::AppHandle,
+        shared: &Shared,
+        what: &str,
+        toggle: fn(&Shared) -> Result<bool, String>,
+    ) {
+        let done = toggle(shared).and_then(|_| crate::commands::commit(app, shared).map(|_| ()));
+        if let Err(e) = done {
+            eprintln!("krova: hot corner {what}: {e}");
+        }
+    }
+
+    let (a, s) = (app.clone(), Arc::clone(shared));
+    crate::corners::register(
+        HotCornerAction::Focus,
+        Arc::new(move |_| run(&a, &s, "focus", toggle_focus)),
+    );
+    let (a, s) = (app.clone(), Arc::clone(shared));
+    crate::corners::register(
+        HotCornerAction::CalmDesk,
+        Arc::new(move |_| run(&a, &s, "calm desk", toggle_calm_desk)),
+    );
+}
+// --- end integration ---
+
 /// Flip focus dim. Returns the new state. For the command and, later, Ctrl+Alt+F.
 pub fn toggle_focus(shared: &Shared) -> Result<bool, String> {
     let mut on = false;

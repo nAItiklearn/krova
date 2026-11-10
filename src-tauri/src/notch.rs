@@ -176,19 +176,17 @@ fn push(app: &AppHandle) {
 }
 
 // --- integration ---
-/// The app handle, so code without one (wave3's share-safe switch) can reach the notch.
-static APP: std::sync::OnceLock<AppHandle> = std::sync::OnceLock::new();
+/// Set by `start`: tells the running notch that share-safe switched. A plain
+/// callback, so callers (and their unit tests) never touch tauri types.
+type ShareSafeHook = Box<dyn Fn(bool) + Send + Sync>;
+static SHARE_SAFE_HOOK: std::sync::OnceLock<ShareSafeHook> = std::sync::OnceLock::new();
 
 /// Share-safe switched (called by `wave3::apply_settings`): the expanded notch
 /// and its menu stop showing layout names at once, without waiting for the
 /// next `state-changed`. Does nothing before `start` or without a notch.
 pub fn set_share_safe(on: bool) {
-    let Some(state) = APP.get().and_then(|app| app.try_state::<NotchState>()) else {
-        return;
-    };
-    let guard = lock(&state.notch);
-    if let Some(notch) = guard.as_ref() {
-        notch.set_share_safe(on);
+    if let Some(hook) = SHARE_SAFE_HOOK.get() {
+        hook(on);
     }
 }
 // --- end integration ---
@@ -197,7 +195,14 @@ pub fn set_share_safe(on: bool) {
 pub fn start(app: &AppHandle) {
     app.manage(NotchState::default());
     // --- integration ---
-    let _ = APP.set(app.clone());
+    let handle = app.clone();
+    let _ = SHARE_SAFE_HOOK.set(Box::new(move |on| {
+        let state = handle.state::<NotchState>();
+        let guard = lock(&state.notch);
+        if let Some(notch) = guard.as_ref() {
+            notch.set_share_safe(on);
+        }
+    }));
     // --- end integration ---
     if !SUPPORTED {
         return;

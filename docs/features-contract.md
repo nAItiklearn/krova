@@ -172,6 +172,37 @@ A page that loaded late can pull the last anchor with the command `panel_anchor`
 `AppState.capabilities.notch` is `true` on Windows and `false` elsewhere (and absent from older backends). The UI should hide the notch settings when it is not `true`.
 
 **Demo mode.** `onPanelAnchor` sends a fake anchor (the notch on the primary demo monitor at `settings.notch.corner`) right after subscribing; `demoControls.clickNotch(corner?)` sends another, and `demoControls.onNotchNavigate` gets `"panel"` with it.
+## Hot corners (corners branch)
+
+Push the cursor into an outer screen corner and rest it there: the corner's action runs once, with a small accent-coloured quarter-circle ripple in that corner.
+
+**Setting** `config.settings.hot_corners` (TS `HotCornerSettings`):
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `top_left`, `top_right`, `bottom_left`, `bottom_right` | `HotCornerAction \| null` | `null`, `"switcher"`, `null`, `"calm_desk"` | `HotCornerAction` is one of `"switcher"`, `"cheat_sheet"`, `"focus"`, `"calm_desk"`, `"pause"`, `"show_zones"`, `"panel"`. An unknown name loads as `null`. |
+| `dwell_ms` | int | `300` | How long the cursor must rest. Clamped to `150..=1000` on load and save. |
+| `ignore_fullscreen` | bool | `true` | Do nothing while a full-screen app (game, video, slides) covers that monitor. |
+
+Loading never fails on this block: a missing or mistyped field takes its default.
+
+**Rules** (`krova_core::corners`, unit-tested):
+- Only outer corners count: a corner whose outside neighbour pixels (left/right, above/below, diagonal) belong to another monitor is internal and never fires, like edge snapping's shared borders. L-shaped and staggered arrangements keep exactly the corners where the cursor stops.
+- Hit: within 3 logical px of the corner (per axis). Fires after `dwell_ms` there with no mouse button held (a held button restarts the dwell, so dragging a window into a corner never fires). Fires once; re-arms only after the cursor went more than 24 logical px away. After any fire no corner fires for 600 ms. Distances use the DPI of the corner's own monitor.
+- Nothing is watched while `enabled` is false.
+
+**Event** `hot-corner`, payload `HotCornerEvent` `{ corner: "top_left" | ..., action: HotCornerAction, monitor_id: string | null }` (`monitor_id` is the `MonitorProfile.id`). Sent on every fire, before the action runs. TS: `api.onHotCorner(cb)`.
+
+**Actions** go through one function, `corners::dispatch` in `src-tauri/src/corners.rs`:
+- `switcher`: the layout switcher opens for the monitor whose corner fired (`switcher_monitor` returns it), via `navigate("switcher")`.
+- `panel`: `navigate("settings")`.
+- `cheat_sheet`, `focus`, `calm_desk`, `pause`, `show_zones`: only the event, plus an in-process handler if one was plugged in with `corners::register(action, handler)`. The branches that own these features hook in there (or listen to the event).
+
+**Command** `hot_corners_status` (no arguments) returns `HotCornerStatus` `{ supported, active }`: `supported` is false where the OS layer cannot watch corners (macOS today); `active` is true while corners are being watched (supported, Krova on, at least one corner set). TS: `api.hotCornersStatus()`.
+
+**Cost.** No new hook, no polling: the existing low-level mouse hook tests the point against at most 64 corner bands in static atomics (no lock, no allocation) and wakes the corners thread only near a corner. One one-shot timer per dwell; the ripple's 16 ms frame timer runs only for its 220 ms. With no corner set the hook does one atomic load. With reduced motion (Windows "Show animations" off) the ripple is a still quarter-circle for 220 ms.
+
+**Demo mode.** `demoControls.hotCorner(corner, monitorId?)` behaves like a fire in the mock backend (event, then switcher/panel navigation) and returns the event, or `null` when that corner does nothing.
 
 ## Not part of the contract
 

@@ -144,6 +144,9 @@ pub struct Settings {
     /// falls back to the defaults field by field.
     pub notch: crate::notch::NotchSettings,
     // --- notch ---
+    // --- corners ---
+    /// What each outer screen corner does when the cursor rests in it.
+    pub hot_corners: crate::corners::HotCornerSettings,
 }
 
 /// `#rrggbb` (any case, optional `#`, surrounding spaces ignored) as lowercase `#rrggbb`.
@@ -172,6 +175,8 @@ impl Settings {
             crate::ffm::clamp_delay(self.focus_follows_mouse_delay_ms);
         self.language = crate::i18n::sanitize_language(&self.language);
         // --- end wave4 ---
+        // --- corners ---
+        self.hot_corners = self.hot_corners.sanitized();
         self.highlight_color =
             normalize_hex_color(&self.highlight_color).unwrap_or(defaults.highlight_color);
         // --- wave3 ---
@@ -215,6 +220,8 @@ impl Default for Settings {
             // --- notch ---
             notch: crate::notch::NotchSettings::default(),
             // --- notch ---
+            // --- corners ---
+            hot_corners: crate::corners::HotCornerSettings::default(),
         }
     }
 }

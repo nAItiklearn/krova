@@ -9,6 +9,8 @@ import type {
   AppState,
   Capabilities,
   Config,
+  HotCorner,
+  HotCornerEvent,
   HoverPicker,
   Layout,
   MonitorProfile,
@@ -49,6 +51,13 @@ import {
 // --- notch ---
 import { defaultNotchSettings, demoAnchor, sanitizeNotch } from './notch';
 // --- notch ---
+// --- corners ---
+import {
+  defaultHotCorners,
+  hotCornerEvent,
+  hotCornersStatus,
+  sanitizeHotCorners,
+} from './cornersMock';
 
 /** localStorage key used for the optional persistence of demo edits. */
 export const STORAGE_KEY = 'krova-demo';
@@ -116,6 +125,13 @@ export interface DemoControls {
   /** Listen to the notch's extra navigate targets (`panel`, `cheatsheet`). */
   onNotchNavigate(cb: (view: NotchNavigateTarget) => void): () => void;
   // --- notch ---
+  // --- corners ---
+  /**
+   * Behaves like the cursor resting in `corner` of a monitor (default the first):
+   * sends `hot-corner` and runs the action like the app (switcher, panel).
+   * Returns the event, or null when that corner does nothing.
+   */
+  hotCorner(corner: HotCorner, monitorId?: string): HotCornerEvent | null;
 }
 
 export type MockBackend = Backend & { demo: DemoControls };
@@ -149,6 +165,8 @@ export function defaultSettings(): Settings {
     // --- notch ---
     notch: defaultNotchSettings(),
     // --- notch ---
+    // --- corners ---
+    hot_corners: defaultHotCorners(),
   };
 }
 
@@ -246,6 +264,8 @@ function sanitizeSettings(s: Settings): Settings {
     // --- notch ---
     notch: sanitizeNotch(s.notch),
     // --- notch ---
+    // --- corners ---
+    hot_corners: sanitizeHotCorners(s.hot_corners),
   };
 }
 
@@ -322,6 +342,8 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
     return { ...anchor };
   }
   // --- notch ---
+  // --- corners ---
+  const hotCornerListeners = new Set<(e: HotCornerEvent) => void>();
 
   function persist(): void {
     if (!storage) return;
@@ -545,6 +567,19 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
       return () => notchNavigateListeners.delete(cb);
     },
     // --- notch ---
+    // --- corners ---
+    hotCorner(corner, monitorId = MONITORS[0].profile_id) {
+      const ev = hotCornerEvent(config.settings, corner, monitorId, capabilities().shortcuts);
+      if (!ev) return null;
+      for (const cb of hotCornerListeners) cb(ev);
+      if (ev.action === 'switcher') {
+        switcherMonitorId = monitorId;
+        demo.navigate('switcher');
+      } else if (ev.action === 'panel') {
+        demo.navigate('settings');
+      }
+      return ev;
+    },
   };
 
   const backend: MockBackend = {
@@ -780,6 +815,15 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
       // A browser tab has no panel window to hide.
     },
     // --- notch ---
+    // --- corners ---
+    async hotCornersStatus() {
+      return hotCornersStatus(config.settings, capabilities().shortcuts);
+    },
+
+    async onHotCorner(cb): Promise<Unlisten> {
+      hotCornerListeners.add(cb);
+      return () => hotCornerListeners.delete(cb);
+    },
   };
 
   return backend;

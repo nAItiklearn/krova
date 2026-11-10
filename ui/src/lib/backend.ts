@@ -10,6 +10,8 @@ import { listen } from '@tauri-apps/api/event';
 import type {
   AppState,
   Axis,
+  HotCornerEvent,
+  HotCornerStatus,
   HoverPicker,
   Layout,
   NavigateTarget,
@@ -133,6 +135,14 @@ export interface Backend {
   /** Hide the panel window (Esc). It stays warm for the next click. */
   hidePanel(): Promise<void>;
   // --- notch ---
+  // --- corners ---
+  /** Whether this OS build can watch the screen corners, and whether it does now. */
+  hotCornersStatus(): Promise<HotCornerStatus>;
+  /**
+   * Backend event "hot-corner": a corner fired. `switcher` and `panel` also arrive
+   * as a `navigate`; the other actions are handled by the parts that own them.
+   */
+  onHotCorner(cb: (event: HotCornerEvent) => void): Promise<Unlisten>;
 }
 
 /** Commands reject with a string; be tolerant of Error objects too. */
@@ -200,6 +210,9 @@ export const tauriBackend: Backend = {
   panelAnchor: () => invoke<PanelAnchor | null>('panel_anchor'),
   hidePanel: () => invoke<void>('hide_panel'),
   // --- notch ---
+  // --- corners ---
+  hotCornersStatus: () => invoke<HotCornerStatus>('hot_corners_status'),
+  onHotCorner: (cb) => listen<HotCornerEvent>('hot-corner', (e) => cb(e.payload)),
 };
 
 /** True when running inside the Tauri webview. */

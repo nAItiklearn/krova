@@ -101,6 +101,8 @@ pub fn change_settings(shared: &Shared, edit: impl FnOnce(&mut Settings)) -> Res
     // --- wave3 ---
     crate::wave3::on_settings_changed(shared, &old, &new);
     // --- end wave3 ---
+    // --- corners ---
+    crate::corners::settings_changed(&old, &new);
     if old.launch_at_login != new.launch_at_login {
         if let Err(e) = shared.platform.set_autostart(new.launch_at_login) {
             lock(&shared.model).config.settings.launch_at_login = old.launch_at_login;
