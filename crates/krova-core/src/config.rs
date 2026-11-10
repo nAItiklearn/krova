@@ -119,6 +119,16 @@ pub struct Settings {
     /// `<shortcut_modifier>+Space` opens the layout switcher on the monitor under
     /// the cursor. Independent of `keyboard_shortcuts`.
     pub layout_switcher_shortcut: bool,
+    // --- wave3 ---
+    /// Focus dim (off by default).
+    pub focus: crate::focus::FocusSettings,
+    /// Calm desk options.
+    pub calm_desk: crate::focus::CalmDeskSettings,
+    /// While on, Krova's overlays show only zone shapes, never app names or icons.
+    pub share_safe: bool,
+    /// Window highlight (none by default).
+    pub highlight: crate::focus::HighlightSettings,
+    // --- end wave3 ---
 }
 
 /// `#rrggbb` (any case, optional `#`, surrounding spaces ignored) as lowercase `#rrggbb`.
@@ -144,6 +154,10 @@ impl Settings {
         self.zone_gap_px = self.zone_gap_px.clamp(0, MAX_ZONE_GAP_PX);
         self.highlight_color =
             normalize_hex_color(&self.highlight_color).unwrap_or(defaults.highlight_color);
+        // --- wave3 ---
+        self.focus = self.focus.sanitized();
+        self.highlight = self.highlight.sanitized();
+        // --- end wave3 ---
         self
     }
 }
@@ -166,6 +180,12 @@ impl Default for Settings {
             linked_dividers: true,
             zone_gap_px: 0,
             layout_switcher_shortcut: true,
+            // --- wave3 ---
+            focus: crate::focus::FocusSettings::default(),
+            calm_desk: crate::focus::CalmDeskSettings::default(),
+            share_safe: false,
+            highlight: crate::focus::HighlightSettings::default(),
+            // --- end wave3 ---
         }
     }
 }
@@ -225,6 +245,10 @@ pub struct Config {
     pub schema_version: u32,
     pub settings: Settings,
     pub monitors: Vec<MonitorProfile>,
+    // --- wave3 ---
+    /// Saved workspaces (programs by executable path, in zones). At most 32.
+    pub workspaces: Vec<crate::workspace::Workspace>,
+    // --- end wave3 ---
 }
 
 impl Default for Config {
@@ -233,6 +257,9 @@ impl Default for Config {
             schema_version: SCHEMA_VERSION,
             settings: Settings::default(),
             monitors: Vec::new(),
+            // --- wave3 ---
+            workspaces: Vec::new(),
+            // --- end wave3 ---
         }
     }
 }
@@ -276,6 +303,9 @@ impl Config {
         for m in &mut cfg.monitors {
             m.sanitize();
         }
+        // --- wave3 ---
+        crate::workspace::sanitize_workspaces(&mut cfg.workspaces);
+        // --- end wave3 ---
         Ok((cfg, LoadStatus::Loaded))
     }
 
