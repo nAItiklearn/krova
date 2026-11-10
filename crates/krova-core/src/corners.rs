@@ -354,6 +354,27 @@ pub fn outer_spots(monitors: &[(PxRect, f64)], settings: &HotCornerSettings) -> 
     spots
 }
 
+/// `pos` if it is on a monitor, otherwise the nearest point of the nearest
+/// monitor (where the OS pins the cursor). Unchanged with no monitors.
+pub fn clamp_to_monitors((x, y): (i32, i32), monitors: &[(PxRect, f64)]) -> (i32, i32) {
+    let mut best: Option<((i32, i32), i64)> = None;
+    for (m, _) in monitors {
+        if m.w <= 0 || m.h <= 0 {
+            continue;
+        }
+        if m.contains(x, y) {
+            return (x, y);
+        }
+        let cx = x.clamp(m.x, m.right() - 1);
+        let cy = y.clamp(m.y, m.bottom() - 1);
+        let d = (i64::from(cx) - i64::from(x)).pow(2) + (i64::from(cy) - i64::from(y)).pow(2);
+        if best.map_or(true, |(_, bd)| d < bd) {
+            best = Some(((cx, cy), d));
+        }
+    }
+    best.map_or((x, y), |(p, _)| p)
+}
+
 /// A window covering the whole monitor counts as full screen.
 pub fn covers_monitor(window: PxRect, monitor: PxRect) -> bool {
     monitor.w > 0
@@ -1029,6 +1050,16 @@ mod tests {
     }
 
     // ---- full screen and ripple
+
+    #[test]
+    fn points_past_the_desktop_are_pinned_to_the_nearest_monitor() {
+        let monitors = [(M, 1.0), (PxRect::new(1920, 0, 1920, 1080), 2.0)];
+        assert_eq!(clamp_to_monitors((-5, -3), &monitors), (0, 0));
+        assert_eq!(clamp_to_monitors((3845, 1090), &monitors), (3839, 1079));
+        assert_eq!(clamp_to_monitors((1919, -9), &monitors), (1919, 0));
+        assert_eq!(clamp_to_monitors((700, 300), &monitors), (700, 300));
+        assert_eq!(clamp_to_monitors((7, 7), &[]), (7, 7));
+    }
 
     #[test]
     fn full_screen_means_covering_the_whole_monitor() {

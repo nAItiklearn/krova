@@ -357,6 +357,10 @@ unsafe extern "system" fn mouse_proc(code: i32, wparam: WPARAM, lparam: LPARAM) 
         // SAFETY: for WH_MOUSE_LL, lparam points to a valid MSLLHOOKSTRUCT for
         // the duration of the call.
         let pt = unsafe { (*(lparam.0 as *const MSLLHOOKSTRUCT)).pt };
+        // --- corners ---
+        if wparam.0 as u32 == WM_MOUSEMOVE {
+            crate::win_corners::on_mouse_move(pt.x, pt.y);
+        }
         let ev = match wparam.0 as u32 {
             WM_LBUTTONDOWN => {
                 LEFT_DOWN.store(true, Ordering::Relaxed);
@@ -795,6 +799,15 @@ impl Platform for WindowsPlatform {
 
     fn start_watcher(&self, sink: EventSink<WatchEvent>) -> Result<WatchHandle, PlatformError> {
         crate::win_events::start_watcher(sink)
+    }
+
+    // --- corners ---
+    fn start_hot_corners(
+        &self,
+        config: crate::corners::CornerConfig,
+        sink: EventSink<crate::corners::CornerHit>,
+    ) -> Result<crate::corners::HotCornersHandle, PlatformError> {
+        crate::win_corners::start(config, sink)
     }
 }
 

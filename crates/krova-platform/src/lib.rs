@@ -13,6 +13,8 @@ use std::sync::Arc;
 use krova_core::registry::KeyAction;
 use krova_core::{DragEvent, Modifier, MonitorDescriptor, PxRect};
 
+// --- corners ---
+pub mod corners;
 pub mod hotkeys;
 pub mod ids;
 pub mod input;
@@ -22,6 +24,9 @@ pub mod mac_math;
 pub mod overlay;
 #[cfg(windows)]
 pub mod win;
+// --- corners ---
+#[cfg(windows)]
+pub mod win_corners;
 #[cfg(windows)]
 pub mod win_events;
 #[cfg(windows)]
@@ -336,6 +341,17 @@ pub trait Platform: Send + Sync {
 
     /// Watch for window move/resize and display changes until the handle is dropped.
     fn start_watcher(&self, _sink: EventSink<WatchEvent>) -> Result<WatchHandle, PlatformError> {
+        Err(PlatformError::Unsupported)
+    }
+
+    // --- corners ---
+    /// Watch the outer screen corners and report each hot-corner fire to `sink`
+    /// until the handle is dropped. Needs the mouse hook of [`Platform::start_input`].
+    fn start_hot_corners(
+        &self,
+        _config: corners::CornerConfig,
+        _sink: EventSink<corners::CornerHit>,
+    ) -> Result<corners::HotCornersHandle, PlatformError> {
         Err(PlatformError::Unsupported)
     }
 }
