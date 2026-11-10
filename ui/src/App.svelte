@@ -135,7 +135,6 @@
         <rect x="23" y="19" width="4" height="8" rx="1.8" fill="var(--accent)" />
       </svg>
       <h1 class="name">Krova</h1>
-      {#if api.kind === 'mock'}<DemoBadge />{/if}
     </div>
 
     <div class="status" class:on={arranging && enabled}>
@@ -143,7 +142,7 @@
         <span class="dot" aria-hidden="true"></span>
         <span>
           <strong id="st-label">{!enabled ? 'Krova is off' : arranging ? 'Arranging' : 'Paused'}</strong>
-          <small>{!enabled ? 'Nothing is moved' : arranging ? 'New windows find a zone' : 'Windows stay put'}</small>
+          <small>{!enabled ? 'Nothing is moved' : arranging ? 'Windows find a zone' : 'Windows stay put'}</small>
         </span>
       </div>
       <Toggle
@@ -180,6 +179,7 @@
       {/each}
     </nav>
 
+    {#if api.kind === 'mock'}<div class="demo"><DemoBadge /></div>{/if}
     <footer class="foot">
       <span data-testid="version">Krova {app.state ? `v${app.state.version}` : ''}</span>
       <span data-testid="privacy">Offline · no telemetry</span>
@@ -355,6 +355,16 @@
     color: var(--accent);
   }
 
+  .demo {
+    margin-top: auto;
+    font-size: 0.78rem;
+  }
+  .demo + .foot {
+    margin-top: 0;
+  }
+  .brand svg {
+    flex: none;
+  }
   .foot {
     margin-top: auto;
     display: flex;

@@ -81,7 +81,7 @@ export function defaultSettings(): Settings {
   return {
     enabled: true,
     modifier: 'shift',
-    highlight_color: '#3b82f6',
+    highlight_color: '#ff5b1f',
     highlight_opacity: 0.35,
     move_mode: 'animate',
     edge_snapping: false,
