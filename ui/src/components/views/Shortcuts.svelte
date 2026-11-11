@@ -581,8 +581,10 @@
   }
   .keys {
     display: inline-flex;
+    flex-shrink: 0;
     align-items: center;
     gap: 4px;
+    white-space: nowrap;
   }
   .fam {
     margin-left: 2px;

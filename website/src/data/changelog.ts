@@ -84,7 +84,7 @@ export const releases: readonly Release[] = [
           'Ctrl+Alt+Left and Right clash with back and forward in some code editors, and some older Intel graphics drivers use Ctrl+Alt+arrows to rotate the screen. Rebind them under Shortcuts if needed.',
           'Programs from the Microsoft Store cannot be started by a workspace restore; they are reused when already open.',
           'Languages other than English are placeholders (English text) for now.',
-          '“Show zones” (quick panel, hot corner) and the “Cheat sheet” hot corner do nothing yet. Ctrl+Alt+/ and the quick panel’s Cheat sheet link may not show the sheet in this build; it is always under Shortcuts, Cheat sheet.',
+          '“Show zones” (quick panel, hot corner) does nothing yet.',
         ],
       },
     ],

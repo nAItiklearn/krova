@@ -233,3 +233,44 @@ test.describe('layout switcher', () => {
     await expect(selected(page)).toHaveAccessibleName(/^Thirds/);
   });
 });
+
+// Ctrl+Alt+/ (and the notch menu) show the switcher window with
+// `navigate: "cheat_sheet"`; the demo page takes ?view=cheat_sheet.
+test.describe('cheat sheet in the switcher window', () => {
+  const SHEET = '/switcher.html?nopersist&view=cheat_sheet';
+
+  test('shows the shortcuts grouped, with families collapsed, and closes on any key', async ({ page }) => {
+    await page.goto(SHEET);
+    const sheet = page.getByTestId('cheat-sheet');
+    await expect(sheet).toBeVisible();
+    await expect(sheet).toBeFocused();
+    await expect(page.getByRole('heading', { name: 'Krova shortcuts' })).toBeVisible();
+    await expect(dialog(page)).not.toHaveAttribute('data-open', 'true');
+    for (const g of ['Windows', 'Layouts', 'Krova']) {
+      await expect(sheet.getByRole('region', { name: g })).toBeVisible();
+    }
+    await expect(sheet).toContainText('Move to zone 1–9');
+    await expect(sheet).toContainText('Apply layout 1–9');
+    await page.keyboard.press('a');
+    await expect(sheet).toHaveCount(0);
+  });
+
+  test('a click outside closes it', async ({ page }) => {
+    await page.goto(SHEET);
+    await expect(page.getByTestId('cheat-sheet')).toBeVisible();
+    await page.mouse.click(5, 5);
+    await expect(page.getByTestId('cheat-sheet')).toHaveCount(0);
+  });
+
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`axe AA (${scheme})`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+      await page.goto(SHEET);
+      await expect(page.getByTestId('cheat-sheet')).toBeVisible();
+      const results = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .analyze();
+      expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
+    });
+  }
+});

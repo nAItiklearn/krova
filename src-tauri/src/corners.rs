@@ -2,8 +2,8 @@
 //! settings, and dispatch every fire.
 //!
 //! Each fire emits the Tauri event `hot-corner` (`{ corner, action, monitor_id }`)
-//! and then runs the action through [`dispatch`]: `switcher` and `panel` open
-//! their views here; the other actions (`cheat_sheet`, `focus`, `calm_desk`,
+//! and then runs the action through [`dispatch`]: `switcher`, `panel` and
+//! `cheat_sheet` open their views here; the other actions (`focus`, `calm_desk`,
 //! `pause`, `show_zones`) belong to other parts of the app, which either listen
 //! to the event or plug a handler in with [`register`].
 //!
@@ -68,9 +68,11 @@ enum Route {
 fn route(action: HotCornerAction) -> Route {
     match action {
         HotCornerAction::Switcher => Route::View("switcher"),
-        HotCornerAction::Panel => Route::View("settings"),
-        HotCornerAction::CheatSheet
-        | HotCornerAction::Focus
+        // Both are popup views: the opener shows the quick panel / the switcher
+        // window with the cheat sheet (`popups::window_for`).
+        HotCornerAction::Panel => Route::View("panel"),
+        HotCornerAction::CheatSheet => Route::View("cheat_sheet"),
+        HotCornerAction::Focus
         | HotCornerAction::CalmDesk
         | HotCornerAction::Pause
         | HotCornerAction::ShowZones => Route::Elsewhere,
@@ -265,9 +267,12 @@ mod tests {
     #[test]
     fn switcher_and_panel_open_views_the_rest_goes_elsewhere() {
         assert_eq!(route(HotCornerAction::Switcher), Route::View("switcher"));
-        assert_eq!(route(HotCornerAction::Panel), Route::View("settings"));
+        assert_eq!(route(HotCornerAction::Panel), Route::View("panel"));
+        assert_eq!(
+            route(HotCornerAction::CheatSheet),
+            Route::View("cheat_sheet")
+        );
         for a in [
-            HotCornerAction::CheatSheet,
             HotCornerAction::Focus,
             HotCornerAction::CalmDesk,
             HotCornerAction::Pause,

@@ -19,7 +19,12 @@
 
 </div>
 
-<!-- SCREENSHOT -->
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="website/public/screenshots/app-overview-dark.png">
+    <img src="website/public/screenshots/app-overview-light.png" width="860" alt="The Krova settings app: a sidebar with Overview, Layouts, Arrange, Workspaces, Focus, Shortcuts, Appearance, Corners, Displays, Screen edges and Privacy, and the Overview page showing two sample monitors with their zones and layouts.">
+  </picture>
+</p>
 
 > [!WARNING]
 > **v0.2.0-beta.1 is a test build.** Every feature passes the automated tests (unit, integration and browser tests), but the new 0.2 features have **not yet been tried by hand on a real Windows desktop**. Expect bugs, and don't rely on it for important work. The stable version is [v0.1.0](https://github.com/nAItiklearn/krova/releases/tag/v0.1.0). **macOS is not ready**: the code has never run on a Mac.

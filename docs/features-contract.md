@@ -195,8 +195,9 @@ Loading never fails on this block: a missing or mistyped field takes its default
 
 **Actions** go through one function, `corners::dispatch` in `src-tauri/src/corners.rs`:
 - `switcher`: the layout switcher opens for the monitor whose corner fired (`switcher_monitor` returns it), via `navigate("switcher")`.
-- `panel`: `navigate("settings")`.
-- `cheat_sheet`, `focus`, `calm_desk`, `pause`, `show_zones`: only the event, plus an in-process handler if one was plugged in with `corners::register(action, handler)`. The branches that own these features hook in there (or listen to the event).
+- `panel`: the quick panel window (`popups::show("panel")`).
+- `cheat_sheet`: the switcher window with `navigate("cheat_sheet")`, which shows the cheat sheet (built from `AppState.shortcut_actions`).
+- `focus`, `calm_desk`, `pause`, `show_zones`: only the event, plus an in-process handler if one was plugged in with `corners::register(action, handler)`. The branches that own these features hook in there (or listen to the event).
 
 **Command** `hot_corners_status` (no arguments) returns `HotCornerStatus` `{ supported, active }`: `supported` is false where the OS layer cannot watch corners (macOS today); `active` is true while corners are being watched (supported, Krova on, at least one corner set). TS: `api.hotCornersStatus()`.
 

@@ -9,6 +9,7 @@
   import { api, errorMessage, insideTauri } from '../../lib/backend';
   import type { AppState } from '../../lib/bindings';
   import { ext } from '../../lib/ext.svelte';
+  import CheatSheet from './CheatSheet.svelte';
   import Deck, { type DeckActions } from './Deck.svelte';
 
   const demo = api.kind === 'mock';
@@ -16,6 +17,8 @@
 
   let monitorId = $state<string | null>(null);
   let open = $state(false);
+  /** The window shows the layout deck, or the cheat sheet (`navigate: "cheat_sheet"`). */
+  let mode = $state<'deck' | 'sheet'>('deck');
   let loadError = $state<string | null>(null);
   let reopenBtn = $state<HTMLButtonElement>();
 
@@ -110,8 +113,9 @@
     }
   }
 
-  async function reopen(): Promise<void> {
+  async function reopen(view: 'deck' | 'sheet' = 'deck'): Promise<void> {
     await load();
+    mode = view;
     open = true;
   }
 
@@ -147,7 +151,14 @@
     );
     // The backend shows the window and sends `navigate: "switcher"` every time
     // the shortcut is pressed; re-read which monitor it is for.
-    keep(api.onNavigate((v) => v === 'switcher' && void reopen()));
+    let asked = false;
+    keep(
+      api.onNavigate((v) => {
+        if (v !== 'switcher' && v !== 'cheat_sheet') return;
+        asked = true;
+        void reopen(v === 'cheat_sheet' ? 'sheet' : 'deck');
+      }),
+    );
     if (tauri) {
       keep(
         import('@tauri-apps/api/window').then(({ getCurrentWindow }) =>
@@ -157,7 +168,15 @@
         ),
       );
     }
-    void reopen();
+    // The real app sends the view about 250 ms after the page has loaded; open the
+    // deck only if none arrives, so the cheat sheet does not flash the deck first.
+    // The demo page takes `?view=cheat_sheet`.
+    const first = new URLSearchParams(location.search).get('view') === 'cheat_sheet' ? 'sheet' : 'deck';
+    if (tauri) {
+      void load();
+      const t = setTimeout(() => !asked && void reopen(), 700);
+      offs.push(() => clearTimeout(t));
+    } else void reopen(first);
     return () => {
       alive = false;
       for (const off of offs) off();
@@ -185,12 +204,14 @@
 <Deck
   layouts={profile?.layouts ?? []}
   activeId={profile?.active_layout ?? null}
-  {open}
+  open={open && mode === 'deck'}
   title="Layouts"
   {subtitle}
   {monitorLabel}
   {actions}
 />
+
+<CheatSheet actions={st?.shortcut_actions ?? []} open={open && mode === 'sheet'} onclose={close} />
 
 <style>
   /* The window is transparent: only the deck's scrim paints. */

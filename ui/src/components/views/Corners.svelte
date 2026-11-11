@@ -133,7 +133,10 @@
         <Toggle id="co-n-on" checked={notch.enabled} onchange={(v) => ext.patch('notch', { enabled: v })} />
       </Row>
       <Row label="Position">
-        <Segmented name="notch-pos" label="Notch position" options={PLACES} value={notch.corner} onchange={(v) => ext.patch('notch', { corner: v })} />
+        {#snippet below()}
+          <!-- Five choices: on its own line so the label is never squeezed. -->
+          <Segmented name="notch-pos" label="Notch position" options={PLACES} value={notch.corner} onchange={(v) => ext.patch('notch', { corner: v })} />
+        {/snippet}
       </Row>
       <Row label="Screen" desc="Stay on the main screen or follow the mouse.">
         <Segmented

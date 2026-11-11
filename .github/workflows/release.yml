@@ -35,11 +35,12 @@ jobs:
             os: windows-latest
             bundle_dir: src-tauri/target/release/bundle
             args: "--bundles nsis"
-          - name: macos
-            os: macos-latest
-            rust_target: aarch64-apple-darwin,x86_64-apple-darwin
-            bundle_dir: src-tauri/target/universal-apple-darwin/release/bundle
-            args: "--target universal-apple-darwin --bundles dmg"
+          # Windows only for now. To build macOS again (never run on a real Mac), add back:
+          #   - name: macos
+          #     os: macos-latest
+          #     rust_target: aarch64-apple-darwin,x86_64-apple-darwin
+          #     bundle_dir: src-tauri/target/universal-apple-darwin/release/bundle
+          #     args: "--target universal-apple-darwin --bundles dmg"
     runs-on: ${{ matrix.os }}
     # The macOS build is not released yet (never run on a real Mac), so it may fail without
     # blocking the release. Its artifact stays available for testing.
