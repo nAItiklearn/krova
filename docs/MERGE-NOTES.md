@@ -54,15 +54,13 @@ for that reason; hooks are registered only from `start` functions tests do not c
 
 ## Still open (for the next merges and a person with a PC)
 
-1. **UI pages.** `panel.html`, `switcher.html` (ui-panel, ui-switcher) and
-   `picker.html` (ui-workspaces) are not in this branch; the windows exist in
-   `tauri.conf.json`, but their pages 404 until those branches merge. Add each page
-   as a Vite input when it lands, and check the picker page calls
-   `place_hovered` and `hide_popup("picker")`.
-2. **Share-safe in the popups.** The Tauri popups are not excluded from capture;
-   their pages must read `AppState.wave3.share_safe` and show no app names
-   (`front_app.exe` is already `null` then). If capture exclusion is wanted, apply
-   `SetWindowDisplayAffinity` to the popup HWNDs from `popups.rs`.
+1. ~~**UI pages.**~~ Done on `next` (final join): `ui-merge` brought `panel.html`,
+   `switcher.html` and `picker.html` as Vite inputs; the picker page calls
+   `place_hovered` and hides its own window.
+2. ~~**Share-safe in the popups.**~~ Done on `next`: the panel, switcher and picker
+   windows join the capture-exclusion registry when built (`popups::track_capture`
+   -> `krova_platform::desk::track_capture_window`); `front_app.exe` is null under
+   share-safe, so the panel shows no program name.
 3. **`show_zones`** (hot corner) is only an event: no "show the zones" overlay
    call outside a drag exists yet.
 4. **Translations.** `tray.pause` and `tray.panel` are English in every table.

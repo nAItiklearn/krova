@@ -1,5 +1,82 @@
 # Progress
 
+## State on 2026-11-10: v0.2 integration
+
+Branch `next` = `integrate` (backend waves 0-4, notch, hot corners, engine: auto-arrange, stacks, swap, presets, app rules, shortcut rebinding, warm popups, pause, appearance; see `docs/MERGE-NOTES.md`) + `ui-merge` (the new sidebar UI with Overview, Layouts, Arrange, Workspaces, Focus, Shortcuts, Appearance, Corners, Displays, Screen edges and Privacy views; the quick panel, layout switcher and hover picker pages) + the new website and the ink/ember brand icon (`assets/icon`, `src-tauri/icons`). Nothing of this has been run on a real desktop as one build yet; the checklist below is the order to do it in.
+
+**UI to backend wiring (what the new views now really change).** `ui/src/lib/ext.svelte.ts` no longer keeps these in localStorage when the backend has them: `appearance`, `hot_corners`, `notch`, `highlight` and `focus_follows_mouse` are `Settings` fields (saved by the debounced form); `auto_arrange` is per monitor (shown from the first connected monitor, written to every connected one with `set_auto_arrange`); app rules go through `set_app_rule` / `remove_app_rule` (the UI's `{action, zone}` is converted to `RuleAction`; zones 1..64; `start_on_monitor` rules are kept but not shown); pause is `AppState.paused` / `set_paused`. The Shortcuts view renders from `AppState.shortcut_actions` (families "Move", "Swap", "Zone 1-9", "Layout 1-9" set all their actions at once), records through `probe_shortcut` then `set_shortcut`, shows the probe's message and suggestions on a refusal, and Reset all calls `reset_shortcuts`; the v0.1 modifier select and key map are gone from the view. Displays shows each monitor's reserved edges (and draws them) with a link to Screen edges. A pending settings save always sends the backend's current `app_rules` and `shortcuts`, so it never undoes those commands. The popup windows (panel, switcher, picker) join the share-safe capture-exclusion registry (`krova_platform::desk::track_capture_window`, `WDA_EXCLUDEFROMCAPTURE` while share-safe is on).
+
+**Still local or mock-only in the UI:** workspace shortcuts (`workspace:<id>`) and a calm-desk shortcut (no backend action exists; the sheet hides the calm-desk row when the backend has shortcut actions); "Show zones" (hot corner and panel: event only, no overlay outside a drag). The demo seeds two example app rules (`DEMO_APP_RULES`); the real default is none.
+
+**Automated checks on this branch (re-run 2026-11-11 after the final join, Windows 11, GNU toolchain, WinLibs first on PATH):** `cargo fmt --all --check` and `clippy -D warnings` clean for the root workspace, `src-tauri`, and `aarch64-apple-darwin` (core + platform). Tests: core **503**, platform **125** (+12 ignored desktop tests), app **125** (+3 ignored). UI: vitest **290**, `svelte-check` 0 errors / 0 warnings, `vite build` (4 pages: index, panel, switcher, picker), e2e type check, Playwright **314** (all passed, incl. axe AA light + dark) on a static demo build (`PW_PREVIEW=1`, 2 workers, Edge). Website: `npm run build` (17 pages) and `check:links` clean. Release build: `npx @tauri-apps/cli@2.12.3 build --bundles nsis` succeeded with the version `0.2.0-beta.1` (installer 2.52 MiB); the built app was not started (a hands-on run is item 1 below).
+
+### Manual test checklist (v0.2, one build, a real Windows PC)
+
+Build: `npm ci --prefix ui && npm run build --prefix ui`, then `npx -y @tauri-apps/cli@2.12.3 build --no-bundle` (or `dev`). Watch Task Manager throughout: idle means 0 % CPU for Krova. Ignored desktop tests to run once: `cargo test -p krova-platform -- --ignored --test-threads=1` and `cargo test -p krova-platform default_chords_probe -- --ignored --nocapture` (note which default `Ctrl+Alt` chords this PC refuses).
+
+**1. Start, tray, brand**
+1. Fresh config (rename `config.json`) and start: the tray and taskbar show the new ink tile with the ember zone, crisp at 100 % and 150 %; the notch pill appears at the top centre of the primary monitor.
+2. Every monitor gets the "Main + side 3" preset for its shape as the active layout (ultrawide and portrait monitors get their variant).
+3. Idle with nothing happening: 0 % CPU (no timers between events), also with the notch, hot corners and both pointer features on.
+
+**2. Auto-arrange, stacks, swap, rules (engine wave 1)**
+4. Open Notepad, Explorer, a browser: each springs into the next free zone about 0.3 s after it appears.
+5. A fourth window with every zone full: it stacks; a tab strip on the zone's top edge shows icons and short program names (never titles). Click a tab: it comes forward; wheel over the strip cycles; clicks between tabs reach the window below. Close the visible tab: the next shows; one window left: the strip goes.
+6. Strip look: radius, translucency, hairline, accent underline; switch Windows light/dark: it follows; same physical size on 100 % and 150 %.
+7. Dialogs (File > Open), tooltips, the Start menu, Task Manager (elevated): never arranged.
+8. In Arrange, add rules: `calc.exe` Float (Calculator stays where it opens), `notepad.exe` Zone 2 (opens in zone 2), Never touch. Restart: the rules are still there (they live in `Settings.app_rules`).
+9. Shift-drag a tiled window onto another tiled window's zone: they swap. Drag a tiled window to the middle without the modifier: it floats and is left alone.
+10. Switch the active layout (switcher or Layouts): the arranged windows move to the new zones.
+11. Arrange > "Arrange new windows" off: new windows are not touched on any monitor (the switch writes every connected monitor); policy "Main zone first", "Fill gaps" and "Stack when full" change the behaviour as described.
+
+**3. Shortcuts, pause, popups (engine wave 2 + new UI)**
+12. `Ctrl+Alt+Right` moves the focused window to the next zone (past the edge into the next monitor); `Ctrl+Alt+Shift+Left` swaps; `Ctrl+Alt+3` sends to zone 3; `Ctrl+Alt+Shift+2` applies layout 2 on the monitor under the cursor; `Ctrl+Alt+Enter` fills and restores; `Ctrl+Alt+]` / `[` cycle a stack.
+13. Shortcuts view: every row shows the chord the backend registered. Record `Pause` as a free chord: it works at once. Record it as `Ctrl+Alt+F`: the row says it is already Focus and offers up to three free chords; pick one. Record a chord another program holds: the row says so with suggestions. Rebind "Move" to `Ctrl+Shift`: all four arrows follow. Backspace turns one off. Reset all brings the defaults back. An old config with `"shortcut_modifier":"win_alt"` keeps Win+Alt for the zone shortcuts.
+14. `Ctrl+Alt+T`, the tray item, the Overview button and the panel switch all pause: the tray icon dims ("Krova (paused)"), the notch dot greys and reads "Paused", new windows are not arranged, focus follows mouse and the hover picker stop, and every pause control in the UI shows it within a moment; any of them resumes.
+15. `Ctrl+Alt+Space`: the switcher covers the monitor under the cursor with a blurred backdrop on Windows 11 (page background on Windows 10); Esc or a click outside hides it; the second open is instant. `Ctrl+Alt+/` opens the cheat sheet. A left click on the tray icon opens the quick panel near the tray. Record the latencies in `docs/measurements/popup-open-latency.md`.
+16. In the quick panel, the Settings / Corners links open (or focus) the main window on that view (`open_main`); Switcher and Shortcuts open the switcher window.
+
+**4. The new main window**
+17. Every sidebar view opens without a flash; Arrow keys move through the sidebar; light, dark and system themes follow Windows.
+18. Appearance: change the accent, corner radius and border width: the drag zones, stack tabs and notch use them at once (1.5 times the pixels on a 150 % monitor; border 6 makes the highlighted zone clearly thicker). Highlight mode and width change the focused-window highlight.
+19. Displays: each monitor card shows resolution, scale, layout and its reserved edges; "Edit edges" opens Screen edges.
+
+**5. Notch**
+20. The pill sits 4 px below the top edge, above every window. Hover: after about 150 ms it grows smoothly to the layout name; a quick pass does not expand it.
+21. Left click: the quick panel opens just below it (above a bottom notch), on the notch's monitor, with the focus; Esc or a click elsewhere hides it; clicking again reopens it instantly, clicking while open closes it.
+22. Right click menu: Pause Krova, Layouts (active one checked), Layout switcher, Cheat sheet, Open Krova, Hide notch; each does what it says, and the label follows a layout change.
+23. Drag it to each of the five positions (taskbar at the bottom and at the top): it springs there and comes back there after a restart. Corners view: the position, monitor (`primary` / `cursor`), "hide in full screen" and on/off switches change it live; Hide notch then switching it on again brings it back without a restart.
+24. Full-screen video or game: the notch hides on that monitor and returns afterwards; a maximised window does not hide it.
+25. Mixed DPI with `cursor`: it moves to the monitor of the window you click and is drawn at that scale; changing the scale redraws it. Unplug or rearrange monitors: it moves to the new primary.
+
+**6. Hot corners**
+26. Default: rest in the top-right corner: after about 0.3 s an ember quarter-circle blooms and the switcher opens for that monitor; staying does nothing more; small wiggles do nothing; leaving and coming back fires again (not sooner than 0.6 s). Passing through without stopping does nothing.
+27. Dragging a window into a corner never fires; releasing there fires one dwell later.
+28. Bottom-right `calm_desk`: calm desk toggles. A `pause` corner pauses and also resumes while paused (other corners stay quiet while paused). `focus` toggles focus dim. `show_zones` only sends the event (no overlay yet).
+29. Two monitors side by side, staggered, and at 100 % / 175 %: corners where screens meet never fire; outer corners feel the same on both. Rearranging or unplugging works without a restart.
+30. Full screen in front: nothing fires; `ignore_fullscreen` off: it fires. Krova off in the tray: nothing fires. Animation effects off in Windows: the ripple is a still quarter-circle.
+31. The dwell slider in Corners (150..1000 ms) changes the wait at once.
+
+**7. Workspaces, focus, calm desk (wave3)**
+32. Snap three apps into zones on two monitors, capture a workspace in the Workspaces view (read the privacy line), move things and open another app, restore: each lands in its zone, the other app is minimised (not closed), every entry says `placed`.
+33. Close a captured classic app (VS Code) and restore with launching: it starts and lands within 10 s; without launching: `not_running`. A program copied to `%TEMP%` and captured from there is never started (`refused`, with its path).
+34. Focus dim (Focus view or `Ctrl+Alt+F`): the dim fades in, the rounded hole follows focus with a spring and follows a drag; clicking the desktop fades it out; the strength slider changes it; 100 % and 150 % monitors and a window spanning both.
+35. Calm desk: only floating windows minimise; restore one by hand, toggle again: only the others come back.
+36. Highlight `active` 2 px on Windows 11 uses the window's own border colour; 5 px draws an overlay ring that eases between windows; `all` and `glow` as named; all disappear for full-screen video, minimised windows and other virtual desktops; off restores every border colour.
+
+**8. Reserved edges, pointer features, updates, languages (wave4)**
+37. Screen edges: reserve 48 px on the left of one monitor: drag-snap, keyboard moves, edge snaps and the overlay stop 48 logical px from the edge on 100 % and 150-200 % monitors; the other monitor is unchanged; Displays shows it. 400 on both sides of a small monitor is ignored for that axis (the views say so). Unplug and replug: the restore uses the reduced area.
+38. Focus follows mouse (Arrange): resting on an inactive Notepad activates it after the delay (try 150 and 800 ms); moving across windows without stopping activates nothing. Note whether Windows lets activations through or flashes the taskbar button, and whether `pointer.focus_refused` counts it.
+39. Nothing is activated with a button held, right after a click, over the desktop or taskbar, over Krova's own windows, over an elevated window, with a menu or the Start menu open, in full screen, or over a window with a modal dialog.
+40. Hover picker: hold Shift on Notepad's title bar and rest: the picker window appears next to the cursor without taking the focus; pick a zone: Notepad moves there (and a reconnect restores it there); resting elsewhere hides it; a hung window does not stall the cursor; Shift-drag still works.
+41. Check for updates (tray): opens the releases page in the browser; Krova makes no request itself (Resource Monitor).
+42. Language `de` and `system` on a German Windows: the tray relabels without a restart; missing keys show English (`tray.pause` and `tray.panel` are English everywhere for now).
+
+**9. Share-safe and privacy (last, with OBS or the Snipping Tool recording)**
+43. Share-safe on (Focus view): the notch shows "N zones" and its menu "Layout 1..N"; stack strips show dots, no names or icons; the panel shows no program name.
+44. While recording: the notch, ripple, strips, zone overlays **and the quick panel, switcher and hover picker windows** do not appear in the capture (they show on the real screen). Share-safe off: they appear in captures again.
+45. No window title appears anywhere (notch label and menu, strips, panel, logs, `config.json`); workspaces store program paths only.
+
 ## Verification status — read this first
 
 State on 2026-10-31. `main` is on the **public** repository `github.com/nAItiklearn/krova`. **v0.1.0 is published (2026-10-31), Windows only**: assets `Krova-windows-x64-setup.exe` and `SHA256SUMS.txt`, notes from `docs/release-notes/v0.1.0.md`. `RELEASE_PUBLISHED = true`, `MAC_RELEASED = false` in `website/src/site.ts`; the README says it is an early preview, not ready for everyday use. The owner downloaded and ran the Windows installer built by `release.yml` (started by hand with `workflow_dispatch`), so the Windows build and bundle jobs work on GitHub.
@@ -57,7 +134,7 @@ No Critical or High findings in Krova's own code; privacy promises hold for Krov
 - F-15, F-17: injected input is not filtered; the config temp file name is fixed.
 - `npm audit`: `ui/` has advisories in dev tooling only (vitest/tinypool); `website/` has advisories in Astro 5.18.2, a static site that uses none of the affected features. Dependabot has opened major-version upgrade branches (Vite 8, Vitest 5, TypeScript 7, Astro 7, the Svelte Vite plugin 7). They are breaking changes and need a test run each before merging; none is merged.
 
-## Manual tests for the notch branch
+## Manual tests for the notch branch (merged into the v0.2 checklist above; kept for its notes)
 
 Run the app (`npm run tauri dev` or a build) on Windows. Watch Task Manager: with the notch idle, the Krova process stays at 0% CPU.
 
@@ -102,7 +179,7 @@ Run the app (`npm run tauri dev` or a build) on Windows. Watch Task Manager: wit
 - macOS: `start_input` fails until Accessibility is granted. `get_state` retries it once permission is `Granted`; a restart may still be needed. The Accessibility prompt helper (`prompt_for_accessibility`) is not yet wired to any command.
 - Window memory, keyboard shortcuts and linked dividers are Windows-only (`capabilities` is false for them on macOS).
 
-## Manual tests for the wave3 branch
+## Manual tests for the wave3 branch (merged into the v0.2 checklist above; kept for its notes)
 
 Automated: `krova-core` unit tests for `workspace`, `focus` and `calm`; `krova-platform` tests for `desk` and `win_desk`; `src-tauri` `wave3::tests` (fake desk and platform); `ui` `wave3Mock.test.ts`. Ignored desktop tests, run by hand: `cargo test -p krova-platform -- --ignored visuals_start launching_notepad --nocapture`. Both passed on Windows 11 build 26300 (agent run); the Notepad test showed that `System32\notepad.exe` starts the packaged Notepad, whose process path differs, so a wait by path cannot find it (the test then finds the window by file name).
 
@@ -113,7 +190,7 @@ Automated: `krova-core` unit tests for `workspace`, `focus` and `calm`; `krova-p
 - [ ] Highlight `active` at 2 px on Windows 11: the focused window's own border takes the colour and the previous one returns to normal; at 5 px an overlay ring follows and eases between windows; `all`: every window gets a ring (or a Windows border); `glow`: a soft halo. All disappear for full-screen video, minimised windows and windows on another virtual desktop; switching the highlight off restores every border colour.
 - [ ] Share-safe: switch it on; `AppState.wave3.share_safe` is true and no overlay shows an app name or icon (none does today; this matters once the switcher and previews exist).
 
-## Manual tests for the wave4 branch
+## Manual tests for the wave4 branch (merged into the v0.2 checklist above; kept for its notes)
 
 Backend only (no Svelte view yet). Automated: core 384, platform 83 (+4 ignored), app 74 (+3 ignored), UI vitest 185, `svelte-check` clean. The items below need a real Windows desktop; none has been run yet.
 
@@ -128,7 +205,7 @@ Backend only (no Svelte view yet). Automated: core 384, platform 83 (+4 ignored)
 - [ ] **macOS** (when a Mac is available): `wave4_capabilities` are all false and nothing above runs.
 
 New surfaces not yet reviewed (add to the review list): the pointer watcher (hook callback, `SendMessageTimeout` to other windows, `SetForegroundWindow`), `ShellExecuteW` with a fixed URL (guarded by `is_safe_https_url`), and the string tables (compiled in, size and length limits).
-## Manual tests for the corners branch
+## Manual tests for the corners branch (merged into the v0.2 checklist above; kept for its notes)
 
 Automated: `krova_core::corners` unit tests (outer corners incl. L-shaped and mixed-DPI sets, dwell, re-arm, buttons, cooldown, ripple), `win_corners` table tests, `src-tauri` corners tests, `ui/src/lib/mock/cornersMock.test.ts`. Real desktop: `cargo test -p krova-platform a_real_cursor_in_a_corner_fires_once -- --ignored` (moves the mouse into the primary monitor's top-left corner with `SendInput`; passed 2026-11-10 on Windows 11 10.0.26300, single 125% monitor).
 
@@ -146,7 +223,7 @@ By hand, on a real Windows PC:
 - [ ] Switch Krova off in the tray: no corner fires. Back on: they work.
 - [ ] Windows Settings, Accessibility, Visual effects, Animation effects off: the ripple is a still quarter-circle that disappears after a moment.
 - [ ] Task Manager with the cursor resting in a set corner and elsewhere: no CPU use beyond the fire itself.
-## Manual tests for the engine branch
+## Manual tests for the engine branch (merged into the v0.2 checklist above; kept for its notes)
 
 Run on a real Windows PC with the app built from the `engine` branch (automated tests cover the logic; these cover the desktop). Ignored desktop tests: `cargo test -p krova-platform -- --ignored --test-threads=1` (strip window, Notepad probe, watcher events).
 

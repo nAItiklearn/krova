@@ -619,7 +619,7 @@ export function createMockBackend(options: MockOptions = {}): MockBackend {
       monitors: monitorSnapshots(),
       autostart,
       permission,
-      version: "0.1.0",
+      version: "0.2.0-beta.1",
       shortcuts: shortcutStatus(),
       capabilities: capabilities(),
       layout_switcher: layoutSwitcherStatus(),
