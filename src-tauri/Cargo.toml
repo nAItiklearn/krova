@@ -30,7 +30,7 @@ tempfile = "3"
 # press keys and drag a window edge, which needs a few raw Win32 calls. Same crate
 # version as krova-platform, so the lockfile gains an edge, not a package.
 [target.'cfg(windows)'.dev-dependencies.windows]
-version = "0.58"
+version = "0.62"
 features = [
     "Win32_Foundation",
     "Win32_UI_HiDpi",
