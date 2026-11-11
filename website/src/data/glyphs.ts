@@ -61,6 +61,10 @@ export const glyphs = {
   desktops: `<rect class="fr" x="14" y="3" width="48" height="28" rx="4"/><rect class="fr" x="2" y="9" width="48" height="28" rx="4"/><rect class="z" x="5" y="12" width="20" height="22" rx="2.5"/><rect class="a" x="27" y="12" width="20" height="22" rx="2.5"/>`,
   maximize: `${frame}<rect class="z" x="5" y="5" width="14" height="30" rx="2.5"/><rect class="a" x="21" y="5" width="22" height="30" rx="2.5"/><rect class="z" x="45" y="5" width="14" height="30" rx="2.5"/><path class="l" d="M27 13l-3-3M24 10h4M24 10v4M37 27l3 3M40 30h-4M40 30v-4"/>`,
   cli: `${frame}<path class="l a" d="M10 14l7 6-7 6M22 28h14"/>`,
+
+  /* ---- 0.2 beta additions ---- */
+  notch: `${frame}<rect class="a" x="24" y="4.5" width="16" height="5" rx="2.5"/><rect class="z" x="5" y="13" width="26" height="22" rx="2.5"/><rect class="z" x="33" y="13" width="26" height="22" rx="2.5"/>`,
+  corners: `${frame}<path class="a" d="M62.5 1.5v12a12 12 0 0 1-12-12z"/><rect class="z" x="5" y="12" width="26" height="23" rx="2.5"/><rect class="z" x="33" y="17" width="26" height="18" rx="2.5"/>`,
 } as const;
 
 export type GlyphName = keyof typeof glyphs;

@@ -33,11 +33,11 @@ export const faq: readonly FaqGroup[] = [
       },
       {
         q: 'Can I snap with a keyboard shortcut?',
-        a: 'Yes, on Windows. With the default keys, Ctrl+Alt+Shift+Left or Right moves the focused window to the previous or next zone, Ctrl+Alt+Shift+1 to 9 sends it to that zone, and Ctrl+Alt+Shift+Up sends it to the next monitor in the same zone. There are no keyboard shortcuts on macOS yet, so there you snap by dragging. See [[/guides/keyboard-shortcuts/|Keyboard shortcuts]].',
+        a: 'Yes, on Windows. In the 0.2 beta, Ctrl+Alt with an arrow key moves the focused window to the next zone that way (and on to the next monitor), Ctrl+Alt+1 to 9 sends it to that zone, and adding Shift swaps it with its neighbour or applies a layout. Every shortcut can be changed. In v0.1.0 the keys are Ctrl+Alt+Shift with Left, Right, Up or 1 to 9. There are no keyboard shortcuts on macOS yet. See [[/guides/keyboard-shortcuts/|Keyboard shortcuts]].',
       },
       {
         q: 'A shortcut does nothing. Why?',
-        a: 'Windows, or another app, may already own that key combination. Windows refused every Win+Alt combination and almost every Win+Ctrl combination on the machine we tested, so the default is Ctrl+Alt+Shift. Krova lists the shortcuts it could not register under Settings, Keyboard shortcuts; pick another modifier there, or close the app that holds the key. Shortcuts also do nothing for the desktop, the taskbar, minimized windows, administrator windows and Krova’s own windows.',
+        a: 'Windows, or another app, may already own that key combination: some code editors use Ctrl+Alt+Left and Right, and some older Intel graphics drivers use Ctrl+Alt+arrows to rotate the screen. In the 0.2 beta, the Shortcuts page marks a refused shortcut and suggests free keys; in v0.1.0, Settings, Keyboard shortcuts lists them and lets you pick other modifier keys. Shortcuts also do nothing for the desktop, the taskbar, minimized windows, administrator windows and Krova’s own windows.',
       },
       {
         q: 'Do windows go back to their zones when I plug a monitor back in?',
@@ -57,7 +57,7 @@ export const faq: readonly FaqGroup[] = [
       },
       {
         q: 'Does it replace Windows Snap, or clash with it?',
-        a: 'Krova does not turn Windows’ own snapping off. Its zones only appear while you hold its key, so the two stay out of each other’s way. Its keyboard shortcuts use Ctrl+Alt+Shift by default, not the Windows key, so Win+Arrow keeps working. Krova’s edge snapping is different: if you switch it on, it works without a key and acts on the same screen edges as Windows’ own snapping. The two have not been tested together, so leave one of them off.',
+        a: 'Krova does not turn Windows’ own snapping off. Its zones only appear while you hold its key, so the two stay out of each other’s way. Its keyboard shortcuts use Ctrl+Alt (Ctrl+Alt+Shift in v0.1.0), not the Windows key, so Win+Arrow keeps working. Krova’s edge snapping is different: if you switch it on, it works without a key and acts on the same screen edges as Windows’ own snapping. The two have not been tested together, so leave one of them off.',
       },
       {
         q: 'Which windows won’t it move?',
@@ -65,7 +65,7 @@ export const faq: readonly FaqGroup[] = [
       },
       {
         q: 'Can I use a different key than Shift?',
-        a: 'Yes. The key you hold while dragging can be Shift, Ctrl, Alt, or the Windows key (Command on macOS): Settings, Activation modifier. The keyboard shortcuts have their own setting, Settings, Keyboard shortcuts, Modifier keys: Ctrl+Alt+Shift (the default), Ctrl+Alt, Win+Alt or Win+Ctrl.',
+        a: 'Yes. The key you hold while dragging can be Shift, Ctrl, Alt, or the Windows key (Command on macOS): Settings, Activation modifier. In the 0.2 beta it is under Arrange, Snapping, and every keyboard shortcut can be recorded again under Shortcuts. In v0.1.0 the shortcuts have one setting, Settings, Keyboard shortcuts, Modifier keys.',
       },
       {
         q: 'What happens when I close Krova’s window?',
@@ -73,7 +73,7 @@ export const faq: readonly FaqGroup[] = [
       },
       {
         q: 'Is there a Linux version?',
-        a: 'No. Krova supports Windows 10/11 and macOS 13 or later.',
+        a: 'No. Krova supports Windows 10 and 11. A macOS version comes once it has been tested on a real Mac.',
       },
     ],
   },
@@ -86,7 +86,7 @@ export const faq: readonly FaqGroup[] = [
       },
       {
         q: 'Can it see what is in my windows?',
-        a: 'No. Krova looks at the position and size of the window you are dragging or moving with a shortcut, whether that window runs as administrator, and which window has the focus when you press a shortcut. On Windows it also remembers, in memory only, which window handle sits in which zone so it can put windows back. It does not read window titles or contents, and none of it is written to disk.',
+        a: 'No. Krova looks at the position and size of the window you are dragging or moving with a shortcut, whether that window runs as administrator, and which window has the focus when you press a shortcut. On Windows it also remembers, in memory only, which window handle sits in which zone so it can put windows back. In the 0.2 beta it also reads the file name of a window’s program, for app rules and stack tabs, and a workspace you save stores program paths. It never reads window titles or contents.',
       },
       {
         q: 'Does Krova record what I type?',

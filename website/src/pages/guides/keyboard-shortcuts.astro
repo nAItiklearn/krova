@@ -5,43 +5,65 @@ import { url } from '../../lib/url';
 
 <GuideLayout
   slug="keyboard-shortcuts"
-  description="Krova's keyboard shortcuts. On Windows, global shortcuts move the focused window to the previous or next zone, to zone 1 to 9, or to the next monitor (default Ctrl+Alt+Shift). Plus the layout editor's keys. No keyboard shortcuts on macOS yet."
-  lead="On Windows, global shortcuts move the window you are working in from zone to zone. Inside the layout editor there are a few more keys. macOS has no global shortcuts yet."
+  description="Krova's keyboard shortcuts on Windows. In the 0.2 beta they use Ctrl+Alt: arrows move the focused window between zones, numbers send it to a zone, Shift swaps or applies a layout. Every shortcut can be changed or switched off. Plus the layout editor's keys."
+  lead="On Windows, global shortcuts move the window you are working in from zone to zone. Every one can be changed or switched off. Inside the layout editor there are a few more keys. macOS has no global shortcuts yet."
 >
   <div class="note">
     <p>
-      <strong>Windows only for now.</strong> The global shortcuts need Windows. On macOS the Settings window says
-      &ldquo;Keyboard shortcuts are not available on this system yet&rdquo;, and you snap by dragging.
+      <strong>This page describes the 0.2 beta.</strong> In v0.1.0 the shortcuts use <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>
+      with Left, Right, Up or 1 to 9, and the modifier keys are chosen in Settings, Keyboard shortcuts. The global shortcuts
+      need Windows; on macOS you snap by dragging.
     </p>
   </div>
 
-  <h2 id="global">Move the focused window (Windows)</h2>
+  <h2 id="global">The default shortcuts (Windows, 0.2 beta)</h2>
   <p>
-    Each shortcut is the <strong>modifier keys</strong> you chose, held together with one more key. By default the
-    modifier keys are <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>. They act on the window that has the focus.
+    Every shortcut starts with <kbd>Ctrl</kbd>+<kbd>Alt</kbd>. Adding <kbd>Shift</kbd> swaps windows or applies a layout.
+    The window shortcuts act on the window that has the focus.
   </p>
   <div class="table-scroll" tabindex="0" role="region" aria-label="Global keyboard shortcuts">
     <table class="data-table">
-      <thead><tr><th scope="col">Keys (with the default modifier)</th><th scope="col">What it does</th></tr></thead>
+      <thead><tr><th scope="col">Keys</th><th scope="col">What it does</th></tr></thead>
       <tbody>
         <tr>
-          <th scope="row"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Left</kbd></th>
-          <td>Move the focused window to the previous zone. From the first zone it wraps to the last.</td>
+          <th scope="row"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+ arrow key</th>
+          <td>Move the focused window to the neighbouring zone in that direction. Past the edge of the layout it goes to the nearest zone on the next monitor that way.</td>
         </tr>
         <tr>
-          <th scope="row"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Right</kbd></th>
-          <td>Move it to the next zone. From the last zone it wraps to the first.</td>
+          <th scope="row"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+ arrow key</th>
+          <td>Swap it with the window in the neighbouring zone. A window Krova is not arranging just moves.</td>
+        </tr>
+        <tr>
+          <th scope="row"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1</kbd> to <kbd>9</kbd></th>
+          <td>Move it to that zone number on its monitor.</td>
         </tr>
         <tr>
           <th scope="row"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>1</kbd> to <kbd>9</kbd></th>
-          <td>Move it to that zone number on the monitor it is on.</td>
+          <td>Apply layout 1 to 9 (the order in the monitor&rsquo;s list) on the monitor under the cursor.</td>
         </tr>
         <tr>
-          <th scope="row"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Up</kbd></th>
-          <td>
-            Send it to the next monitor, to the right and wrapping round, in the zone with the same number. If that monitor&rsquo;s
-            layout has fewer zones, it goes to the last one.
-          </td>
+          <th scope="row"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Enter</kbd></th>
+          <td>Let a window in a zone fill the whole monitor; press again to put it back in its zone.</td>
+        </tr>
+        <tr>
+          <th scope="row"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>]</kbd> / <kbd>[</kbd></th>
+          <td>Next or previous window in the focused window&rsquo;s stack.</td>
+        </tr>
+        <tr>
+          <th scope="row"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Space</kbd></th>
+          <td>Open the layout switcher on the monitor under the cursor.</td>
+        </tr>
+        <tr>
+          <th scope="row"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>T</kbd></th>
+          <td>Pause or resume auto-arrange. Windows stay where they are.</td>
+        </tr>
+        <tr>
+          <th scope="row"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd></th>
+          <td>Turn focus dim on or off.</td>
+        </tr>
+        <tr>
+          <th scope="row"><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>/</kbd></th>
+          <td>Show the cheat sheet: every shortcut, with your own keys. It is also under Shortcuts, Cheat sheet.</td>
         </tr>
       </tbody>
     </table>
@@ -52,8 +74,7 @@ import { url } from '../../lib/url';
     Zones are counted in reading order: top to bottom, and left to right within a row (rows are compared to the nearest 1%).
     In a 2x2 grid, 1 is top left, 2 top right, 3 bottom left and 4 bottom right. In Halves and Thirds, 1 is the leftmost zone.
     The number is the zone&rsquo;s place in that order, not an id you can see. With more than nine zones, <kbd>1</kbd> to
-    <kbd>9</kbd> reach the first nine and <kbd>Left</kbd> and <kbd>Right</kbd> reach the others. A number past the last zone
-    does nothing.
+    <kbd>9</kbd> reach the first nine and the arrow keys reach the others. A number past the last zone does nothing.
   </p>
 
   <h3>Which windows they move</h3>
@@ -64,30 +85,27 @@ import { url } from '../../lib/url';
       Krova&rsquo;s own windows.
     </li>
     <li>They follow the same settings as dragging: animated or instant moves, and the space between zones.</li>
-    <li>When <strong>Enabled</strong> is off in the tray menu, the shortcuts are released and do nothing.</li>
+    <li>When Krova is switched off, the shortcuts are released and do nothing.</li>
   </ul>
 
-  <h3>Choose other modifier keys</h3>
+  <h3 id="change">Change a shortcut</h3>
   <p>
-    Open <strong>Settings</strong> from the tray menu, then <strong>Keyboard shortcuts</strong>. <strong>Use keyboard
-    shortcuts</strong> switches the feature on or off (on by default). <strong>Modifier keys</strong> offers:
+    Open Krova and choose <strong>Shortcuts</strong> in the sidebar. Click a shortcut and press the new keys;
+    <kbd>Backspace</kbd> turns it off, and <strong>Reset all</strong> brings the defaults back. The four arrows of a row
+    (move, swap) and the nine numbers (zones, layouts) change together. Before it saves a new combination, Krova checks it
+    against its own shortcuts and asks Windows whether it is free. If it is taken, the row says so and offers up to three
+    free combinations with the same key.
   </p>
-  <div class="table-scroll" tabindex="0" role="region" aria-label="Modifier key choices">
-    <table class="data-table">
-      <thead><tr><th scope="col">Choice</th><th scope="col">Note</th></tr></thead>
-      <tbody>
-        <tr><th scope="row"><kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Shift</kbd></th><td>The default. Accepted for all twelve shortcuts on the Windows 11 PC we tested.</td></tr>
-        <tr><th scope="row"><kbd>Ctrl</kbd> + <kbd>Alt</kbd></th><td>Accepted for all twelve there. Some programming tools use Ctrl+Alt+Left and Right for back and forward.</td></tr>
-        <tr><th scope="row"><kbd>Win</kbd> + <kbd>Alt</kbd></th><td>Windows refused all twelve on that PC; it keeps these for itself.</td></tr>
-        <tr><th scope="row"><kbd>Win</kbd> + <kbd>Ctrl</kbd></th><td>Windows refused eleven of the twelve on that PC; only Win+Ctrl+Up was accepted.</td></tr>
-      </tbody>
-    </table>
-  </div>
+
+  <h3>Known clashes</h3>
+  <ul>
+    <li><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Left</kbd> and <kbd>Right</kbd> are back and forward in Visual Studio and JetBrains IDEs. While Krova runs, its shortcut wins.</li>
+    <li>Some older Intel graphics drivers use <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+ arrow keys to rotate the screen. Windows then refuses the shortcut and its row says so.</li>
+    <li><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Space</kbd> is used by some launchers and quick-entry tools.</li>
+  </ul>
   <p>
-    That is one PC and one Windows version, so treat it as a hint. Some combinations can be taken by Windows or by other
-    apps. When Krova cannot register a shortcut, Settings lists it, for example &ldquo;Win+Alt+3 is already used by another
-    app&rdquo;. Pick other modifier keys, or close the app that holds the combination. The list updates as soon as you
-    change the choice. If a shortcut does nothing, see <a href={url('/support/#shortcut')}>Troubleshooting</a>.
+    If you chose <kbd>Win</kbd>+<kbd>Alt</kbd> or <kbd>Win</kbd>+<kbd>Ctrl</kbd> in v0.1, the beta keeps those keys for the
+    shortcuts that existed then. If a shortcut does nothing, see <a href={url('/support/#shortcut')}>Troubleshooting</a>.
   </p>
 
   <h2 id="editor">In the layout editor</h2>
@@ -132,16 +150,17 @@ import { url } from '../../lib/url';
     </table>
   </div>
 
-  <h3>Tabs</h3>
+  <h3>Tabs and the sidebar</h3>
   <p>
-    On the monitor tabs, <kbd>Left</kbd>, <kbd>Right</kbd>, <kbd>Home</kbd> and <kbd>End</kbd> move between monitors. On
-    the Editor / Settings switch, <kbd>Left</kbd> and <kbd>Right</kbd> move between the two views.
+    On the monitor tabs, <kbd>Left</kbd>, <kbd>Right</kbd>, <kbd>Home</kbd> and <kbd>End</kbd> move between monitors. In
+    the beta&rsquo;s sidebar, <kbd>Up</kbd>, <kbd>Down</kbd>, <kbd>Home</kbd> and <kbd>End</kbd> move between views. (In
+    v0.1, <kbd>Left</kbd> and <kbd>Right</kbd> move between Editor and Settings.)
   </p>
 
   <h2 id="activation">The activation key is a separate setting</h2>
   <p>
     The key you hold while <em>dragging</em> (Shift by default) is not one of these shortcuts. It only shows the zones
-    during a drag. Change it in Settings, Snapping, Activation modifier: Shift, Ctrl, Alt, or the Windows key (Command on a
+    during a drag. Change it under Arrange, Snapping, Activation modifier (in v0.1: Settings, Snapping): Shift, Ctrl, Alt, or the Windows key (Command on a
     Mac). See <a href={url('/guides/first-snap/')}>Your first snap</a>.
   </p>
 </GuideLayout>

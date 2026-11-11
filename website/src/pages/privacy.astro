@@ -26,6 +26,7 @@ const description =
 
     <article class="prose" aria-label="Privacy details">
       <h2>The short version</h2>
+      <p>This holds for v0.1.0 and for the v0.2.0-beta.1 pre-release. <a href="#beta">What the beta does differently</a> is listed below.</p>
       <ul>
         <li>Krova makes <strong>no network calls</strong>.</li>
         <li>There are <strong>no accounts</strong> and <strong>no telemetry</strong>.</li>
@@ -140,31 +141,62 @@ const description =
         listening described above.
       </p>
 
-      <h2>Coming in 0.2: what changes</h2>
+      <h2 id="beta">In the 0.2 beta: what is different</h2>
       <p>
-        Everything above describes v0.1, the version you can download today. Version 0.2 keeps a little more on your PC.
-        This page will be updated when it ships; in short:
+        Everything above describes v0.1.0, the stable release. The v0.2.0-beta.1 pre-release keeps every promise in
+        &ldquo;The short version&rdquo; and works the same way, with these differences. They were checked against the
+        beta&rsquo;s source code, not yet against a running build on a real PC.
       </p>
       <ul>
         <li>
+          <strong>Still no network.</strong> The beta makes no network calls and has no telemetry. &ldquo;Check for
+          updates&rdquo; in the tray opens the releases page in your browser; Krova itself sends no request.
+        </li>
+        <li>
+          <strong>Window titles are still never read, logged or stored.</strong> To decide whether to arrange a new
+          window, Krova looks at its style, its owner, its class, whether it is hidden or runs as administrator, and the
+          file path of its program. The program&rsquo;s file name (for example <code>notepad.exe</code>) is used for app
+          rules, for the tab strip of a stack and for the &ldquo;Not arranged&rdquo; note in the quick panel. None of
+          this is written down, except what you save yourself (below).
+        </li>
+        <li>
           <strong>Workspaces save program paths.</strong> When you save a workspace, Krova writes the full path of each
           program on screen (for example <code>C:\Users\you\AppData\Local\Programs\App\app.exe</code>, which includes your
-          Windows user name) and the zone it sits in to <code>config.json</code>. Window titles and program arguments are never
-          stored. Delete a workspace to remove its paths, and remove workspaces before you share your settings file. When a
-          restore would start a program, Krova shows its full path and asks first; it refuses programs in Temp, Downloads,
-          the Desktop, roaming app data, removable drives and network locations.
+          Windows user name), its monitor and its zone to <code>config.json</code>. Window titles and program arguments
+          are never stored. Delete a workspace to remove its paths, and remove workspaces before you share your settings
+          file. When a restore would start a program, Krova shows its full path and asks first; it refuses programs in
+          Temp, Downloads, the Desktop, roaming app data, removable drives and network locations.
         </li>
         <li>
-          <strong>Focus follows mouse and the title-bar zone picker</strong> (both off by default) read the cursor position
-          while they are on, to see where it rests. That stays in memory and is never written down.
+          <strong>App rules save program file names</strong> (never a path or a title) in <code>config.json</code>.
         </li>
         <li>
-          <strong>New settings in <code>config.json</code>:</strong> auto-arrange, app rules (program file names only),
-          shortcuts, appearance, screen corners, the notch, focus dim, highlight, calm desk, share-safe, reserved screen
-          edges and language.
+          <strong>More keyboard shortcuts, still no keyboard hook.</strong> Krova registers its own key combinations with
+          Windows (about thirty with the defaults) and is told only when one of those is pressed. When you record a new
+          shortcut, Krova briefly registers that one combination to check whether it is free. It does not record what you
+          type.
+        </li>
+        <li>
+          <strong>The cursor and the front window.</strong> Hot corners, focus follows mouse and the title-bar zone picker
+          (the last two are off by default) use the cursor position that Krova&rsquo;s mouse listener already sees. The
+          notch, focus dim and the window highlight follow which window is in front. All of this stays in memory and is
+          never written down.
+        </li>
+        <li>
+          <strong>Share-safe.</strong> While share-safe is on, the notch shows &ldquo;3 zones&rdquo; instead of layout
+          names, stack tabs show dots instead of program names and icons, and the quick panel names no program. Krova
+          also asks Windows to leave its own windows out of screen capture and recording: the zone overlay, focus dim,
+          highlight rings, the notch, the hot-corner ripple, stack tabs, and the quick panel, layout switcher and zone
+          picker windows. You still see them on your own screen. On Windows 10 builds before version 2004 they show as
+          black in a capture instead.
+        </li>
+        <li>
+          <strong>New settings in <code>config.json</code>:</strong> auto-arrange per monitor, app rules, your own
+          shortcuts, appearance, screen corners, the notch, focus dim, highlight, calm desk, share-safe, focus follows
+          mouse, the zone picker, reserved screen edges and language. With the language set to &ldquo;System&rdquo;,
+          Krova reads Windows&rsquo; display language.
         </li>
       </ul>
-      <p>Krova 0.2 still makes no network calls. &ldquo;Check for updates&rdquo; opens the releases page in your browser.</p>
 
       <h2>Permissions</h2>
       <p>
@@ -227,7 +259,7 @@ const description =
           )
         }
       </p>
-      <p class="muted">Last updated: 31 October 2026. See also <a href={url('/license/')}>License and terms</a>.</p>
+      <p class="muted">Last updated: 11 November 2026 (the 0.2 beta section). See also <a href={url('/license/')}>License and terms</a>.</p>
     </article>
   </div>
 </BaseLayout>

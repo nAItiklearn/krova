@@ -1,8 +1,8 @@
 ---
 /**
  * Features as tabs: a pill bar on top, one panel at a time (copy left, picture right).
- * Each panel says whether the feature is in v0.1 or coming. Pictures are a real screenshot where
- * the feature has UI, otherwise a labelled diagram from Krova's zone shapes.
+ * Each panel says whether the feature is in v0.1 (stable) or in the 0.2 beta. Pictures are labelled
+ * diagrams from Krova's zone shapes; the real screenshots of the beta are in BetaTour.astro.
  */
 import ZoneScene from './ZoneScene.astro';
 import SwitcherLoop from './SwitcherLoop.astro';
@@ -12,7 +12,7 @@ type Tab = {
   tab: string;
   ask: string;
   title: string;
-  status: 'now' | 'soon';
+  status: 'now' | 'beta';
   body: string;
 };
 const tabs: Tab[] = [
@@ -20,10 +20,10 @@ const tabs: Tab[] = [
     body: 'Split, drag a divider, undo. Start from halves, thirds or a grid and shape it until it fits how you work.' },
   { id: 'snap', tab: 'Hold & drop', ask: 'Placing one by hand?', title: 'Hold Shift, drop it in', status: 'now',
     body: 'Hold Shift while you drag and the zones appear. Let go over one and the window fills it. Edge snapping is there too.' },
-  { id: 'auto', tab: 'Auto-arrange', ask: 'Rather not drag at all?', title: 'Windows arrange themselves', status: 'soon',
-    body: 'Open a window and it takes the next free zone. Close one and the rest fill in. Works with any layout you draw.' },
-  { id: 'switch', tab: 'Switcher', ask: 'Different work, different layout?', title: 'Flip through layouts', status: 'soon',
-    body: 'Press Ctrl+Alt+Space for a stack of your layouts. Swipe to flip, tap to apply, swipe sideways to delete.' },
+  { id: 'auto', tab: 'Auto-arrange', ask: 'Rather not drag at all?', title: 'Windows arrange themselves', status: 'beta',
+    body: 'Open a window and it takes the next free zone. When every zone is full, it stacks. Works with any layout you draw.' },
+  { id: 'switch', tab: 'Switcher', ask: 'Different work, different layout?', title: 'Flip through layouts', status: 'beta',
+    body: 'Press Ctrl+Alt+Space for a stack of your layouts. Flip with the arrows or a drag, Enter applies, swipe sideways to delete.' },
   { id: 'monitors', tab: 'Every monitor', ask: 'Two screens, or three?', title: 'A layout per monitor', status: 'now',
     body: 'Each monitor keeps its own layouts. Unplug it, plug it back in, and its layouts are still there.' },
   { id: 'private', tab: 'Private', ask: 'Who sees your windows?', title: 'Nobody but you', status: 'now',
@@ -65,7 +65,7 @@ const tabs: Tab[] = [
             <p class="ask">{t.ask}</p>
             <h3>
               {t.title}
-              <span class:list={['badge', t.status]}>{t.status === 'now' ? 'In 0.1' : 'Coming in 0.2'}</span>
+              <span class:list={['badge', t.status]}>{t.status === 'now' ? 'In 0.1' : 'In 0.2 beta'}</span>
             </h3>
             <p class="body">{t.body}</p>
           </div>
@@ -209,7 +209,7 @@ const tabs: Tab[] = [
     background: var(--color-surface-3);
     color: var(--color-text-muted);
   }
-  .badge.soon {
+  .badge.beta {
     background: var(--accent-tint-strong);
     color: var(--color-accent-text);
   }
@@ -293,45 +293,5 @@ const tabs: Tab[] = [
 </style>
 
 <script>
-  document.querySelectorAll<HTMLElement>('[data-tabbar]').forEach((bar) => {
-    const tabs = [...bar.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
-    const ind = bar.querySelector<HTMLElement>('[data-ind]')!;
-    const current = () => tabs.find((t) => t.getAttribute('aria-selected') === 'true') ?? tabs[0];
-    function move(t: HTMLElement) {
-      const b = bar.getBoundingClientRect();
-      const r = t.getBoundingClientRect();
-      if (!r.width) return;
-      ind.style.width = r.width + 'px';
-      ind.style.transform = `translateX(${r.left - b.left}px)`;
-    }
-    function select(t: HTMLButtonElement) {
-      tabs.forEach((x) => {
-        const on = x === t;
-        x.setAttribute('aria-selected', String(on));
-        x.tabIndex = on ? 0 : -1;
-        const p = document.getElementById(x.getAttribute('aria-controls')!);
-        if (p) p.hidden = !on;
-      });
-      move(t);
-      t.focus();
-    }
-    tabs.forEach((t) => t.addEventListener('click', () => select(t)));
-    bar.addEventListener('keydown', (e) => {
-      const i = tabs.indexOf(document.activeElement as HTMLButtonElement);
-      if (i < 0) return;
-      let n = -1;
-      if (e.key === 'ArrowRight') n = (i + 1) % tabs.length;
-      else if (e.key === 'ArrowLeft') n = (i - 1 + tabs.length) % tabs.length;
-      else if (e.key === 'Home') n = 0;
-      else if (e.key === 'End') n = tabs.length - 1;
-      if (n >= 0) {
-        e.preventDefault();
-        select(tabs[n]);
-      }
-    });
-    requestAnimationFrame(() => move(current()));
-    document.fonts?.ready.then(() => move(current()));
-    addEventListener('load', () => move(current()));
-    new ResizeObserver(() => move(current())).observe(bar);
-  });
+  import '../lib/tabs-client';
 </script>

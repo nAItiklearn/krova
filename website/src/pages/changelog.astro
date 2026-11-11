@@ -7,9 +7,9 @@ import { ISSUES_URL, REPO_LINKS_ENABLED } from '../site';
 
 const title = 'Changelog: what is in each Krova release';
 const description =
-  'Krova 0.1.0 has not been released yet. This page lists what the first release contains and its known limitations. Future versions are added here.';
+  'What is in each Krova release: 0.2.0-beta.1 (a Windows pre-release with auto-arrange, the notch, workspaces and more) and 0.1.0, the stable release. With the known limitations of each.';
 const anchor = (v: string) => `v${v.replace(/\./g, '-')}`;
-const anyReleased = releases.some((r) => r.status === 'released');
+const anyReleased = releases.some((r) => r.status !== 'unreleased');
 ---
 
 <BaseLayout title={title} description={description}>
@@ -34,8 +34,8 @@ const anyReleased = releases.some((r) => r.status === 'released');
               <h2 id={`${anchor(r.version)}-h`}>
                 Version {r.version}
               </h2>
-              <p class:list={['pill', { 'pill--warn': r.status === 'unreleased' }]}>
-                {r.status === 'unreleased' && <span class="dot" aria-hidden="true" />}
+              <p class:list={['pill', { 'pill--warn': r.status !== 'released' }]}>
+                {r.status !== 'released' && <span class="dot" aria-hidden="true" />}
                 {r.status === 'released' && r.date ? <time datetime={r.date}>{r.date}</time> : releaseLabel(r)}
               </p>
             </header>

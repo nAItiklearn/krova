@@ -2,7 +2,7 @@
 /**
  * "Change anything and the desk follows": a settings card next to a live desk. The highlight,
  * colour, space and layout controls act on the desk at once. Highlight styles and colours are
- * planned (see /roadmap/); space between zones and layouts are in 0.1.
+ * in the 0.2 beta (Appearance); space between zones and layouts are in 0.1.
  */
 import LiveDesk from './LiveDesk.astro';
 const colours = [
@@ -30,7 +30,7 @@ const colours = [
 
       <div class="card" role="group" aria-label="Demo settings">
         <fieldset>
-          <legend>Highlight <span class="soon">Planned</span></legend>
+          <legend>Highlight <span class="soon">0.2 beta</span></legend>
           <div class="opts" role="radiogroup" aria-label="Highlight">
             {
               [
@@ -48,7 +48,7 @@ const colours = [
         </fieldset>
 
         <fieldset>
-          <legend>Colour <span class="soon">Planned</span></legend>
+          <legend>Colour <span class="soon">0.2 beta</span></legend>
           <div class="swatches" role="radiogroup" aria-label="Highlight colour">
             {
               colours.map((c, i) => (

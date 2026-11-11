@@ -12,6 +12,11 @@ import {
   REPO_LINKS_ENABLED,
   REPO_URL,
   VERSION_LABEL,
+  APP_VERSION,
+  BETA_VERSION,
+  BETA_DOWNLOADS_ENABLED,
+  BETA_RELEASE_URL,
+  betaDownloadUrl,
   latestDownloadUrl,
 } from '../site';
 
@@ -20,7 +25,7 @@ const title = MAC_RELEASED
   : 'Download Krova for Windows';
 const description = MAC_RELEASED
   ? 'Krova is free and MIT licensed. The Windows installer and macOS disk image are unsigned: here is what to expect, how to get past the warnings, and how to check the download.'
-  : 'Krova is free and MIT licensed. The Windows installer is unsigned: here is what to expect, how to get past the SmartScreen warning, and how to check the download. macOS is coming once tested on real hardware.';
+  : `Krova is free and MIT licensed. Download v${APP_VERSION} (stable) or v${BETA_VERSION} (beta, a pre-release) for Windows. The installer is unsigned: here is how to get past the SmartScreen warning and check the download. macOS is coming once tested on real hardware.`;
 
 const win = DOWNLOADS.find((d) => d.id === 'windows')!;
 const mac = DOWNLOADS.find((d) => d.id === 'macos')!;
@@ -41,9 +46,9 @@ const state = DOWNLOADS_ENABLED ? 'released' : RELEASE_PUBLISHED ? 'private' : '
           </p>
         ) : (
           <p class="lead">
-            Free, MIT license, no account. Krova is available for Windows. The installer is unsigned, so Windows will
-            warn you before the first run; here is exactly what to expect. macOS support is coming once it has been
-            tested on real hardware.
+            Free, MIT license, no account. Krova is available for Windows, as a stable release and as a beta. The
+            installers are unsigned, so Windows will warn you before the first run; here is exactly what to expect. macOS
+            support is coming once it has been tested on real hardware.
           </p>
         )
       }
@@ -74,6 +79,63 @@ const state = DOWNLOADS_ENABLED ? 'released' : RELEASE_PUBLISHED ? 'private' : '
       )
     }
 
+    {
+      state === 'released' && (
+        <section class="versions" aria-labelledby="versions-title">
+          <h2 id="versions-title" class="visually-hidden">Choose a version</h2>
+          <article class="card version" aria-labelledby="stable-title">
+            <header>
+              <h3 id="stable-title">v{APP_VERSION}</h3>
+              <p class="tag">Stable</p>
+            </header>
+            <p>
+              The first release: zones you draw, Shift-drag to snap, keyboard shortcuts, layouts per monitor and layout files.
+            </p>
+            <div class="get">
+              <a class="btn btn-primary" href={latestDownloadUrl(win.file)}>
+                <Icon name="download" />
+                Download v{APP_VERSION}
+              </a>
+            </div>
+          </article>
+
+          <article class="card version beta" aria-labelledby="beta-title">
+            <header>
+              <h3 id="beta-title">v{BETA_VERSION}</h3>
+              <p class="tag tag--beta">Beta &middot; pre-release</p>
+            </header>
+            <p>
+              Auto-arrange with stacks and swap, app rules, the notch and quick panel, the layout switcher, hot corners,
+              workspaces, focus dim, calm desk, share-safe and rebindable shortcuts. Windows only.
+            </p>
+            <p class="muted small">
+              It passes its automated tests, but most of it has not been tried by hand on a real PC yet. Expect bugs. Your
+              v{APP_VERSION} settings and layouts load in the beta.
+            </p>
+            <div class="get">
+              {
+                BETA_DOWNLOADS_ENABLED ? (
+                  <Fragment>
+                    <a class="btn btn-primary" href={betaDownloadUrl(win.file)}>
+                      <Icon name="download" />
+                      Download the beta
+                    </a>
+                    <a class="btn btn-secondary" href={BETA_RELEASE_URL}>Release notes</a>
+                  </Fragment>
+                ) : (
+                  <p class="pill pill--warn"><span class="dot" aria-hidden="true"></span>Not published yet</p>
+                )
+              }
+            </div>
+            <p class="smart small">
+              The installer is unsigned. When Windows says &ldquo;Windows protected your PC&rdquo;, choose <strong>More info</strong>,
+              then <strong>Run anyway</strong>.
+            </p>
+          </article>
+        </section>
+      )
+    }
+
     <div class="builds">
       <article class="card build" aria-labelledby="win-title">
         <header>
@@ -88,7 +150,8 @@ const state = DOWNLOADS_ENABLED ? 'released' : RELEASE_PUBLISHED ? 'private' : '
           <li>Krova goes into <code>%LOCALAPPDATA%\Krova</code>, with a Start menu shortcut. A desktop shortcut and &ldquo;Run Krova&rdquo; are offered on the last page.</li>
           <li>If Microsoft&rsquo;s WebView2 runtime is not on your PC, the installer downloads it. That download is the installer&rsquo;s, not Krova&rsquo;s.</li>
           <li>Krova starts in the notification area. No window opens by itself, and closing its window later closes the embedded browser too.</li>
-          <li>Keyboard shortcuts (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd> with Left, Right, Up or 1 to 9) are on by default. Settings says so if another program holds one of them.</li>
+          <li>Keyboard shortcuts are on by default: <kbd>Ctrl</kbd>+<kbd>Alt</kbd> with the arrow keys or 1 to 9 in the beta, <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd> with Left, Right, Up or 1 to 9 in v{APP_VERSION}. Krova says so if another program holds one of them.</li>
+          <li>In the beta, auto-arrange is on from the start: new windows go into the zones of the active layout. Switch it off under Arrange.</li>
         </ul>
 
         <h3>The SmartScreen warning</h3>
@@ -105,10 +168,9 @@ const state = DOWNLOADS_ENABLED ? 'released' : RELEASE_PUBLISHED ? 'private' : '
         <div class="get">
           {
             DOWNLOADS_ENABLED ? (
-              <a class="btn btn-primary" href={latestDownloadUrl(win.file)}>
-                <Icon name="download" />
-                Download for Windows
-              </a>
+              <p class="muted small">
+                Same file name for both versions. <a href="#versions-title">Choose a version</a> above.
+              </p>
             ) : (
               <p class="pill pill--warn"><span class="dot" aria-hidden="true"></span>Not available yet</p>
             )
@@ -185,7 +247,8 @@ const state = DOWNLOADS_ENABLED ? 'released' : RELEASE_PUBLISHED ? 'private' : '
     <div class="below prose">
       <h2 id="verify">Check your download</h2>
       <p>
-        Each release will publish <code>{CHECKSUMS_FILE}</code> next to the installers: one SHA-256 hash per file.
+        Each release publishes <code>{CHECKSUMS_FILE}</code> next to the installers (the beta&rsquo;s is on its
+        release page): one SHA-256 hash per file.
         Compute the hash of what you downloaded and compare it with the line for that file.
       </p>
       <p><strong>Windows</strong> (PowerShell), from the folder with the file:</p>
@@ -232,6 +295,54 @@ const state = DOWNLOADS_ENABLED ? 'released' : RELEASE_PUBLISHED ? 'private' : '
 <style>
   .status {
     margin-bottom: var(--space-l);
+  }
+
+  .versions {
+    display: grid;
+    gap: var(--space-m);
+    margin-bottom: var(--space-m);
+  }
+  .version {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    padding: var(--space-l) var(--space-m);
+    border-radius: var(--radius-xl);
+  }
+  .version header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2xs) var(--space-s);
+  }
+  .version h3 {
+    font-size: var(--text-xl);
+  }
+  .version .get {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+    padding-top: var(--space-s);
+  }
+  .tag {
+    padding: 0.15rem 0.65rem;
+    border-radius: 999px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    background: var(--color-surface-3);
+    color: var(--color-text-muted);
+  }
+  .tag--beta {
+    background: var(--accent-tint-strong);
+    color: var(--color-accent-text);
+  }
+  .beta {
+    box-shadow:
+      inset 0 0 0 1.5px var(--color-ember),
+      var(--shadow-1);
+  }
+  .smart {
+    color: var(--color-text-muted);
   }
 
   .builds {
@@ -295,6 +406,12 @@ const state = DOWNLOADS_ENABLED ? 'released' : RELEASE_PUBLISHED ? 'private' : '
   }
 
   @media (min-width: 56rem) {
+    .versions {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .version {
+      padding: var(--space-xl) var(--space-l);
+    }
     .builds {
       grid-template-columns: repeat(2, minmax(0, 1fr));
       align-items: stretch;

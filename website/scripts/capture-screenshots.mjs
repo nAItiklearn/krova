@@ -1,19 +1,28 @@
 // Captures the real Krova UI (../ui, demo mode, in-memory mock backend) into website/public/screenshots/.
 // The home page shows these files, so to refresh them after the desktop UI changes, run this one script:
 //
-//   npm run screenshots                 (from website/)
-//   npm run screenshots -- --only editor,crop-keyboard
+//   npm run screenshots                       (from website/)
+//   npm run screenshots -- --only app-panel,app-switcher
+//   npm run screenshots -- --static           (build the demo once and serve it; steadier on a busy PC)
 //
 // What it does
 //   1. Starts `vite --mode demo` from ../ui on a free local port (or uses KROVA_SHOT_URL if you already run one).
+//      With --static (or KROVA_SHOT_STATIC=1) it runs `vite build --mode demo` into a temporary folder outside
+//      ../ui and serves that with `vite preview` instead: no on-demand compiling, no reloads.
 //   2. Opens it in Chromium at 2x device pixel ratio, once in the light theme and once in the dark theme.
-//   3. Saves a full window shot of the Editor and of Settings, plus small crops of single cards and rows.
+//   3. Saves the main window (sidebar + Overview), crops of single sidebar views (Arrange, Workspaces, Focus,
+//      Shortcuts, Corners & notch, Appearance), the cheat sheet, and the three popup pages: the quick panel
+//      (panel.html), the layout switcher (switcher.html) and the hover zone picker (picker.html).
 //   4. Writes PNGs named <shot>-light.png and <shot>-dark.png, quantised to a small palette with `sharp`
 //      (a dependency of Astro; if it is missing the raw PNG is kept).
 //
-// The page never leaves localhost. The only change made to the UI is hiding the "Demo mode" badge, which
-// exists in the browser demo only; the real app has no such badge. The monitors are the mock backend's two
-// sample monitors, so captions on the site say "sample monitors".
+// The page never leaves localhost. The only change made to the UI is hiding the "Demo mode" note, which exists
+// in the browser demo only; the real app has no such note. The monitors, layouts, app rules and workspace apps
+// are the mock backend's samples, so captions on the site say "sample".
+//
+// What cannot be captured here: everything Krova draws natively on the desktop (the notch pill, the drag zone
+// overlay, stack tab strips, focus dim, highlight rings, the hot-corner ripple). The site describes those in
+// words or with its own diagrams, never with a made-up screenshot.
 //
 // Browser: Microsoft Edge by default (ships with Windows, nothing to download). Override with
 //   PW_CHANNEL=chrome        installed Google Chrome
@@ -23,8 +32,9 @@
 // so a restyle of the UI does not break them. A shot that cannot be found is skipped with a warning and the
 // previous file stays in place.
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -38,13 +48,13 @@ const args = process.argv.slice(2);
 const onlyArg = args.find((a) => a.startsWith('--only='))?.slice(7) ?? (args.includes('--only') ? args[args.indexOf('--only') + 1] : '');
 const only = new Set(onlyArg.split(',').map((s) => s.trim()).filter(Boolean));
 const want = (name) => only.size === 0 || only.has(name);
+const useStatic = args.includes('--static') || process.env.KROVA_SHOT_STATIC === '1';
 
 const DPR = 2;
 const THEMES = ['light', 'dark'];
-const EDITOR_WIDTH = 1280; // the editor window; its height is the page height, so nothing is cut off
-const NARROW_WIDTH = 400; // a narrow window: settings rows wrap, so crops of single rows stay legible at card size
-const SETTINGS_WIDTH = 1040; // settings is a centred column, so a narrower window
-const SETTINGS_SHOT_HEIGHT = 860; // fallback height of the settings shot, if the end card below is not found
+const WINDOW = { width: 1200, height: 780 }; // the main window as a user would size it
+const TALL = 2600; // for crops: a viewport taller than any view, so nothing scrolls inside the window
+const SWITCHER = { width: 1000, height: 640 };
 
 function fail(msg) {
   console.error(`\n${tag} ERROR: ${msg}\n`);
@@ -64,15 +74,16 @@ try {
   console.warn(`${tag} sharp not found, keeping raw PNGs`);
 }
 
-/* ------------------------------------------------------------------ dev server */
+/* ------------------------------------------------------------------ UI server */
 
 let server = null;
+let staticDir = null;
 
 async function waitFor(url, ms) {
   const end = Date.now() + ms;
   while (Date.now() < end) {
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
       if (res.ok) return true;
     } catch {
       /* not up yet */
@@ -82,20 +93,39 @@ async function waitFor(url, ms) {
   return false;
 }
 
+function run(cmdArgs) {
+  return new Promise((ok, no) => {
+    const p = spawn(process.execPath, cmdArgs, { cwd: ui, stdio: ['ignore', 'ignore', 'inherit'] });
+    p.on('exit', (code) => (code ? no(new Error(`exit code ${code}`)) : ok()));
+  });
+}
+
 async function startUi() {
   if (process.env.KROVA_SHOT_URL) return process.env.KROVA_SHOT_URL.replace(/\/+$/, '');
-  const port = Number(process.env.KROVA_SHOT_PORT ?? 5199);
+  const port = Number(process.env.KROVA_SHOT_PORT ?? 5287);
   const base = `http://127.0.0.1:${port}`;
   const vite = join(ui, 'node_modules', 'vite', 'bin', 'vite.js');
   if (!existsSync(vite)) fail('Vite is not installed in ../ui. Run: npm ci --prefix ../ui');
-  server = spawn(process.execPath, [vite, '--mode', 'demo', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], {
-    cwd: ui,
-    stdio: ['ignore', 'ignore', 'inherit'],
-  });
+  const common = ['--host', '127.0.0.1', '--port', String(port), '--strictPort'];
+  if (useStatic) {
+    staticDir = mkdtempSync(join(tmpdir(), 'krova-demo-'));
+    console.log(`${tag} building the demo into ${staticDir}`);
+    try {
+      await run([vite, 'build', '--mode', 'demo', '--outDir', staticDir, '--emptyOutDir']);
+    } catch (e) {
+      fail(`the demo build failed (${e.message})`);
+    }
+    server = spawn(process.execPath, [vite, 'preview', '--outDir', staticDir, ...common], {
+      cwd: ui,
+      stdio: ['ignore', 'ignore', 'inherit'],
+    });
+  } else {
+    server = spawn(process.execPath, [vite, '--mode', 'demo', ...common], { cwd: ui, stdio: ['ignore', 'ignore', 'inherit'] });
+  }
   server.on('exit', (code) => {
-    if (code) console.error(`${tag} the UI dev server exited with code ${code}`);
+    if (code) console.error(`${tag} the UI server exited with code ${code}`);
   });
-  if (!(await waitFor(base + '/', 60_000))) fail(`the UI dev server did not answer on ${base} (is the port in use? set KROVA_SHOT_PORT)`);
+  if (!(await waitFor(base + '/', 120_000))) fail(`the UI server did not answer on ${base} (is the port in use? set KROVA_SHOT_PORT)`);
   return base;
 }
 
@@ -119,56 +149,45 @@ async function save(name, theme, buffer) {
 
 /* ------------------------------------------------------------------ helpers */
 
-/**
- * Make the viewport as tall as the page, so nothing scrolls (no sticky header in the middle of a crop) and
- * the page is shown whole, like a window big enough for its content.
- */
-async function fit(page) {
-  const width = page.viewportSize().width;
-  for (let i = 0; i < 2; i++) {
-    await page.setViewportSize({ width, height: 400 });
-    const height = await page.evaluate(() => Math.ceil(document.documentElement.scrollHeight));
-    await page.setViewportSize({ width, height });
-    await page.waitForTimeout(150);
+/** Screenshot of the union of some elements' boxes, with room around it. Page coordinates (nothing scrolls). */
+async function shotAround(page, locators, pad = 12) {
+  const list = Array.isArray(locators) ? locators : [locators];
+  const boxes = [];
+  for (const l of list) {
+    const b = await l.first().boundingBox();
+    if (!b) throw new Error('element has no box');
+    boxes.push(b);
   }
-}
-
-/** Screenshot of an element with some room around it. Needs fit() first: coordinates are page coordinates. */
-async function shotAround(page, locator, pad = 10) {
-  const box = await locator.first().boundingBox();
-  if (!box) throw new Error('element has no box');
   const vp = page.viewportSize();
-  const x = Math.max(0, box.x - pad);
-  const y = Math.max(0, box.y - pad);
-  const width = Math.min(vp.width - x, box.width + 2 * pad);
-  const height = Math.min(vp.height - y, box.height + 2 * pad);
-  return page.screenshot({ clip: { x, y, width, height } });
+  const x0 = Math.max(0, Math.min(...boxes.map((b) => b.x)) - pad);
+  const y0 = Math.max(0, Math.min(...boxes.map((b) => b.y)) - pad);
+  const x1 = Math.min(vp.width, Math.max(...boxes.map((b) => b.x + b.width)) + pad);
+  const y1 = Math.min(vp.height, Math.max(...boxes.map((b) => b.y + b.height)) + pad);
+  return page.screenshot({ clip: { x: x0, y: y0, width: x1 - x0, height: y1 - y0 } });
 }
 
-/** The card (a <section>) that holds a heading. */
-const sectionWithHeading = (page, name) =>
-  page.getByRole('heading', { name, exact: true }).locator('xpath=ancestor::section[1]');
+const HIDE_DEMO = '[data-testid="demo-badge"] { display: none !important; }';
 
-/** The element that directly holds a heading (a settings card). */
-const parentOfHeading = (page, name) => page.getByRole('heading', { name, exact: true }).locator('xpath=..');
-
-/** The closest ancestor <div> of a control that also holds a label: one settings row. */
-const rowOf = (page, testId) => page.getByTestId(testId).locator('xpath=ancestor::div[.//label][1]');
-
-async function go(page, base, view) {
-  await page.goto(`${base}/?nopersist`);
-  await page.getByTestId('canvas').waitFor();
-  await page.addStyleTag({ content: '[data-testid="demo-badge"] { display: none !important; }' });
-  if (view === 'settings') {
-    await page.getByTestId('nav-settings').click();
-    await page.getByTestId('settings').waitFor();
-  }
-  // Let fonts, focus rings and layout settle.
+/** Settle: fonts, springs and focus rings. Reduced motion is on, so this is short. */
+async function settle(page, ms = 400) {
+  await page.evaluate(() => document.fonts?.ready);
   await page.mouse.move(2, 2);
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(ms);
+}
+
+async function openMain(page, base, section) {
+  await page.goto(`${base}/?nopersist`);
+  await page.getByTestId('view-overview').waitFor();
+  await page.addStyleTag({ content: HIDE_DEMO });
+  if (section !== 'overview') {
+    await page.getByTestId(`nav-${section}`).click();
+    await page.getByTestId(section === 'layouts' ? 'canvas' : `view-${section}`).waitFor();
+  }
+  await settle(page);
 }
 
 async function attempt(name, theme, fn) {
+  if (!want(name)) return;
   try {
     await fn();
   } catch (e) {
@@ -176,104 +195,125 @@ async function attempt(name, theme, fn) {
   }
 }
 
+/** The <section class="group"> that holds a group heading. */
+const group = (page, title) => page.getByRole('heading', { name: title, exact: true }).locator('xpath=ancestor::section[1]');
+
 /* ------------------------------------------------------------------ the shots */
 
 async function captureTheme(browser, base, theme) {
   const ctxOptions = { deviceScaleFactor: DPR, colorScheme: theme, locale: 'en-US', reducedMotion: 'reduce' };
 
-  // ---- Editor ---------------------------------------------------------------------------------------
+  // ---- The main window at a normal size: sidebar + Overview ------------------------------------------
   {
-    const ctx = await browser.newContext({ ...ctxOptions, viewport: { width: EDITOR_WIDTH, height: 400 } });
+    const ctx = await browser.newContext({ ...ctxOptions, viewport: WINDOW });
     const page = await ctx.newPage();
-    await go(page, base, 'editor');
+    await openMain(page, base, 'overview');
+    await attempt('app-overview', theme, async () => save('app-overview', theme, await page.screenshot()));
+    await ctx.close();
+  }
 
-    // The Priority layout has three zones of different widths, which shows more than the default halves.
-    await page.getByTestId('layout-item').filter({ hasText: 'Priority' }).click();
-    await page.getByTestId('zone-2').click();
-    await page.mouse.move(2, 2);
-    await fit(page);
+  // ---- Single views, cropped (tall window: nothing scrolls) -------------------------------------------
+  {
+    const ctx = await browser.newContext({ ...ctxOptions, viewport: { width: WINDOW.width, height: TALL } });
+    const page = await ctx.newPage();
 
-    if (want('editor')) await attempt('editor', theme, async () => save('editor', theme, await page.screenshot()));
+    await openMain(page, base, 'arrange');
+    await attempt('app-arrange', theme, async () =>
+      save('app-arrange', theme, await shotAround(page, [group(page, 'Auto-arrange')], 14)),
+    );
+    await attempt('app-rules', theme, async () =>
+      save('app-rules', theme, await shotAround(page, page.getByTestId('app-rules'), 14)),
+    );
 
-    if (want('crop-layouts')) {
-      await attempt('crop-layouts', theme, async () =>
-        save('crop-layouts', theme, await shotAround(page, sectionWithHeading(page, 'Layouts on this monitor'), 1)),
-      );
-    }
+    await openMain(page, base, 'workspaces');
+    await attempt('app-workspaces', theme, async () => {
+      // Save one workspace from the sample windows, accepting the one-time path notice.
+      await page.getByTestId('ws-empty').getByTestId('ws-capture').click();
+      await page.getByTestId('ws-privacy-ok').click();
+      await page.getByTestId('ws-card').first().waitFor();
+      await settle(page);
+      await save('app-workspaces', theme, await shotAround(page, [page.getByTestId('ws-card'), page.getByTestId('ws-privacy')], 14));
+    });
 
-    if (want('crop-zones')) {
-      await attempt('crop-zones', theme, async () => {
-        // Split tool with the guide over the middle of the wide zone: an edit in progress.
-        await page.getByTestId('tool-split-vertical').click();
-        const z = await page.getByTestId('zone-2').boundingBox();
-        if (!z) throw new Error('zone-2 has no box');
-        await page.mouse.move(z.x + z.width * 0.5, z.y + z.height * 0.5);
-        await page.waitForTimeout(250);
-        const canvas = page.getByTestId('canvas');
-        await save('crop-zones', theme, await shotAround(page, canvas, 0));
-        await page.getByTestId('tool-select').click();
-      });
-    }
+    await openMain(page, base, 'focus');
+    await attempt('app-focus', theme, async () =>
+      save('app-focus', theme, await shotAround(page, [page.getByTestId('focus-dim'), page.getByTestId('focus-calm'), page.getByTestId('focus-share')], 14)),
+    );
 
-    if (want('crop-export')) {
-      await attempt('crop-export', theme, async () => {
-        await page.getByTestId('export-layout').click();
-        await page.getByTestId('export-panel').waitFor();
-        await page.mouse.move(2, 2);
-        await fit(page);
-        await save('crop-export', theme, await shotAround(page, page.getByTestId('layout-transfer'), 1));
-      });
-    }
+    await openMain(page, base, 'shortcuts');
+    await attempt('app-shortcuts', theme, async () =>
+      // The keyboard picture and the first two groups of the sheet (the rest is the same pattern).
+      save('app-shortcuts', theme, await shotAround(page, [page.locator('.kb-wrap'), group(page, 'Windows'), group(page, 'Layouts')], 14)),
+    );
+    await attempt('app-cheatsheet', theme, async () => {
+      await page.getByTestId('open-cheat-sheet').click();
+      const sheet = page.getByRole('dialog', { name: 'Krova shortcuts' });
+      await sheet.waitFor();
+      await settle(page);
+      await save('app-cheatsheet', theme, await shotAround(page, sheet, 16));
+      await page.keyboard.press('Escape');
+    });
 
-    if (want('crop-footer')) {
-      await attempt('crop-footer', theme, async () =>
-        save('crop-footer', theme, await shotAround(page, page.getByTestId('privacy'), 6)),
-      );
-    }
+    await openMain(page, base, 'corners');
+    await attempt('app-corners', theme, async () => {
+      const preview = page.getByRole('complementary', { name: 'Preview of the panel the notch opens' }).locator('xpath=..');
+      await save('app-corners', theme, await shotAround(page, preview, 14));
+    });
+
+    await openMain(page, base, 'appearance');
+    await attempt('app-appearance', theme, async () => {
+      const desk = page.getByTestId('view-appearance').locator('.desk').first();
+      await save('app-appearance', theme, await shotAround(page, [desk, group(page, 'Accent'), group(page, 'Windows')], 14));
+    });
 
     await ctx.close();
   }
 
-  // ---- Settings -------------------------------------------------------------------------------------
+  // ---- The quick panel (panel.html): the demo "clicks the notch" as soon as it listens -----------------
   {
-    const ctx = await browser.newContext({ ...ctxOptions, viewport: { width: SETTINGS_WIDTH, height: 400 } });
+    const ctx = await browser.newContext({ ...ctxOptions, viewport: { width: 760, height: 620 } });
     const page = await ctx.newPage();
-    await go(page, base, 'settings');
-
-    await fit(page);
-
-    if (want('settings')) {
-      await attempt('settings', theme, async () => {
-        // The top of the page down to the bottom of the Appearance card, so the shot ends between two cards
-        // (a window scrolled to the top, big enough for its first three cards).
-        let height = SETTINGS_SHOT_HEIGHT;
-        const card = await parentOfHeading(page, 'Appearance').boundingBox();
-        if (card) height = Math.min(page.viewportSize().height, Math.ceil(card.y + card.height + 16));
-        await save('settings', theme, await page.screenshot({ clip: { x: 0, y: 0, width: SETTINGS_WIDTH, height } }));
-      });
-    }
-
+    await attempt('app-panel', theme, async () => {
+      await page.goto(`${base}/panel.html?nopersist`);
+      const panel = page.getByTestId('panel');
+      await panel.waitFor();
+      await page.waitForFunction(() => document.querySelector('[data-testid="panel"]')?.getAttribute('data-state') === 'open');
+      await settle(page, 700);
+      // No focus ring on the first switch in a still picture.
+      await page.evaluate(() => (document.activeElement instanceof HTMLElement ? document.activeElement.blur() : null));
+      await page.waitForTimeout(150);
+      await save('app-panel', theme, await shotAround(page, panel, 28));
+    });
     await ctx.close();
   }
 
-  // ---- Settings in a narrow window: crops of single controls ------------------------------------------
+  // ---- The layout switcher (switcher.html), whole window ----------------------------------------------
   {
-    const ctx = await browser.newContext({ ...ctxOptions, viewport: { width: NARROW_WIDTH, height: 400 } });
+    const ctx = await browser.newContext({ ...ctxOptions, viewport: SWITCHER });
     const page = await ctx.newPage();
-    await go(page, base, 'settings');
-    await fit(page);
+    await attempt('app-switcher', theme, async () => {
+      await page.goto(`${base}/switcher.html?nopersist`);
+      await page.waitForFunction(() => document.querySelector('[data-testid="switcher"]')?.getAttribute('data-open') === 'true');
+      await settle(page, 900);
+      await save('app-switcher', theme, await page.screenshot());
+    });
+    await ctx.close();
+  }
 
-    if (want('crop-keyboard')) {
-      await attempt('crop-keyboard', theme, async () =>
-        save('crop-keyboard', theme, await shotAround(page, page.getByTestId('shortcuts-keymap').locator('xpath=..'), 12)),
-      );
-    }
-    if (want('crop-memory')) {
-      await attempt('crop-memory', theme, async () =>
-        save('crop-memory', theme, await shotAround(page, rowOf(page, 'setting-restore_on_reconnect'), 12)),
-      );
-    }
-
+  // ---- The hover zone picker (picker.html): its demo button shows it as the backend would ---------------
+  {
+    const ctx = await browser.newContext({ ...ctxOptions, viewport: { width: 900, height: 620 } });
+    const page = await ctx.newPage();
+    await attempt('app-picker', theme, async () => {
+      await page.goto(`${base}/picker.html?nopersist`);
+      await page.getByTestId('picker-simulate').click();
+      const card = page.getByTestId('picker-card');
+      await card.waitFor();
+      await settle(page, 500);
+      await page.getByTestId('picker-zone-2').hover();
+      await page.waitForTimeout(250);
+      await save('app-picker', theme, await shotAround(page, card, 40));
+    });
     await ctx.close();
   }
 }
@@ -289,5 +329,6 @@ try {
 } finally {
   await browser.close();
   if (server) server.kill();
+  if (staticDir) rmSync(staticDir, { recursive: true, force: true });
 }
 console.log(`${tag} done`);

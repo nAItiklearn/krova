@@ -4,6 +4,7 @@
  *
  *   status 'unreleased' -> shown as "not released yet", no date allowed
  *   status 'released'   -> `date` (YYYY-MM-DD) is required
+ *   status 'prerelease' -> a beta published as a GitHub pre-release; `date` optional (add it once it is out)
  *
  * Write for users: what changed for them, in plain sentences. Do not invent
  * dates, and do not list a thing that is not in the build.
@@ -16,7 +17,7 @@ export interface ChangelogSection {
 
 export interface Release {
   version: string;
-  status: 'unreleased' | 'released';
+  status: 'unreleased' | 'released' | 'prerelease';
   /** ISO date, only for released versions. */
   date?: string;
   summary: string;
@@ -24,6 +25,70 @@ export interface Release {
 }
 
 export const releases: readonly Release[] = [
+  {
+    version: '0.2.0-beta.1',
+    status: 'prerelease',
+    summary:
+      'A beta of 0.2, published as a pre-release on GitHub, for Windows only. The installer is unsigned. Every feature below passes its automated tests, but most have not yet been tried by hand on a real PC, so expect bugs. v0.1.0 stays the stable version.',
+    sections: [
+      {
+        title: 'Arrange without dragging',
+        items: [
+          'Auto-arrange, on by default for every monitor: a new window goes into the next free zone of the active layout about a third of a second after it opens. Dialogs, tool windows, pop-ups, full-screen and administrator windows are left alone. Switch it off, or choose “Main zone first”, “Fill gaps” and “Stack when full”, under Arrange.',
+          'Stacks: when every zone is taken, a new window joins a zone’s stack. A slim tab strip on the zone’s top edge shows each program’s icon and file name (never the window title); click a tab or turn the wheel over the strip to switch.',
+          'Swap: drag an arranged window onto another one’s zone with the snap key held and the two trade places; Ctrl+Alt+Shift+arrow swaps with the neighbour.',
+          'App rules, by program file name only: never touch, always float, or a preferred zone.',
+          'On first run, each monitor gets a main + side layout that fits its shape (landscape, ultrawide or portrait), added in front of your layouts.',
+        ],
+      },
+      {
+        title: 'Control',
+        items: [
+          'New shortcut scheme on Ctrl+Alt: arrows move to the neighbouring zone (and on to the next monitor), 1 to 9 pick a zone, Shift+arrows swap, Shift+1 to 9 apply a layout, Enter fills the screen and back, [ and ] cycle a stack, Space opens the layout switcher, T pauses, F toggles focus dim, / shows the cheat sheet.',
+          'Rebind any shortcut, or switch it off. Krova checks a new combination against its own and asks Windows whether it is free, and suggests free ones when it is not. If you used Win+Alt or Win+Ctrl in 0.1, those keys are kept.',
+          'The notch: a small pill at the top centre of the screen, or in a top or bottom corner. Hover to see the layout name, click for the quick panel, right-click for a menu, drag to move it. It hides during full-screen apps.',
+          'The quick panel: pause, the layouts of that monitor, focus dim, calm desk, share-safe, and links to the switcher, the cheat sheet and Krova. It also opens from a left click on the tray icon.',
+          'The layout switcher: your layouts as a stack of cards on the monitor under the cursor. Flip, apply, reorder, or delete with undo.',
+          'Hot corners: rest the cursor in a screen corner to open the layout switcher, toggle calm desk or focus dim, or pause. By default the top-right corner opens the switcher and the bottom-right one toggles calm desk. Corners where two monitors meet never fire.',
+          'Pause: Ctrl+Alt+T, the tray, the notch or the panel. New windows are not arranged while paused; windows stay where they are.',
+          'A hover zone picker (off by default): hold the snap key on a window’s title bar and pick a zone from a small card next to the cursor.',
+        ],
+      },
+      {
+        title: 'Workspaces and focus',
+        items: [
+          'Workspaces: save which programs are in which zones on which monitors, and restore it later. Restore can start missing programs (it shows their paths and asks first, and refuses programs in places like Temp or Downloads), and it minimises the other windows instead of closing them.',
+          'Focus dim: everything except the active window fades (20 to 80 %), and follows the focus.',
+          'Calm desk: minimise every window that is not in a zone; toggle again to bring them back.',
+          'Share-safe: while on, Krova’s overlays show no program names or icons, and Krova’s own overlays and pop-up windows are hidden from screen capture and recording.',
+          'Window highlight: none, an active border, all borders or a soft glow, in your colour and width.',
+        ],
+      },
+      {
+        title: 'Look and fit',
+        items: [
+          'A new main window with a sidebar: Overview, Layouts, Arrange, Workspaces, Focus, Shortcuts, Corners & notch, Appearance, Displays, Screen edges and Privacy & about. A new ink and ember icon.',
+          'Appearance: accent colour, corner radius and border width, used by the zone overlay, the stack tabs and the notch too.',
+          'Screen edges: keep room per monitor for third-party docks and bars that Windows does not know about.',
+          'Focus follows mouse (off by default): the window under a resting cursor becomes active after a short delay.',
+          '“Check for updates” in the tray opens the releases page in your browser. Krova itself still makes no network requests.',
+        ],
+      },
+      {
+        title: 'Known limitations in 0.2.0-beta.1',
+        items: [
+          'Windows only. No macOS build: the macOS code has never run on a real Mac.',
+          'The installer is not code-signed. SmartScreen shows “Windows protected your PC”: choose More info, then Run anyway.',
+          'Most new features have only been checked by automated tests and have not been tried by hand on real hardware yet, including the notch, hot corners, stacks, workspaces, focus dim and mixed-DPI setups.',
+          'Focus follows mouse may be refused by Windows’ foreground rules; how often is not measured yet.',
+          'Ctrl+Alt+Left and Right clash with back and forward in some code editors, and some older Intel graphics drivers use Ctrl+Alt+arrows to rotate the screen. Rebind them under Shortcuts if needed.',
+          'Programs from the Microsoft Store cannot be started by a workspace restore; they are reused when already open.',
+          'Languages other than English are placeholders (English text) for now.',
+          '“Show zones” (quick panel, hot corner) and the “Cheat sheet” hot corner do nothing yet. Ctrl+Alt+/ and the quick panel’s Cheat sheet link may not show the sheet in this build; it is always under Shortcuts, Cheat sheet.',
+        ],
+      },
+    ],
+  },
   {
     version: '0.1.0',
     status: 'released',
@@ -74,9 +139,11 @@ export const releases: readonly Release[] = [
   },
 ];
 
-export const latestRelease = releases[0];
+/** The newest stable release (pre-releases are skipped). */
+export const latestRelease = releases.find((r) => r.status === 'released') ?? releases[0];
 
 export function releaseLabel(r: Release): string {
   if (r.status === 'unreleased') return 'Not released yet';
+  if (r.status === 'prerelease') return r.date ? `Beta, ${r.date}` : 'Beta · pre-release';
   return r.date ?? 'Released';
 }

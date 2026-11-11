@@ -1,7 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { url } from '../lib/url';
-import { ISSUES_URL, REPO_LINKS_ENABLED, APP_VERSION } from '../site';
+import { ISSUES_URL, REPO_LINKS_ENABLED, APP_VERSION, BETA_VERSION } from '../site';
 
 const title = 'Support: troubleshooting Krova and reporting a problem';
 const description =
@@ -64,17 +64,22 @@ const toc = [
 
       <h2 id="shortcut">A keyboard shortcut does nothing</h2>
       <p>
-        The shortcuts (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd> and Left, Right, Up or 1 to 9 by default) exist on Windows
-        only; macOS has none yet. On Windows, work down this list:
+        The shortcuts exist on Windows only; macOS has none yet. The defaults are <kbd>Ctrl</kbd>+<kbd>Alt</kbd> with the arrow
+        keys or 1 to 9 in the 0.2 beta, and <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd> with Left, Right, Up or 1 to 9 in
+        v0.1.0. On Windows, work down this list:
       </p>
       <ol>
-        <li>Is <strong>Enabled</strong> ticked in the tray menu? When it is off, the shortcuts are released.</li>
-        <li>Open <strong>Settings</strong> and look at <strong>Keyboard shortcuts</strong>: is <em>Use keyboard shortcuts</em> on?</li>
+        <li>Is Krova switched on in the tray menu? When it is off, the shortcuts are released.</li>
         <li>
-          Does the same card list shortcuts that &ldquo;could not be registered&rdquo;? Then Windows or another app already owns that
-          combination. Some combinations are kept by Windows: on the PC we tested it refused every Win+Alt and eleven of twelve Win+Ctrl
-          combinations. Choose other <em>Modifier keys</em> (the list updates at once), or close the app that holds the keys. Some
-          tools also use Ctrl+Alt+Left and Right for back and forward.
+          In the 0.2 beta, open <strong>Shortcuts</strong> in Krova&rsquo;s sidebar. A row that Windows refused says the keys are
+          in use and offers free ones; click the row to record other keys. In v0.1.0, open <strong>Settings</strong>, <strong>Keyboard
+          shortcuts</strong>: check that <em>Use keyboard shortcuts</em> is on and whether the card lists shortcuts that &ldquo;could not
+          be registered&rdquo;; then choose other <em>Modifier keys</em>, or close the app that holds the keys.
+        </li>
+        <li>
+          Some combinations are often taken: Ctrl+Alt+Left and Right are back and forward in some code editors, some older Intel
+          graphics drivers use Ctrl+Alt+arrows to rotate the screen, and on the PC we tested Windows refused every Win+Alt and eleven
+          of twelve Win+Ctrl combinations.
         </li>
         <li>
           Is the focused window one the shortcuts skip? They do nothing for the desktop, the taskbar, minimized windows, windows of
@@ -82,7 +87,7 @@ const toc = [
         </li>
         <li>
           Is the zone there? <kbd>1</kbd> to <kbd>9</kbd> count zones top to bottom, then left to right, on the monitor the window is
-          on; a number past the last zone does nothing, and <kbd>Up</kbd> does nothing with a single monitor.
+          on, and a number past the last zone does nothing.
         </li>
       </ol>
       <p>
@@ -229,7 +234,7 @@ const toc = [
       }
       <p>A report is easiest to act on when it says:</p>
       <ul>
-        <li>The Krova version (the footer of Krova&rsquo;s window reads &ldquo;Krova v{APP_VERSION}&rdquo;) and where you got it.</li>
+        <li>The Krova version (the bottom of Krova&rsquo;s window reads, for example, &ldquo;Krova v{APP_VERSION}&rdquo; or &ldquo;Krova v{BETA_VERSION}&rdquo;) and where you got it.</li>
         <li>Your operating system and its exact version, Windows 10 or 11 or the macOS version.</li>
         <li>Your monitors: how many, their resolutions, and their scaling (for example 150%).</li>
         <li>Which app's window you were dragging, and whether it runs as administrator.</li>

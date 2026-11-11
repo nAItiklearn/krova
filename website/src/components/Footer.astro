@@ -1,7 +1,7 @@
 ---
 import { url } from '../lib/url';
 import { footerColumns } from '../data/nav';
-import { COPYRIGHT_HOLDER, MAC_RELEASED, REPO_LINKS_ENABLED, REPO_URL, VERSION_LABEL } from '../site';
+import { BETA_VERSION, COPYRIGHT_HOLDER, MAC_RELEASED, REPO_LINKS_ENABLED, REPO_URL, VERSION_LABEL } from '../site';
 
 const home = url('/');
 ---
@@ -53,7 +53,7 @@ const home = url('/');
 
     <div class="legal">
       <p>
-        &copy; 2026 {COPYRIGHT_HOLDER}. Free and open source under the MIT License. Early software ({VERSION_LABEL}).
+        &copy; 2026 {COPYRIGHT_HOLDER}. Free and open source under the MIT License. Early software ({VERSION_LABEL}; v{BETA_VERSION} in beta).
         {REPO_LINKS_ENABLED && <Fragment> <a href={REPO_URL}>Source code</a>.</Fragment>}
       </p>
       <p>

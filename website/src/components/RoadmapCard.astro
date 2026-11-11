@@ -16,7 +16,7 @@ const { item } = Astro.props;
     <div class="art"><Glyph name={item.glyph} /></div>
     <p class={`status status--${item.status}`}>
       {item.status === 'available' && <Icon name="check" />}
-      {item.status === 'progress' && <span class="dot" aria-hidden="true" />}
+      {(item.status === 'progress' || item.status === 'beta') && <span class="dot" aria-hidden="true" />}
       {statusLabel[item.status]}
     </p>
   </div>

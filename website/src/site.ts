@@ -15,9 +15,22 @@
  */
 
 export const SITE_NAME = 'Krova';
+/** The stable release. Its numbers are what the Performance page shows. */
 export const VERSION_LABEL = 'v0.1';
-/** Must equal "version" in src-tauri/tauri.conf.json. */
+/**
+ * The stable (non-pre-release) version: what `releases/latest` points at. GitHub never makes a pre-release
+ * "latest", so latestDownloadUrl() keeps serving this one while a beta is out.
+ */
 export const APP_VERSION = '0.1.0';
+
+/**
+ * The current beta, published on GitHub as a pre-release. Its version must equal "version" in
+ * src-tauri/tauri.conf.json on the branch it was built from, and BETA_TAG the pushed tag.
+ * Set BETA_PUBLISHED to false to hide every beta download link (the page then says it is not out yet).
+ */
+export const BETA_VERSION = '0.2.0-beta.1';
+export const BETA_TAG = `v${BETA_VERSION}`;
+export const BETA_PUBLISHED = true;
 export const COPYRIGHT_HOLDER = 'Krova contributors';
 
 /* ------------------------------------------------------------------ *
@@ -106,6 +119,17 @@ export const DOWNLOADS_ENABLED = REPO_LINKS_ENABLED && RELEASE_PUBLISHED;
 /** Stable link to an asset of the newest release. */
 export function latestDownloadUrl(file: string): string {
   return `${RELEASES_URL}/latest/download/${encodeURIComponent(file)}`;
+}
+
+/** Beta links render only when this is true. */
+export const BETA_DOWNLOADS_ENABLED = REPO_LINKS_ENABLED && BETA_PUBLISHED;
+
+/** The release page of the beta (its notes and assets). */
+export const BETA_RELEASE_URL = `${RELEASES_URL}/tag/${BETA_TAG}`;
+
+/** Direct link to an asset of the beta pre-release (`releases/latest` never points at a pre-release). */
+export function betaDownloadUrl(file: string): string {
+  return `${RELEASES_URL}/download/${BETA_TAG}/${encodeURIComponent(file)}`;
 }
 
 /* ------------------------------------------------------------------ *

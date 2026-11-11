@@ -25,7 +25,7 @@ import { url } from '../lib/url';
             <li>
               <span class="name">{c.name}</span>
               <span class={`status status--${c.status}`}>
-                {c.status === 'progress' && <span class="dot" aria-hidden="true" />}
+                {(c.status === 'progress' || c.status === 'beta') && <span class="dot" aria-hidden="true" />}
                 {statusLabel[c.status]}
               </span>
             </li>

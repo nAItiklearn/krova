@@ -8,7 +8,7 @@ import { available, LAST_UPDATED, LAST_UPDATED_ISO, own, progress, statusLabel, 
 
 const title = 'Roadmap: what Krova can do today and what is planned';
 const description =
-  'What is in Krova v0.1.0 today, what is being built now, and what is planned next: auto-arrange, stacks, a layout switcher, workspaces and more. Planned means planned: none of it is in the app yet.';
+  'What is in Krova v0.1.0 (stable), what is in the v0.2.0-beta.1 pre-release (auto-arrange, stacks, the layout switcher, workspaces and more), and what is still planned.';
 
 const groups = [available, progress, ...waves, own];
 const switcher = progress.items.find((i) => i.name === 'Layout switcher')!;
@@ -21,9 +21,9 @@ const otherProgress = progress.items.filter((i) => i !== switcher);
       <p class="eyebrow">Roadmap</p>
       <h1>What you can use, <span class="soft">and what is coming.</span></h1>
       <p class="lead">
-        Krova v0.1.0 is an early preview for Windows. This page lists what is in it, what is being built now, and what is
-        planned. <strong>Planned means planned:</strong> none of those features is in the app you can download. The order can
-        change, and so can what ships.
+        Krova v0.1.0 is the stable release for Windows, and v0.2.0-beta.1 is a pre-release with most of the waves below.
+        This page lists what is in each, and what is still planned. <strong>Planned means planned:</strong> it is in neither
+        build. The order can change, and so can what ships.
       </p>
       <p class="meta">
         Last updated <time datetime={LAST_UPDATED_ISO}>{LAST_UPDATED}</time> &middot; <a href={url('/changelog/')}>Changelog</a>
@@ -31,9 +31,10 @@ const otherProgress = progress.items.filter((i) => i !== switcher);
     </header>
 
     <div class="key" role="list" aria-label="What the labels mean">
-      <p role="listitem"><span class="status status--available"><Icon name="check" />{statusLabel.available}</span> in v0.1.0 today</p>
-      <p role="listitem"><span class="status status--progress"><span class="dot" aria-hidden="true" />{statusLabel.progress}</span> being built, not in the app</p>
-      <p role="listitem"><span class="status">{statusLabel.planned}</span> not started or not shipped, not in the app</p>
+      <p role="listitem"><span class="status status--available"><Icon name="check" />{statusLabel.available}</span> in v0.1.0, the stable release</p>
+      <p role="listitem"><span class="status status--beta"><span class="dot" aria-hidden="true" />{statusLabel.beta}</span> in the v0.2.0-beta.1 pre-release</p>
+      <p role="listitem"><span class="status status--progress"><span class="dot" aria-hidden="true" />{statusLabel.progress}</span> partly built, or being built</p>
+      <p role="listitem"><span class="status">{statusLabel.planned}</span> not started, in neither build</p>
     </div>
 
     <nav class="jump" aria-label="On this page">
@@ -63,12 +64,12 @@ const otherProgress = progress.items.filter((i) => i !== switcher);
           <SwitcherLoop />
         </div>
         <div class="about">
-          <p class="status status--progress"><span class="dot" aria-hidden="true" />{statusLabel.progress}</p>
+          <p class="status status--beta"><span class="dot" aria-hidden="true" />{statusLabel.beta}</p>
           <h3>{switcher.name}</h3>
           <p>{switcher.text}</p>
           <p class="note-line">
             The picture is a small copy of the design prototype, the same stack of cards and the same spring motion. It is
-            not the app.
+            not the app; the home page has a screenshot of the real one.
           </p>
         </div>
       </div>

@@ -1,0 +1,421 @@
+---
+/**
+ * "New in the 0.2 beta": the same pill tabs as FeatureTabs, one panel per feature, each with a REAL screenshot
+ * of the beta's UI (public/screenshots, made by scripts/capture-screenshots.mjs from the UI in demo mode).
+ *
+ * What Krova draws natively on the desktop (the notch pill, stack tab strips, focus dim, the corner ripple) cannot be
+ * captured from the demo, so those panels say so in words and show the settings or popup that controls them.
+ * Never put a made-up picture here. Copy must match what the code does (docs/features-contract.md).
+ */
+import Shot from './Shot.astro';
+import { url } from '../lib/url';
+import { BETA_VERSION } from '../site';
+
+type Pic = { name: string; alt: string };
+type Tab = {
+  id: string;
+  tab: string;
+  ask: string;
+  title: string;
+  body: string;
+  /** Said in words: what the picture cannot show. */
+  note?: string;
+  pics: Pic[];
+  caption: string;
+};
+
+const tabs: Tab[] = [
+  {
+    id: 'notch',
+    tab: 'Notch',
+    ask: 'Without opening the app?',
+    title: 'The notch and quick panel',
+    body: 'A small ink pill sits at the top of the screen. Hover it to see the layout name, click it for the quick panel, right-click for a menu, or drag it to a corner. It hides while a game or video is full screen. A click on the tray icon opens the same panel.',
+    note: 'The pill itself is drawn by Windows, outside the app’s window, so it is not in this picture.',
+    pics: [
+      {
+        name: 'app-panel',
+        alt: 'The quick panel: an Arranging switch, the four layouts of Display 1, buttons for Focus, Calm desk, Share-safe and Show zones, and links to the layout switcher, the cheat sheet and Krova.',
+      },
+    ],
+    caption: 'The quick panel.',
+  },
+  {
+    id: 'switcher',
+    tab: 'Switcher',
+    ask: 'Change layout in a second?',
+    title: 'The layout switcher',
+    body: 'Ctrl+Alt+Space shows the layouts of the monitor under the cursor as a stack of cards. Flip with the arrow keys or a drag, press Enter to apply, drag the grip to reorder, swipe sideways to delete. Delete has an undo.',
+    pics: [
+      {
+        name: 'app-switcher',
+        alt: 'The layout switcher: four layout cards stacked, Halves in front and marked Active, with key hints along the bottom.',
+      },
+    ],
+    caption: 'The layout switcher for Display 1.',
+  },
+  {
+    id: 'corners',
+    tab: 'Hot corners',
+    ask: 'Rest the mouse in a corner?',
+    title: 'Hot corners',
+    body: 'Push the cursor into a screen corner and wait a moment: that corner’s action runs, with a small ember ripple. By default the top right opens the layout switcher and the bottom right tucks away stray windows. Corners where two monitors meet never fire, and nothing fires while you drag.',
+    pics: [
+      {
+        name: 'app-corners',
+        alt: 'Krova’s Corners and notch page: a screen with the notch at the top and a label in each corner (Nothing, Layout switcher, Nothing, Calm desk), next to a preview of the quick panel.',
+      },
+    ],
+    caption: 'The Corners & notch page with the default corners.',
+  },
+  {
+    id: 'arrange',
+    tab: 'Auto-arrange',
+    ask: 'Rather not drag at all?',
+    title: 'Stacks, swap and app rules',
+    body: 'New windows take the next free zone. When every zone is full, a window joins a stack, and a slim tab strip on the zone’s top edge shows each program’s icon and name, never the window title. Drag an arranged window onto another one’s zone with Shift held and the two swap. App rules leave a program alone, keep it floating, or send it to a zone.',
+    note: 'The tab strip is drawn on the desktop, so this picture shows the settings.',
+    pics: [
+      {
+        name: 'app-arrange',
+        alt: 'Auto-arrange settings: Arrange new windows on, Which zone set to Next free zone, Fill gaps off, Stack when every zone is full on.',
+      },
+      {
+        name: 'app-rules',
+        alt: 'App rules: Calculator.exe set to Float, Spotify.exe set to Zone 3, and a field to add a program.',
+      },
+    ],
+    caption: 'Arrange settings; the two app rules are samples.',
+  },
+  {
+    id: 'workspaces',
+    tab: 'Workspaces',
+    ask: 'Same setup every morning?',
+    title: 'Save the whole desk',
+    body: 'Save which programs sit in which zones, on every monitor, and restore it later. Krova can start the programs that are missing: it shows their paths and asks first. Other windows are minimised, never closed.',
+    pics: [
+      {
+        name: 'app-workspaces',
+        alt: 'A saved workspace with two apps, Code.exe and mail.exe, drawn in their zones, with Restore, Open missing apps and Delete, and a note that the full path of each app is saved on this PC only.',
+      },
+    ],
+    caption: 'A workspace saved from sample apps.',
+  },
+  {
+    id: 'focus',
+    tab: 'Focus',
+    ask: 'Too much on screen?',
+    title: 'Focus dim, calm desk, share-safe',
+    body: 'Ctrl+Alt+F dims everything except the window you are in, and the dim follows the focus. Calm desk minimises every window that is not in a zone, and brings them back. Share-safe hides program names in Krova’s overlays and keeps Krova’s own windows out of screen recordings.',
+    note: 'The dim is drawn over the desktop, so this picture shows the settings.',
+    pics: [
+      {
+        name: 'app-focus',
+        alt: 'Focus settings: Dim everything else with the Ctrl+Alt+F key and a strength of 45 percent, Calm desk for every monitor, and Share-safe.',
+      },
+    ],
+    caption: 'The Focus page.',
+  },
+  {
+    id: 'keys',
+    tab: 'Shortcuts',
+    ask: 'Hands on the keyboard?',
+    title: 'Every shortcut on Ctrl+Alt',
+    body: 'Arrows move a window to the next zone, numbers send it to one. Add Shift to swap or to apply a layout. Click any shortcut to record new keys: Krova checks that Windows has not given them to another program, and suggests free ones.',
+    pics: [
+      {
+        name: 'app-shortcuts',
+        alt: 'The Shortcuts page: a keyboard picture above the list, with Ctrl+Alt+arrows to move, Ctrl+Alt+Shift+arrows to swap, Ctrl+Alt+1 to 9 for zones, Ctrl+Alt+Shift+1 to 9 for layouts and Ctrl+Alt+Space for the switcher.',
+      },
+    ],
+    caption: 'The default shortcuts.',
+  },
+  {
+    id: 'look',
+    tab: 'Appearance',
+    ask: 'Make it yours?',
+    title: 'Your colour, your corners',
+    body: 'Pick an accent colour, a corner radius and a border width. The zone overlay, the stack tabs and the notch use them too. Mark the active window with a border or a soft glow.',
+    pics: [
+      {
+        name: 'app-appearance',
+        alt: 'The Appearance page: a small desk preview with three windows, the accent colours with Ember selected, and the highlight options None, Active border, All borders and Glow.',
+      },
+    ],
+    caption: 'The Appearance page.',
+  },
+  {
+    id: 'picker',
+    tab: 'Zone picker',
+    ask: 'Mouse already on the title bar?',
+    title: 'Pick a zone from the title bar',
+    body: 'Turn on the hover picker, hold Shift on a window’s title bar and rest: a small card with that monitor’s zones appears next to the cursor, without taking the focus. Click a zone and the window moves there. Off by default.',
+    pics: [
+      { name: 'app-picker', alt: 'The zone picker: a small card with zones 1 and 2, zone 2 highlighted, next to the cursor.' },
+    ],
+    caption: 'The zone picker over a sample desk.',
+  },
+];
+---
+
+<section class="section bt" id="new" aria-labelledby="bt-title">
+  <div class="container">
+    <header class="sec-head">
+      <p class="eyebrow">New in the 0.2 beta</p>
+      <h2 id="bt-title">More of Krova, fewer clicks. <span class="soft">Real screenshots from the beta.</span></h2>
+      <p class="lead">
+        v{BETA_VERSION} is a pre-release for Windows. <a href={url('/download/')}>Get it</a> or read
+        <a href={url('/changelog/')}>what is in it</a>. The pictures are the app in its demo mode, with sample monitors and apps.
+      </p>
+    </header>
+
+    <figure class="overview">
+      <div class="frame">
+        <Shot
+          name="app-overview"
+          alt="Krova’s main window in the beta: a sidebar with Overview, Layouts, Arrange, Workspaces, Focus, Shortcuts, Corners and notch, Appearance, Displays, Screen edges and Privacy, and the Overview page showing two sample monitors with their zones."
+        />
+      </div>
+      <figcaption>The new main window, Overview page.</figcaption>
+    </figure>
+
+    <div class="bar-wrap">
+      <div class="tabbar" role="tablist" aria-label="New in the 0.2 beta" data-tabbar>
+        <span class="ind" aria-hidden="true" data-ind></span>
+        {
+          tabs.map((t, i) => (
+            <button
+              type="button"
+              role="tab"
+              id={`bt-tab-${t.id}`}
+              aria-controls={`bt-panel-${t.id}`}
+              aria-selected={i === 0 ? 'true' : 'false'}
+              tabindex={i === 0 ? 0 : -1}
+            >
+              {t.tab}
+            </button>
+          ))
+        }
+      </div>
+    </div>
+
+    {
+      tabs.map((t, i) => (
+        <div class="panel" role="tabpanel" id={`bt-panel-${t.id}`} aria-labelledby={`bt-tab-${t.id}`} hidden={i !== 0}>
+          <div class="copy">
+            <p class="ask">{t.ask}</p>
+            <h3>
+              {t.title}
+              <span class="badge">In 0.2 beta</span>
+            </h3>
+            <p class="body">{t.body}</p>
+            {t.note && <p class="note-line">{t.note}</p>}
+          </div>
+          <figure class="viz">
+            <div class:list={['pics', { two: t.pics.length > 1 }]}>
+              {t.pics.map((p) => (
+                <div class="pic">
+                  <Shot name={p.name} alt={p.alt} />
+                </div>
+              ))}
+            </div>
+            <figcaption>{t.caption}</figcaption>
+          </figure>
+        </div>
+      ))
+    }
+  </div>
+</section>
+
+<style>
+  .sec-head .lead a {
+    font-weight: 550;
+  }
+
+  .overview {
+    margin: 0 auto clamp(2.5rem, 2rem + 2vw, 4rem);
+    max-width: 62rem;
+  }
+  .frame {
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px var(--color-border),
+      var(--shadow-2);
+  }
+  .frame :global(img),
+  .pic :global(img) {
+    /* No `display` here: base.css shows only the image that matches the theme. */
+    vertical-align: top;
+    width: 100%;
+    height: auto;
+  }
+  figcaption {
+    margin-top: 0.75rem;
+    text-align: center;
+    font-size: var(--text-sm);
+    color: var(--color-text-soft);
+  }
+
+  .bar-wrap {
+    display: flex;
+    justify-content: center;
+    margin-bottom: clamp(2rem, 1.5rem + 2vw, 3.25rem);
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding: 2px;
+  }
+  .tabbar {
+    position: relative;
+    display: inline-flex;
+    gap: 2px;
+    padding: 5px;
+    border-radius: 999px;
+    background: var(--color-surface-3);
+  }
+  .ind {
+    position: absolute;
+    top: 5px;
+    bottom: 5px;
+    left: 0;
+    width: 0;
+    border-radius: 999px;
+    background: var(--color-surface);
+    pointer-events: none;
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.08),
+      0 0 0 1px var(--color-border);
+    transition:
+      transform 0.45s cubic-bezier(0.32, 0.72, 0, 1),
+      width 0.45s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  [role='tab'] {
+    position: relative;
+    font: inherit;
+    font-size: var(--text-sm);
+    font-weight: 550;
+    white-space: nowrap;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-muted);
+    padding: 0.6rem 0.95rem;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+  [role='tab'][aria-selected='true'],
+  [role='tab']:hover {
+    color: var(--color-text);
+  }
+  [role='tab']:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 1px;
+  }
+
+  .panel {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: clamp(2rem, 1rem + 4vw, 4.5rem);
+    align-items: center;
+    animation: panel-in 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .panel[hidden] {
+    display: none;
+  }
+  @keyframes panel-in {
+    from {
+      opacity: 0;
+      filter: blur(6px);
+      transform: translateY(12px);
+    }
+  }
+  .ask {
+    color: var(--color-accent-text);
+    font-weight: 600;
+    font-size: var(--text-md);
+  }
+  h3 {
+    margin-top: 0.6rem;
+    font-size: clamp(2rem, 1.3rem + 2.4vw, 3rem);
+    font-weight: 720;
+    letter-spacing: -0.04em;
+    line-height: 1.04;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.8rem;
+  }
+  .badge {
+    font-size: 0.8rem;
+    letter-spacing: 0;
+    font-weight: 600;
+    padding: 0.25rem 0.7rem;
+    border-radius: 999px;
+    line-height: 1.2;
+    background: var(--accent-tint-strong);
+    color: var(--color-accent-text);
+  }
+  .body {
+    margin-top: 1.1rem;
+    font-size: var(--text-md);
+    line-height: 1.6;
+    color: var(--color-text-muted);
+    max-width: 30rem;
+  }
+  .note-line {
+    margin-top: 0.9rem;
+    max-width: 30rem;
+    font-size: var(--text-sm);
+    color: var(--color-text-soft);
+  }
+
+  .viz {
+    margin: 0;
+    padding: clamp(1rem, 0.5rem + 2.5vw, 2.25rem);
+    border-radius: var(--radius-xl);
+    background: var(--stage-bg);
+    box-shadow: inset 0 0 0 1px var(--color-border);
+  }
+  .pics {
+    display: grid;
+    gap: 1rem;
+    justify-items: center;
+  }
+  .pic {
+    width: 100%;
+    max-width: 40rem;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px var(--color-border),
+      var(--shadow-2);
+  }
+  /* The panel and the picker are narrow windows: keep them at a natural size. */
+  #bt-panel-notch .pic {
+    max-width: 22rem;
+  }
+  #bt-panel-picker .pic {
+    max-width: 20rem;
+  }
+
+  @media (max-width: 56rem) {
+    .bar-wrap {
+      justify-content: flex-start;
+    }
+    .panel {
+      grid-template-columns: 1fr;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .panel {
+      animation: none;
+    }
+    .ind {
+      transition: none;
+    }
+  }
+</style>
+
+<script>
+  import '../lib/tabs-client';
+</script>

@@ -2,6 +2,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Hero from '../components/Hero.astro';
 import FeatureTabs from '../components/FeatureTabs.astro';
+import BetaTour from '../components/BetaTour.astro';
 import Customize from '../components/Customize.astro';
 import Faq from '../components/Faq.astro';
 import FinalCta from '../components/FinalCta.astro';
@@ -12,12 +13,13 @@ const title = MAC_RELEASED
   : 'Krova: free, offline window zone manager for Windows';
 const description = MAC_RELEASED
   ? 'Draw zones on each monitor, hold Shift while dragging a window, release over a zone to snap. Keyboard shortcuts and windows that return to their zones on Windows. Free, MIT, offline, for Windows 10/11 and macOS 13+.'
-  : 'Draw zones on each monitor, hold Shift while dragging a window, release over a zone to snap. Keyboard shortcuts and windows that return to their zones. Free, MIT, offline, for Windows 10/11. An early preview; macOS comes after testing on a real Mac.';
+  : 'Draw zones on each monitor and snap windows into them, or let Krova arrange them as they open. The 0.2 beta adds auto-arrange with stacks, the notch and quick panel, a layout switcher, hot corners, workspaces and focus dim. Free, MIT, offline, for Windows 10/11.';
 ---
 
 <BaseLayout title={title} description={description}>
   <Hero />
   <FeatureTabs />
+  <BetaTour />
   <Customize />
   <Faq />
   <FinalCta />

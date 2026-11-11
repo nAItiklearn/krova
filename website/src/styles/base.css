@@ -649,6 +649,14 @@ hr {
   border-radius: 50%;
   background: var(--color-warn);
 }
+.status--beta {
+  border-color: var(--color-ember);
+  background: var(--accent-tint);
+  color: var(--color-accent-text);
+}
+.status--beta .dot {
+  background: var(--color-ember);
+}
 
 /* ---- Scroll reveal (class added by BaseLayout's script, so no-JS pages stay visible) ---- */
 .reveal {
