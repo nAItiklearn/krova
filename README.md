@@ -1,4 +1,5 @@
 # Krova
+<img width="1886" height="920" alt="image" src="https://github.com/user-attachments/assets/45f1ed45-4ce8-49ae-9db6-83cafa9d13c2" />
 
 An app to keep your windows dekstop organised,
 made by me(and claude code)
